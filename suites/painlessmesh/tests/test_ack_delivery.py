@@ -6,6 +6,8 @@ import pytest
 
 from alteriom_hil.protocol import TimeoutWaitingFor
 
+pytestmark = pytest.mark.hil_only(reason="radio_timing")
+
 
 def test_send_single_with_ack_delivers(pair):
     sender, receiver, receiver_id = pair

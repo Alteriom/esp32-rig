@@ -1,6 +1,9 @@
 """Broadcast delivery confirmation: exactly one ack per mesh peer."""
 
+import pytest
 
+
+@pytest.mark.hil_only(reason="radio_timing")
 def test_broadcast_with_ack_confirms_every_node(mesh):
     clients, node_ids = mesh
     if len(clients) < 2:
