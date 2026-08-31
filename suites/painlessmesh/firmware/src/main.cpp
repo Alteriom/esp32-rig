@@ -34,6 +34,12 @@
 #ifndef HIL_AGENT_VERSION
 #define HIL_AGENT_VERSION "0.1.0"
 #endif
+#ifndef HIL_ARTIFACT_TARGET
+#define HIL_ARTIFACT_TARGET "unknown"
+#endif
+#ifndef HIL_PAINLESSMESH_REF
+#define HIL_PAINLESSMESH_REF "unknown"
+#endif
 
 Scheduler userScheduler;
 painlessMesh mesh;
@@ -58,6 +64,8 @@ void handleInfo() {
   doc["evt"] = "info";
   doc["nodeId"] = mesh.getNodeId();
   doc["version"] = HIL_AGENT_VERSION;
+  doc["target"] = HIL_ARTIFACT_TARGET;
+  doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
   doc["freeHeap"] = ESP.getFreeHeap();
   emitEvent(doc);
 }
@@ -91,9 +99,13 @@ void handleSendSingle(JsonDocument &cmd) {
   String msg = cmd["msg"].as<String>();
   bool ack = cmd["ack"] | false;
   uint32_t ackTimeoutMs = cmd["ackTimeoutMs"] | (uint32_t)5000;
+  bool hasPriority = !cmd["priority"].isNull();
+  uint8_t priority = cmd["priority"] | (uint8_t)2;
   bool ok;
   if (ack) {
     ok = mesh.sendSingle(dest, msg, &deliveryEvent, ackTimeoutMs);
+  } else if (hasPriority) {
+    ok = mesh.sendSingle(dest, msg, priority);
   } else {
     ok = mesh.sendSingle(dest, msg);
   }
@@ -105,9 +117,13 @@ void handleSendBroadcast(JsonDocument &cmd) {
   bool ack = cmd["ack"] | false;
   bool includeSelf = cmd["includeSelf"] | false;
   uint32_t ackTimeoutMs = cmd["ackTimeoutMs"] | (uint32_t)5000;
+  bool hasPriority = !cmd["priority"].isNull();
+  uint8_t priority = cmd["priority"] | (uint8_t)2;
   bool ok;
   if (ack) {
     ok = mesh.sendBroadcast(msg, includeSelf, &deliveryEvent, ackTimeoutMs);
+  } else if (hasPriority) {
+    ok = mesh.sendBroadcast(msg, priority, includeSelf);
   } else {
     ok = mesh.sendBroadcast(msg, includeSelf);
   }
@@ -188,6 +204,8 @@ void setup() {
   doc["evt"] = "boot";
   doc["nodeId"] = mesh.getNodeId();
   doc["version"] = HIL_AGENT_VERSION;
+  doc["target"] = HIL_ARTIFACT_TARGET;
+  doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
   emitEvent(doc);
 }
 

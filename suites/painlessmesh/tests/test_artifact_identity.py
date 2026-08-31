@@ -1,0 +1,18 @@
+"""Every physical board must report the exact artifact selected by its map."""
+
+import os
+
+import pytest
+
+
+@pytest.mark.hil_only(reason="multi_node")
+def test_board_artifact_matches_inventory(bank, board_map):
+    if board_map is None:
+        pytest.skip("artifact identity is a physical-board property")
+    expected_ref = os.environ.get("HIL_FIRMWARE_SHA")
+    inventory = {board.id: board for board in board_map}
+    for board_id, client in bank.items():
+        info = client.info(timeout=15)
+        assert info["target"] == inventory[board_id].target
+        if expected_ref:
+            assert info["painlessMeshRef"] == expected_ref
