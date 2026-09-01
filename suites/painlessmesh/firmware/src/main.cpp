@@ -139,6 +139,8 @@ void startRegularMesh() {
   rolePreferences.remove("sharedGateway");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
+  rolePreferences.remove("healthHost");
+  rolePreferences.remove("healthPort");
   rolePreferences.putBool("reportMesh", true);
   rolePreferences.end();
   JsonDocument doc;
@@ -161,6 +163,8 @@ void handleMeshConfigure(JsonDocument &cmd) {
   rolePreferences.remove("sharedGateway");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
+  rolePreferences.remove("healthHost");
+  rolePreferences.remove("healthPort");
   rolePreferences.putString("meshSsid", prefix);
   rolePreferences.putString("meshPass", password);
   rolePreferences.putBool("reportMesh", true);
@@ -200,8 +204,11 @@ void handleGatewayStart(JsonDocument &cmd) {
 void handleSharedGatewayStart(JsonDocument &cmd) {
   String ssid = cmd["ssid"].as<String>();
   String password = cmd["password"].as<String>();
-  if (ssid.length() == 0 || password.length() < 8) {
-    emitError("shared_gateway_start requires ssid and an 8+ character password");
+  String healthHost = cmd["healthHost"].as<String>();
+  uint16_t healthPort = cmd["healthPort"] | (uint16_t)0;
+  if (ssid.length() == 0 || password.length() < 8 ||
+      healthHost.length() == 0 || healthPort == 0) {
+    emitError("shared_gateway_start requires Wi-Fi and health endpoint settings");
     return;
   }
   rolePreferences.begin("hil-role", false);
@@ -209,6 +216,8 @@ void handleSharedGatewayStart(JsonDocument &cmd) {
   rolePreferences.putBool("sharedGateway", true);
   rolePreferences.putString("ssid", ssid);
   rolePreferences.putString("password", password);
+  rolePreferences.putString("healthHost", healthHost);
+  rolePreferences.putUShort("healthPort", healthPort);
   rolePreferences.end();
   JsonDocument doc;
   doc["evt"] = "shared_gateway_restarting";
@@ -369,6 +378,8 @@ void setup() {
   bool reportMeshStart = rolePreferences.getBool("reportMesh", false);
   String routerSSID = rolePreferences.getString("ssid", "");
   String routerPassword = rolePreferences.getString("password", "");
+  String healthHost = rolePreferences.getString("healthHost", "8.8.8.8");
+  uint16_t healthPort = rolePreferences.getUShort("healthPort", 53);
   activeMeshPrefix = rolePreferences.getString("meshSsid", HIL_MESH_PREFIX);
   activeMeshPassword = rolePreferences.getString("meshPass", HIL_MESH_PASSWORD);
   if (reportMeshStart) {
@@ -379,9 +390,17 @@ void setup() {
   bool initialized = true;
   if (sharedGatewayRole) {
     mesh.setDebugMsgTypes(ERROR | STARTUP | CONNECTION);
+    painlessmesh::gateway::SharedGatewayConfig config;
+    config.enabled = true;
+    config.routerSSID = routerSSID;
+    config.routerPassword = routerPassword;
+    config.internetCheckHost = healthHost;
+    config.internetCheckPort = healthPort;
+    config.internetCheckInterval = 5000;
+    config.internetCheckTimeout = 2000;
     initialized = mesh.initAsSharedGateway(
         activeMeshPrefix, activeMeshPassword, routerSSID, routerPassword,
-        &userScheduler, HIL_MESH_PORT);
+        &userScheduler, HIL_MESH_PORT, config);
   } else if (bridgeRole) {
     // Preserve painlessMesh bridge diagnostics in the serial artifact.  The
     // host parser ignores non-JSON lines, while the raw log makes upstream

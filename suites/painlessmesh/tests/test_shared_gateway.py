@@ -38,7 +38,7 @@ def shared_gateway_mesh(mesh):
     states = {}
     try:
         for board_id, client in clients.items():
-            states[board_id] = client.start_shared_gateway(ssid, password)
+            states[board_id] = client.start_shared_gateway(ssid, password, endpoint)
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             states = {board_id: client.gateway_status() for board_id, client in clients.items()}
