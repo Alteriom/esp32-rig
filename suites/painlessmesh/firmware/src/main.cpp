@@ -45,6 +45,7 @@ Scheduler userScheduler;
 painlessMesh mesh;
 
 uint32_t stallUntil = 0;
+uint32_t bootId = 0;
 String serialBuffer;
 
 void emitEvent(JsonDocument &doc) {
@@ -66,6 +67,7 @@ void handleInfo() {
   doc["version"] = HIL_AGENT_VERSION;
   doc["target"] = HIL_ARTIFACT_TARGET;
   doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
+  doc["bootId"] = bootId;
   doc["freeHeap"] = ESP.getFreeHeap();
   emitEvent(doc);
 }
@@ -193,6 +195,7 @@ void newConnectionCallback(uint32_t nodeId) {
 }
 
 void setup() {
+  bootId = esp_random();
   Serial.begin(115200);
   // Quiet library logging: JSON protocol lines must dominate the port
   mesh.setDebugMsgTypes(ERROR);
@@ -206,6 +209,7 @@ void setup() {
   doc["version"] = HIL_AGENT_VERSION;
   doc["target"] = HIL_ARTIFACT_TARGET;
   doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
+  doc["bootId"] = bootId;
   emitEvent(doc);
 }
 

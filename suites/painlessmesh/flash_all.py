@@ -13,6 +13,7 @@ failure with the pio output, so CI cleanly distinguishes "flash failed"
 from "test failed".
 """
 
+import argparse
 import os
 import subprocess
 import sys
@@ -32,19 +33,38 @@ DEFAULT_ARTIFACT_DIR = Path(
 )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--artifacts",
+        type=Path,
+        default=DEFAULT_ARTIFACT_DIR,
+        help="artifact directory containing manifest.json",
+    )
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="verify and flash existing immutable artifacts without rebuilding",
+    )
+    parser.add_argument(
+        "--ref",
+        default=os.environ.get("PAINLESSMESH_REF") or "main",
+        help="painlessMesh ref to build (ignored with --skip-build)",
+    )
+    args = parser.parse_args(argv)
     map_path = os.environ.get("ALTERIOM_HIL_BOARD_MAP")
     if not map_path:
         print("ALTERIOM_HIL_BOARD_MAP not set", file=sys.stderr)
         return 2
-    ref = os.environ.get("PAINLESSMESH_REF") or "main"
     board_map = BoardMap.load(map_path)
     targets = sorted({board.target for board in board_map})
-    build_artifacts(ref, DEFAULT_ARTIFACT_DIR, targets)
-    manifest = load_artifacts(DEFAULT_ARTIFACT_DIR)
+    if not args.skip_build:
+        build_artifacts(args.ref, args.artifacts, targets)
+    manifest = load_artifacts(args.artifacts)
+    resolved_ref = manifest["painlessmesh_sha"]
     print(
         f"Flashing {len(board_map)} board(s) from {len(targets)} "
-        f"immutable artifact(s) with painlessMesh@{ref}"
+        f"immutable artifact(s) with painlessMesh@{resolved_ref}"
     )
     for board in board_map:
         artifact = manifest["targets"][board.target]
