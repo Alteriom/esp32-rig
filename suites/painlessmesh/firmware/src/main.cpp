@@ -13,6 +13,7 @@
 //   {"cmd":"send_broadcast","msg":"x","ack":true,"ackTimeoutMs":5000,
 //    "includeSelf":false}
 //   {"cmd":"gateway_start","ssid":"x","password":"y"}
+//   {"cmd":"shared_gateway_start","ssid":"x","password":"y"}
 //   {"cmd":"gateway_status"}
 //   {"cmd":"internet_send","tag":"case-1","url":"http://...","payload":""}
 //   {"cmd":"mesh_configure","prefix":"run-x","password":"..."}
@@ -123,6 +124,7 @@ void emitGatewayStatus(const char *eventName, bool initialized = true) {
   doc["evt"] = eventName;
   doc["initialized"] = initialized;
   doc["isBridge"] = mesh.isBridge();
+  doc["isSharedGateway"] = mesh.isSharedGatewayMode();
   doc["hasInternet"] = mesh.hasInternetConnection();
   doc["hasLocalInternet"] = mesh.hasLocalInternet();
   doc["wifiStatus"] = (int)WiFi.status();
@@ -134,6 +136,7 @@ void emitGatewayStatus(const char *eventName, bool initialized = true) {
 void startRegularMesh() {
   rolePreferences.begin("hil-role", false);
   rolePreferences.remove("bridge");
+  rolePreferences.remove("sharedGateway");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
   rolePreferences.putBool("reportMesh", true);
@@ -155,6 +158,7 @@ void handleMeshConfigure(JsonDocument &cmd) {
   }
   rolePreferences.begin("hil-role", false);
   rolePreferences.remove("bridge");
+  rolePreferences.remove("sharedGateway");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
   rolePreferences.putString("meshSsid", prefix);
@@ -179,11 +183,35 @@ void handleGatewayStart(JsonDocument &cmd) {
   }
   rolePreferences.begin("hil-role", false);
   rolePreferences.putBool("bridge", true);
+  rolePreferences.remove("sharedGateway");
   rolePreferences.putString("ssid", ssid);
   rolePreferences.putString("password", password);
   rolePreferences.end();
   JsonDocument doc;
   doc["evt"] = "gateway_restarting";
+  doc["ssidLength"] = ssid.length();
+  doc["passwordLength"] = password.length();
+  emitEvent(doc);
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleSharedGatewayStart(JsonDocument &cmd) {
+  String ssid = cmd["ssid"].as<String>();
+  String password = cmd["password"].as<String>();
+  if (ssid.length() == 0 || password.length() < 8) {
+    emitError("shared_gateway_start requires ssid and an 8+ character password");
+    return;
+  }
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.remove("bridge");
+  rolePreferences.putBool("sharedGateway", true);
+  rolePreferences.putString("ssid", ssid);
+  rolePreferences.putString("password", password);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "shared_gateway_restarting";
   doc["ssidLength"] = ssid.length();
   doc["passwordLength"] = password.length();
   emitEvent(doc);
@@ -286,6 +314,8 @@ void handleCommandLine(const String &line) {
     handleGatewayStart(cmd);
   } else if (strcmp(name, "gateway_status") == 0) {
     emitGatewayStatus("gateway_status");
+  } else if (strcmp(name, "shared_gateway_start") == 0) {
+    handleSharedGatewayStart(cmd);
   } else if (strcmp(name, "internet_send") == 0) {
     handleInternetSend(cmd);
   } else if (strcmp(name, "mesh_configure") == 0) {
@@ -335,6 +365,7 @@ void setup() {
   mesh.setDebugMsgTypes(ERROR);
   rolePreferences.begin("hil-role", false);
   bool bridgeRole = rolePreferences.getBool("bridge", false);
+  bool sharedGatewayRole = rolePreferences.getBool("sharedGateway", false);
   bool reportMeshStart = rolePreferences.getBool("reportMesh", false);
   String routerSSID = rolePreferences.getString("ssid", "");
   String routerPassword = rolePreferences.getString("password", "");
@@ -346,7 +377,12 @@ void setup() {
   rolePreferences.end();
 
   bool initialized = true;
-  if (bridgeRole) {
+  if (sharedGatewayRole) {
+    mesh.setDebugMsgTypes(ERROR | STARTUP | CONNECTION);
+    initialized = mesh.initAsSharedGateway(
+        activeMeshPrefix, activeMeshPassword, routerSSID, routerPassword,
+        &userScheduler, HIL_MESH_PORT);
+  } else if (bridgeRole) {
     // Preserve painlessMesh bridge diagnostics in the serial artifact.  The
     // host parser ignores non-JSON lines, while the raw log makes upstream
     // association and reconnect failures explainable in CI reports.
@@ -371,7 +407,9 @@ void setup() {
   doc["bootId"] = bootId;
   doc["meshPrefix"] = activeMeshPrefix;
   emitEvent(doc);
-  if (bridgeRole) {
+  if (sharedGatewayRole) {
+    emitGatewayStatus("shared_gateway_started", initialized);
+  } else if (bridgeRole) {
     emitGatewayStatus("gateway_started", initialized);
   } else if (reportMeshStart) {
     emitGatewayStatus("mesh_started", initialized);
