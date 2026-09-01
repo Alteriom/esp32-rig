@@ -16,7 +16,13 @@ def test_priority_example_broadcast_levels(mesh, priority):
     payload = f'{{"example":"priority","level":{priority}}}'
     assert sender.send_broadcast(payload, priority=priority)
     for board_id in ids[1:]:
-        event = clients[board_id].wait_recv(timeout=15)
+        event = clients[board_id].wait_for(
+            lambda item, expected=payload: (
+                item["evt"] == "recv" and item["msg"] == expected
+            ),
+            f"priority {priority} broadcast",
+            timeout=15,
+        )
         assert event["msg"] == payload
 
 
@@ -26,4 +32,9 @@ def test_priority_example_direct_message(pair):
     """Mirrors the priority example's sendCommandToNode helper."""
     sender, receiver, receiver_id = pair
     assert sender.send_single(receiver_id, "priority-command", priority=1)
-    assert receiver.wait_recv(timeout=15)["msg"] == "priority-command"
+    event = receiver.wait_for(
+        lambda item: item["evt"] == "recv" and item["msg"] == "priority-command",
+        "priority direct message",
+        timeout=15,
+    )
+    assert event["msg"] == "priority-command"

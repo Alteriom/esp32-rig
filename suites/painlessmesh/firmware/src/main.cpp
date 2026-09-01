@@ -15,6 +15,7 @@
 //   {"cmd":"gateway_start","ssid":"x","password":"y"}
 //   {"cmd":"gateway_status"}
 //   {"cmd":"internet_send","tag":"case-1","url":"http://...","payload":""}
+//   {"cmd":"mesh_configure","prefix":"run-x","password":"..."}
 //   {"cmd":"mesh_start"}       // return a gateway to regular mesh mode
 //   {"cmd":"stall","ms":3000}     // stop servicing mesh.update() for ms
 //
@@ -45,6 +46,9 @@
 #ifndef HIL_PAINLESSMESH_REF
 #define HIL_PAINLESSMESH_REF "unknown"
 #endif
+#ifndef HIL_AGENT_SHA
+#define HIL_AGENT_SHA "unknown"
+#endif
 
 Scheduler userScheduler;
 painlessMesh mesh;
@@ -53,6 +57,8 @@ uint32_t stallUntil = 0;
 uint32_t bootId = 0;
 String serialBuffer;
 Preferences rolePreferences;
+String activeMeshPrefix = HIL_MESH_PREFIX;
+String activeMeshPassword = HIL_MESH_PASSWORD;
 
 void receivedCallback(uint32_t from, String &msg);
 void newConnectionCallback(uint32_t nodeId);
@@ -76,8 +82,10 @@ void handleInfo() {
   doc["version"] = HIL_AGENT_VERSION;
   doc["target"] = HIL_ARTIFACT_TARGET;
   doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
+  doc["hilAgentSha"] = HIL_AGENT_SHA;
   doc["bootId"] = bootId;
   doc["freeHeap"] = ESP.getFreeHeap();
+  doc["meshPrefix"] = activeMeshPrefix;
   emitEvent(doc);
 }
 
@@ -125,11 +133,37 @@ void emitGatewayStatus(const char *eventName, bool initialized = true) {
 
 void startRegularMesh() {
   rolePreferences.begin("hil-role", false);
-  rolePreferences.clear();
+  rolePreferences.remove("bridge");
+  rolePreferences.remove("ssid");
+  rolePreferences.remove("password");
   rolePreferences.putBool("reportMesh", true);
   rolePreferences.end();
   JsonDocument doc;
   doc["evt"] = "mesh_restarting";
+  emitEvent(doc);
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleMeshConfigure(JsonDocument &cmd) {
+  String prefix = cmd["prefix"].as<String>();
+  String password = cmd["password"].as<String>();
+  if (prefix.length() == 0 || prefix.length() > 31 || password.length() < 8) {
+    emitError("mesh_configure requires a 1..31 character prefix and 8+ character password");
+    return;
+  }
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.remove("bridge");
+  rolePreferences.remove("ssid");
+  rolePreferences.remove("password");
+  rolePreferences.putString("meshSsid", prefix);
+  rolePreferences.putString("meshPass", password);
+  rolePreferences.putBool("reportMesh", true);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "mesh_restarting";
+  doc["meshPrefix"] = prefix;
   emitEvent(doc);
   Serial.flush();
   delay(200);
@@ -144,7 +178,6 @@ void handleGatewayStart(JsonDocument &cmd) {
     return;
   }
   rolePreferences.begin("hil-role", false);
-  rolePreferences.clear();
   rolePreferences.putBool("bridge", true);
   rolePreferences.putString("ssid", ssid);
   rolePreferences.putString("password", password);
@@ -255,6 +288,8 @@ void handleCommandLine(const String &line) {
     emitGatewayStatus("gateway_status");
   } else if (strcmp(name, "internet_send") == 0) {
     handleInternetSend(cmd);
+  } else if (strcmp(name, "mesh_configure") == 0) {
+    handleMeshConfigure(cmd);
   } else if (strcmp(name, "mesh_start") == 0) {
     startRegularMesh();
   } else if (strcmp(name, "stall") == 0) {
@@ -303,6 +338,8 @@ void setup() {
   bool reportMeshStart = rolePreferences.getBool("reportMesh", false);
   String routerSSID = rolePreferences.getString("ssid", "");
   String routerPassword = rolePreferences.getString("password", "");
+  activeMeshPrefix = rolePreferences.getString("meshSsid", HIL_MESH_PREFIX);
+  activeMeshPassword = rolePreferences.getString("meshPass", HIL_MESH_PASSWORD);
   if (reportMeshStart) {
     rolePreferences.remove("reportMesh");
   }
@@ -315,10 +352,10 @@ void setup() {
     // association and reconnect failures explainable in CI reports.
     mesh.setDebugMsgTypes(ERROR | STARTUP | CONNECTION);
     initialized = mesh.initAsBridge(
-        HIL_MESH_PREFIX, HIL_MESH_PASSWORD, routerSSID, routerPassword,
+        activeMeshPrefix, activeMeshPassword, routerSSID, routerPassword,
         &userScheduler, HIL_MESH_PORT);
   } else {
-    mesh.init(HIL_MESH_PREFIX, HIL_MESH_PASSWORD, &userScheduler,
+    mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
               HIL_MESH_PORT);
   }
   mesh.enableSendToInternet();
@@ -330,7 +367,9 @@ void setup() {
   doc["version"] = HIL_AGENT_VERSION;
   doc["target"] = HIL_ARTIFACT_TARGET;
   doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
+  doc["hilAgentSha"] = HIL_AGENT_SHA;
   doc["bootId"] = bootId;
+  doc["meshPrefix"] = activeMeshPrefix;
   emitEvent(doc);
   if (bridgeRole) {
     emitGatewayStatus("gateway_started", initialized);

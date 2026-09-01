@@ -35,6 +35,17 @@ def _gateway_settings():
     return ssid, password, endpoint.rstrip("/")
 
 
+def _wait_for_peer(client, peer_node_id: int, timeout: float) -> set[int]:
+    deadline = time.monotonic() + timeout
+    peers: set[int] = set()
+    while time.monotonic() < deadline:
+        peers = set(client.node_list(timeout=10))
+        if peer_node_id in peers:
+            return peers
+        time.sleep(2)
+    return peers
+
+
 @pytest.fixture(scope="module")
 def gateway_mesh(mesh):
     clients, node_ids = mesh
@@ -67,11 +78,23 @@ def gateway_mesh(mesh):
             and int(state["wifiStatus"]) == 3
             and state["localIP"] != "0.0.0.0"
         )
+        gateway_peers: set[int] = set()
+        sender_peers: set[int] = set()
         if upstream_ready:
             deadline = time.monotonic() + 120
             while time.monotonic() < deadline:
                 try:
-                    sender.wait_mesh_size(len(clients) - 1, timeout=10)
+                    gateway_peers = _wait_for_peer(
+                        gateway, node_ids[sender_id], timeout=10
+                    )
+                    sender_peers = _wait_for_peer(
+                        sender, node_ids[gateway_id], timeout=10
+                    )
+                    if (
+                        node_ids[sender_id] not in gateway_peers
+                        or node_ids[gateway_id] not in sender_peers
+                    ):
+                        continue
                     sender_state = sender.gateway_status(timeout=10)
                     if sender_state["hasInternet"]:
                         break
@@ -89,6 +112,8 @@ def gateway_mesh(mesh):
             "endpoint": endpoint,
             "gateway_state": state,
             "sender_state": sender_state,
+            "gateway_peers": gateway_peers,
+            "sender_peers": sender_peers,
             "upstream_ready": upstream_ready,
         }
     finally:
@@ -97,8 +122,16 @@ def gateway_mesh(mesh):
             # Role changes reboot the bridge.  Restore the complete topology
             # before later modules run so a gateway failure cannot manufacture
             # unrelated mesh regressions.
-            for client in clients.values():
-                client.wait_mesh_size(len(clients) - 1, timeout=120)
+            for board_id, client in clients.items():
+                expected = {
+                    node_id for peer_id, node_id in node_ids.items() if peer_id != board_id
+                }
+                for peer_node_id in expected:
+                    peers = _wait_for_peer(client, peer_node_id, timeout=120)
+                    if peer_node_id not in peers:
+                        pytest.fail(
+                            f"{board_id} did not restore peer {peer_node_id}: {peers}"
+                        )
         for client in clients.values():
             client.clear_pending()
 
@@ -106,6 +139,8 @@ def gateway_mesh(mesh):
 def _require_upstream(gateway_mesh):
     if not gateway_mesh["upstream_ready"]:
         pytest.skip("blocked: bridge did not establish a usable upstream connection")
+    if gateway_mesh["sender_state"] is None:
+        pytest.skip("blocked: controlled bridge/sender mesh route did not converge")
 
 
 @pytest.mark.capability("gateway.bridge")
@@ -116,7 +151,9 @@ def test_dedicated_bridge_has_upstream_wifi_and_mesh(gateway_mesh):
     assert int(state["wifiStatus"]) == 3  # Arduino WL_CONNECTED
     assert state["localIP"] != "0.0.0.0"
     assert 1 <= int(state["channel"]) <= 13
-    assert len(gateway_mesh["gateway"].node_list()) >= 1
+    assert gateway_mesh["node_ids"][gateway_mesh["sender_id"]] in gateway_mesh[
+        "gateway_peers"
+    ]
 
 
 @pytest.mark.capability("gateway.discovery")

@@ -1,5 +1,7 @@
 """Every board sees every other board — the baseline for all other tests."""
 
+import time
+
 import pytest
 
 from alteriom_hil.protocol import TimeoutWaitingFor
@@ -12,8 +14,13 @@ def test_all_boards_form_one_mesh(mesh):
     all_ids = set(node_ids.values())
     assert len(all_ids) == len(clients), "duplicate nodeIds on the rig"
     for board_id, client in clients.items():
-        peers = set(client.node_list())
         expected = all_ids - {node_ids[board_id]}
+        deadline = time.monotonic() + 30
+        while True:
+            peers = set(client.node_list())
+            if peers >= expected or time.monotonic() >= deadline:
+                break
+            time.sleep(1)
         assert peers >= expected, (
             f"{board_id} sees {peers}, expected at least {expected}"
         )

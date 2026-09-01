@@ -44,6 +44,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def agent_source_sha() -> str:
+    """Identify the HIL agent source independently of the library under test."""
+    digest = hashlib.sha256()
+    for path in sorted(FIRMWARE_DIR.rglob("*")):
+        if not path.is_file() or ".pio" in path.parts:
+            continue
+        relative = path.relative_to(FIRMWARE_DIR).as_posix()
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
 def normalize_targets(names: list[str] | None) -> list[str]:
     selected = sorted(set(names or TARGETS))
     unknown = set(selected) - set(TARGETS)
@@ -109,10 +123,12 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
     out_dir.mkdir(parents=True, exist_ok=True)
     entries = {}
     source_dir, source_sha = checkout_painlessmesh(ref)
+    hil_agent_sha = agent_source_sha()
     build_env = dict(
         os.environ,
         PAINLESSMESH_REF=source_sha,
         PAINLESSMESH_DIR=str(source_dir),
+        HIL_AGENT_SHA=hil_agent_sha,
     )
 
     for name in selected:
@@ -184,7 +200,8 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
     manifest.write_text(
         json.dumps(
             {
-                "schema": 1,
+                "schema": 2,
+                "hil_agent_sha": hil_agent_sha,
                 "painlessmesh_ref": ref,
                 "painlessmesh_sha": source_sha,
                 "targets": entries,
@@ -202,7 +219,7 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
 def load_artifacts(directory: Path) -> dict[str, dict]:
     manifest_path = directory / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != 1:
+    if manifest.get("schema") != 2:
         raise ValueError(f"unsupported artifact manifest: {manifest_path}")
     for name, entry in manifest.get("targets", {}).items():
         image = directory / entry["image"]

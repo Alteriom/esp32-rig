@@ -22,8 +22,8 @@ def test_broadcast_with_ack_confirms_every_node(mesh):
 
         assert sender.send_broadcast(payload, ack=True)
         seen = set()
-        for _ in range(len(expected_acks)):
-            ack = sender.wait_ack(timeout=20)
+        for expected_node in expected_acks:
+            ack = sender.wait_ack(node=expected_node, timeout=20)
             assert ack["delivered"] is True
             seen.add(int(ack["node"]))
         assert seen == expected_acks
