@@ -416,6 +416,11 @@ void setup() {
   mesh.enableSendToInternet();
   registerMeshCallbacks();
 
+  // initAsBridge/initAsSharedGateway diagnostics are useful during the
+  // blocking initialization above, but asynchronous Wi-Fi callbacks can
+  // otherwise splice text into a JSON control event byte-for-byte.
+  mesh.setDebugMsgTypes(ERROR);
+
   JsonDocument doc;
   doc["evt"] = "boot";
   doc["nodeId"] = mesh.getNodeId();

@@ -31,7 +31,7 @@ def _gateway_settings():
 
 @pytest.fixture(scope="module")
 def shared_gateway_mesh(mesh):
-    clients, _ = mesh
+    clients, node_ids = mesh
     if len(clients) < 2:
         pytest.skip("shared gateway validation needs at least two physical nodes")
     ssid, password, endpoint = _gateway_settings()
@@ -50,6 +50,10 @@ def shared_gateway_mesh(mesh):
         for client in clients.values():
             client.start_regular_mesh(timeout=35)
             client.clear_pending()
+        for board_id, client in clients.items():
+            expected = len(clients) - 1
+            if expected:
+                client.wait_mesh_size(expected, timeout=120)
 
 
 @pytest.mark.capability("gateway.shared", "gateway.shared.mixed_mcu")

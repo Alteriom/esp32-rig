@@ -20,6 +20,8 @@ def test_sustained_round_robin_delivery_has_no_loss_or_heap_collapse(mesh):
     clients, node_ids = mesh
     if len(clients) < 2:
         pytest.skip("soak validation needs at least two physical nodes")
+    for client in clients.values():
+        client.wait_mesh_size(len(clients) - 1, timeout=120)
     duration = max(10.0, float(os.environ.get("ALTERIOM_HIL_SOAK_SECONDS", "30")))
     initial_heap = {board_id: int(client.info()["freeHeap"]) for board_id, client in clients.items()}
     ordered = list(clients)
