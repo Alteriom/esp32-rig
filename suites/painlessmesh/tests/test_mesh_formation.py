@@ -6,6 +6,7 @@ from alteriom_hil.protocol import TimeoutWaitingFor
 
 
 @pytest.mark.hil_only(reason="radio_timing")
+@pytest.mark.capability("mesh.formation", "mesh.mixed_mcu")
 def test_all_boards_form_one_mesh(mesh):
     clients, node_ids = mesh
     all_ids = set(node_ids.values())
@@ -19,6 +20,7 @@ def test_all_boards_form_one_mesh(mesh):
 
 
 @pytest.mark.hil_only(reason="radio_timing")
+@pytest.mark.capability("mesh.unicast")
 def test_every_board_delivers_to_every_other_board(mesh):
     """Prove bidirectional unicast across the full physical-board matrix."""
     clients, node_ids = mesh

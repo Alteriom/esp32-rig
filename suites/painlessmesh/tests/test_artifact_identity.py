@@ -6,6 +6,7 @@ import pytest
 
 
 @pytest.mark.hil_only(reason="multi_node")
+@pytest.mark.capability("artifact.provenance", "artifact.family_matrix")
 def test_board_artifact_matches_inventory(bank, board_map):
     if board_map is None:
         pytest.skip("artifact identity is a physical-board property")

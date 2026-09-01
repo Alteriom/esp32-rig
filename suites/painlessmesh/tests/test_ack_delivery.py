@@ -9,6 +9,7 @@ from alteriom_hil.protocol import TimeoutWaitingFor
 pytestmark = pytest.mark.hil_only(reason="radio_timing")
 
 
+@pytest.mark.capability("delivery.ack")
 def test_send_single_with_ack_delivers(pair):
     sender, receiver, receiver_id = pair
     assert sender.send_single(receiver_id, "hil-ack-1", ack=True)
@@ -20,6 +21,7 @@ def test_send_single_with_ack_delivers(pair):
     assert 0 <= ack["latencyMs"] < 5000
 
 
+@pytest.mark.capability("mesh.unicast")
 def test_send_single_without_ack_still_delivers(pair):
     sender, receiver, receiver_id = pair
     assert sender.send_single(receiver_id, "hil-plain-1", ack=False)
@@ -29,6 +31,7 @@ def test_send_single_without_ack_still_delivers(pair):
         sender.wait_ack(timeout=1.0)  # no callback requested -> no ack event
 
 
+@pytest.mark.capability("routing.unknown_node")
 def test_send_to_unknown_node_rejected_without_callback(pair):
     sender, _, _ = pair
     assert sender.send_single(4041904190, "void", ack=True) is False
@@ -36,6 +39,7 @@ def test_send_to_unknown_node_rejected_without_callback(pair):
         sender.wait_ack(timeout=1.5)
 
 
+@pytest.mark.capability("delivery.timeout")
 def test_stalled_receiver_times_out_with_delivered_false(pair):
     sender, receiver, receiver_id = pair
     receiver.stall(4000)

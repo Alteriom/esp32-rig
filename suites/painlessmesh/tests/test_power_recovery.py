@@ -32,6 +32,7 @@ def _info_when_ready(client, timeout: float):
 
 
 @pytest.mark.hil_only(reason="power")
+@pytest.mark.capability("power.recovery")
 def test_node_rejoins_mesh_after_power_cut(mesh, power, board_map):
     if board_map is None:
         pytest.skip("no hardware board map")

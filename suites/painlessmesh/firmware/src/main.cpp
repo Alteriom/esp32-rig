@@ -12,6 +12,10 @@
 //   {"cmd":"send_single","dest":123,"msg":"x","ack":true,"ackTimeoutMs":5000}
 //   {"cmd":"send_broadcast","msg":"x","ack":true,"ackTimeoutMs":5000,
 //    "includeSelf":false}
+//   {"cmd":"gateway_start","ssid":"x","password":"y"}
+//   {"cmd":"gateway_status"}
+//   {"cmd":"internet_send","tag":"case-1","url":"http://...","payload":""}
+//   {"cmd":"mesh_start"}       // return a gateway to regular mesh mode
 //   {"cmd":"stall","ms":3000}     // stop servicing mesh.update() for ms
 //
 // board -> host events (one JSON object per line):
@@ -21,6 +25,7 @@
 #include <painlessMesh.h>
 
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 #ifndef HIL_MESH_PREFIX
 #define HIL_MESH_PREFIX "AlteriomHILMesh"
@@ -47,6 +52,10 @@ painlessMesh mesh;
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
 String serialBuffer;
+Preferences rolePreferences;
+
+void receivedCallback(uint32_t from, String &msg);
+void newConnectionCallback(uint32_t nodeId);
 
 void emitEvent(JsonDocument &doc) {
   serializeJson(doc, Serial);
@@ -93,6 +102,88 @@ void emitSendResult(bool ok) {
   JsonDocument doc;
   doc["evt"] = "send_result";
   doc["ok"] = ok;
+  emitEvent(doc);
+}
+
+void registerMeshCallbacks() {
+  mesh.onReceive(&receivedCallback);
+  mesh.onNewConnection(&newConnectionCallback);
+}
+
+void emitGatewayStatus(const char *eventName, bool initialized = true) {
+  JsonDocument doc;
+  doc["evt"] = eventName;
+  doc["initialized"] = initialized;
+  doc["isBridge"] = mesh.isBridge();
+  doc["hasInternet"] = mesh.hasInternetConnection();
+  doc["hasLocalInternet"] = mesh.hasLocalInternet();
+  doc["wifiStatus"] = (int)WiFi.status();
+  doc["localIP"] = WiFi.localIP().toString();
+  doc["channel"] = WiFi.channel();
+  emitEvent(doc);
+}
+
+void startRegularMesh() {
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.clear();
+  rolePreferences.putBool("reportMesh", true);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "mesh_restarting";
+  emitEvent(doc);
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleGatewayStart(JsonDocument &cmd) {
+  String ssid = cmd["ssid"].as<String>();
+  String password = cmd["password"].as<String>();
+  if (ssid.length() == 0 || password.length() < 8) {
+    emitError("gateway_start requires ssid and an 8+ character password");
+    return;
+  }
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.clear();
+  rolePreferences.putBool("bridge", true);
+  rolePreferences.putString("ssid", ssid);
+  rolePreferences.putString("password", password);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "gateway_restarting";
+  doc["ssidLength"] = ssid.length();
+  doc["passwordLength"] = password.length();
+  emitEvent(doc);
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleInternetSend(JsonDocument &cmd) {
+  String tag = cmd["tag"].as<String>();
+  String url = cmd["url"].as<String>();
+  String payload = cmd["payload"] | "";
+  uint8_t priority = cmd["priority"] | (uint8_t)2;
+  if (tag.length() == 0 || url.length() == 0 || priority > 3) {
+    emitError("internet_send requires tag, url, and priority 0..3");
+    return;
+  }
+  uint32_t messageId = mesh.sendToInternet(
+      url, payload,
+      [tag](bool success, uint16_t httpStatus, String error) {
+        JsonDocument doc;
+        doc["evt"] = "internet_result";
+        doc["tag"] = tag;
+        doc["success"] = success;
+        doc["httpStatus"] = httpStatus;
+        doc["error"] = error;
+        emitEvent(doc);
+      },
+      priority);
+  JsonDocument doc;
+  doc["evt"] = "internet_queued";
+  doc["tag"] = tag;
+  doc["messageId"] = messageId;
   emitEvent(doc);
 }
 
@@ -158,6 +249,14 @@ void handleCommandLine(const String &line) {
     handleSendSingle(cmd);
   } else if (strcmp(name, "send_broadcast") == 0) {
     handleSendBroadcast(cmd);
+  } else if (strcmp(name, "gateway_start") == 0) {
+    handleGatewayStart(cmd);
+  } else if (strcmp(name, "gateway_status") == 0) {
+    emitGatewayStatus("gateway_status");
+  } else if (strcmp(name, "internet_send") == 0) {
+    handleInternetSend(cmd);
+  } else if (strcmp(name, "mesh_start") == 0) {
+    startRegularMesh();
   } else if (strcmp(name, "stall") == 0) {
     handleStall(cmd);
   } else {
@@ -199,9 +298,31 @@ void setup() {
   Serial.begin(115200);
   // Quiet library logging: JSON protocol lines must dominate the port
   mesh.setDebugMsgTypes(ERROR);
-  mesh.init(HIL_MESH_PREFIX, HIL_MESH_PASSWORD, &userScheduler, HIL_MESH_PORT);
-  mesh.onReceive(&receivedCallback);
-  mesh.onNewConnection(&newConnectionCallback);
+  rolePreferences.begin("hil-role", false);
+  bool bridgeRole = rolePreferences.getBool("bridge", false);
+  bool reportMeshStart = rolePreferences.getBool("reportMesh", false);
+  String routerSSID = rolePreferences.getString("ssid", "");
+  String routerPassword = rolePreferences.getString("password", "");
+  if (reportMeshStart) {
+    rolePreferences.remove("reportMesh");
+  }
+  rolePreferences.end();
+
+  bool initialized = true;
+  if (bridgeRole) {
+    // Preserve painlessMesh bridge diagnostics in the serial artifact.  The
+    // host parser ignores non-JSON lines, while the raw log makes upstream
+    // association and reconnect failures explainable in CI reports.
+    mesh.setDebugMsgTypes(ERROR | STARTUP | CONNECTION);
+    initialized = mesh.initAsBridge(
+        HIL_MESH_PREFIX, HIL_MESH_PASSWORD, routerSSID, routerPassword,
+        &userScheduler, HIL_MESH_PORT);
+  } else {
+    mesh.init(HIL_MESH_PREFIX, HIL_MESH_PASSWORD, &userScheduler,
+              HIL_MESH_PORT);
+  }
+  mesh.enableSendToInternet();
+  registerMeshCallbacks();
 
   JsonDocument doc;
   doc["evt"] = "boot";
@@ -211,6 +332,11 @@ void setup() {
   doc["painlessMeshRef"] = HIL_PAINLESSMESH_REF;
   doc["bootId"] = bootId;
   emitEvent(doc);
+  if (bridgeRole) {
+    emitGatewayStatus("gateway_started", initialized);
+  } else if (reportMeshStart) {
+    emitGatewayStatus("mesh_started", initialized);
+  }
 }
 
 void loop() {

@@ -4,6 +4,7 @@ import pytest
 
 
 @pytest.mark.hil_only(reason="multi_node")
+@pytest.mark.capability("priority.levels")
 @pytest.mark.parametrize("priority", [0, 1, 2, 3])
 def test_priority_example_broadcast_levels(mesh, priority):
     """Mirrors examples/priority/priority_basic_example on real radios."""
@@ -20,6 +21,7 @@ def test_priority_example_broadcast_levels(mesh, priority):
 
 
 @pytest.mark.hil_only(reason="multi_node")
+@pytest.mark.capability("priority.levels")
 def test_priority_example_direct_message(pair):
     """Mirrors the priority example's sendCommandToNode helper."""
     sender, receiver, receiver_id = pair
