@@ -13,6 +13,8 @@ failure with the pio output, so CI cleanly distinguishes "flash failed"
 from "test failed".
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import subprocess
