@@ -172,11 +172,23 @@ void handleOtaUploadBegin(JsonDocument &cmd) {
 void handleOtaUploadChunk(JsonDocument &cmd) {
   String encoded = cmd["data"].as<String>();
   size_t offset = cmd["offset"] | (size_t)-1;
+  size_t expectedLength = cmd["length"] | (size_t)0;
+  String expectedMd5 = cmd["md5"].as<String>();
   if (!otaUploadFile || encoded.length() == 0 || offset != otaUploadedSize) {
     emitError("invalid OTA upload chunk or offset");
     return;
   }
   auto decoded = painlessmesh::base64::decode(encoded);
+  MD5Builder chunkMd5;
+  chunkMd5.begin();
+  chunkMd5.add(reinterpret_cast<uint8_t *>(const_cast<char *>(decoded.c_str())),
+               decoded.length());
+  chunkMd5.calculate();
+  if (decoded.length() != expectedLength || expectedMd5.length() != 32 ||
+      !chunkMd5.toString().equalsIgnoreCase(expectedMd5)) {
+    emitOtaEvent("ota_upload_retry", false);
+    return;
+  }
   size_t written = otaUploadFile.write(
       reinterpret_cast<const uint8_t *>(decoded.c_str()), decoded.length());
   if (written != decoded.length()) {
