@@ -73,9 +73,12 @@ File otaUploadFile;
 File otaSourceFile;
 size_t otaExpectedSize = 0;
 size_t otaUploadedSize = 0;
+size_t otaLastChunkOffset = 0;
+size_t otaLastChunkLength = 0;
 String otaExpectedMd5;
 String otaSourceMd5;
 String otaSourceRole;
+String otaLastChunkMd5;
 std::shared_ptr<Task> otaOfferTask;
 
 void receivedCallback(uint32_t from, String &msg);
@@ -164,8 +167,11 @@ void handleOtaUploadBegin(JsonDocument &cmd) {
   }
   otaExpectedSize = size;
   otaUploadedSize = 0;
+  otaLastChunkOffset = 0;
+  otaLastChunkLength = 0;
   otaExpectedMd5 = md5;
   otaSourceRole = role;
+  otaLastChunkMd5 = "";
   emitOtaEvent("ota_upload_ready");
 }
 
@@ -174,7 +180,7 @@ void handleOtaUploadChunk(JsonDocument &cmd) {
   size_t offset = cmd["offset"] | (size_t)-1;
   size_t expectedLength = cmd["length"] | (size_t)0;
   String expectedMd5 = cmd["md5"].as<String>();
-  if (!otaUploadFile || encoded.length() == 0 || offset != otaUploadedSize) {
+  if (!otaUploadFile || encoded.length() == 0) {
     emitError("invalid OTA upload chunk or offset");
     return;
   }
@@ -189,12 +195,29 @@ void handleOtaUploadChunk(JsonDocument &cmd) {
     emitOtaEvent("ota_upload_retry", false);
     return;
   }
+  // A USB-UART frame can be damaged after the board has committed the chunk
+  // but before the host parses its acknowledgement.  Treat an exact retry of
+  // the last committed chunk as idempotent; the final whole-image MD5 remains
+  // authoritative and the file is never written twice.
+  if (offset == otaLastChunkOffset && expectedLength == otaLastChunkLength &&
+      expectedMd5.equalsIgnoreCase(otaLastChunkMd5) &&
+      offset + expectedLength == otaUploadedSize) {
+    emitOtaEvent("ota_upload_chunk");
+    return;
+  }
+  if (offset != otaUploadedSize) {
+    emitError("invalid OTA upload chunk or offset");
+    return;
+  }
   size_t written = otaUploadFile.write(
       reinterpret_cast<const uint8_t *>(decoded.c_str()), decoded.length());
   if (written != decoded.length()) {
     emitError("OTA source write failed");
     return;
   }
+  otaLastChunkOffset = offset;
+  otaLastChunkLength = written;
+  otaLastChunkMd5 = expectedMd5;
   otaUploadedSize += written;
   emitOtaEvent("ota_upload_chunk");
 }
