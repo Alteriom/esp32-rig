@@ -65,8 +65,13 @@ void receivedCallback(uint32_t from, String &msg);
 void newConnectionCallback(uint32_t nodeId);
 
 void emitEvent(JsonDocument &doc) {
-  serializeJson(doc, Serial);
-  Serial.println();
+  // Build one complete frame before writing it. This avoids damaged JSON
+  // prefixes on inexpensive USB-UART bridges under concurrent mesh traffic.
+  String frame;
+  frame.reserve(measureJson(doc) + 1);
+  serializeJson(doc, frame);
+  Serial.println(frame);
+  Serial.flush();
 }
 
 void emitError(const char *message) {
@@ -347,7 +352,7 @@ void pumpSerial() {
       serialBuffer = "";
     } else {
       serialBuffer += c;
-      if (serialBuffer.length() > 1024) serialBuffer = "";  // runaway guard
+      if (serialBuffer.length() > 4096) serialBuffer = "";  // runaway guard
     }
   }
 }
@@ -369,6 +374,7 @@ void newConnectionCallback(uint32_t nodeId) {
 
 void setup() {
   bootId = esp_random();
+  Serial.setRxBufferSize(2048);
   Serial.begin(115200);
   // Quiet library logging: JSON protocol lines must dominate the port
   mesh.setDebugMsgTypes(ERROR);
