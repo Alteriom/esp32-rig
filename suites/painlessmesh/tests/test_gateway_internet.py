@@ -46,6 +46,44 @@ def _wait_for_peer(client, peer_node_id: int, timeout: float) -> set[int]:
     return peers
 
 
+def _restore_regular_mesh(clients, node_ids, attempts: int = 3) -> None:
+    """Reboot all roles and require a complete post-transition topology.
+
+    A bridge election can leave two internally valid subtrees after every
+    device returns to station/AP mode.  Also, inexpensive USB-UART adapters can
+    lose one reply while several boards reboot.  Retry the whole recovery
+    sequence, but only return once every physical node reports every peer.
+    """
+    last: dict[str, set[int] | str] = {}
+    for _ in range(attempts):
+        for client in clients.values():
+            client.start_regular_mesh(timeout=35)
+
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            complete = True
+            for board_id, client in clients.items():
+                expected = {
+                    node_id
+                    for peer_id, node_id in node_ids.items()
+                    if peer_id != board_id
+                }
+                try:
+                    peers = set(client.node_list(timeout=10))
+                    last[board_id] = peers
+                except TimeoutWaitingFor as exc:
+                    last[board_id] = str(exc).splitlines()[0]
+                    complete = False
+                    continue
+                if not peers >= expected:
+                    complete = False
+            if complete:
+                return
+            time.sleep(2)
+
+    pytest.fail(f"regular mesh did not recover complete topology: {last}")
+
+
 @pytest.fixture(scope="module")
 def gateway_mesh(mesh):
     clients, node_ids = mesh
@@ -123,21 +161,7 @@ def gateway_mesh(mesh):
             # when one of those routes is no longer usable.  Reboot every role
             # into the regular mesh so later feature tests start from clean
             # routing state rather than a stale post-election tree.
-            for client in clients.values():
-                client.start_regular_mesh(timeout=35)
-
-            # Restore the complete topology before later modules run so a
-            # gateway transition cannot manufacture unrelated mesh regressions.
-            for board_id, client in clients.items():
-                expected = {
-                    node_id for peer_id, node_id in node_ids.items() if peer_id != board_id
-                }
-                for peer_node_id in expected:
-                    peers = _wait_for_peer(client, peer_node_id, timeout=120)
-                    if peer_node_id not in peers:
-                        pytest.fail(
-                            f"{board_id} did not restore peer {peer_node_id}: {peers}"
-                        )
+            _restore_regular_mesh(clients, node_ids)
         for client in clients.values():
             client.clear_pending()
 
