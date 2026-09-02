@@ -258,6 +258,16 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
         sender_peers = _wait_for_peer(sender, backup_node, timeout=120)
         assert backup_node in sender_peers
 
+        discovery_deadline = time.monotonic() + 120
+        sender_state = sender.gateway_status(timeout=10)
+        while (
+            backup_node not in {int(node) for node in sender_state["gateways"]}
+            and time.monotonic() < discovery_deadline
+        ):
+            time.sleep(2)
+            sender_state = sender.gateway_status(timeout=10)
+        assert backup_node in {int(node) for node in sender_state["gateways"]}
+
         control_tag = f"failover-before-{time.time_ns()}"
         control = _send_and_wait(
             gateway_mesh, control_tag, f"/status/200?tag={control_tag}"
@@ -269,23 +279,24 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
         gateway_mesh["gateway"].start_regular_mesh(timeout=35)
 
         # Gateway advertisements and cached routes converge asynchronously.
-        # Require eventual successful data, retaining each failed transaction
-        # as evidence instead of pretending failover is instantaneous.
+        # Wait until the library itself selects the backup, then prove the
+        # selected route carries application data.
         deadline = time.monotonic() + 120
-        recovered = {"success": False, "error": "no failover attempt"}
-        attempt = 0
+        sender_state = sender.gateway_status(timeout=10)
         while time.monotonic() < deadline:
-            attempt += 1
             backup_state = backup.gateway_status(timeout=10)
             assert backup_state["isBridge"] is True
             assert backup_state["hasInternet"] is True
-            recovered_tag = f"failover-after-{attempt}-{time.time_ns()}"
-            recovered = _send_and_wait(
-                gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
-            )
-            if recovered["success"]:
+            sender_state = sender.gateway_status(timeout=10)
+            if int(sender_state["primaryGateway"]) == backup_node:
                 break
-            time.sleep(5)
+            time.sleep(2)
+        assert int(sender_state["primaryGateway"]) == backup_node, sender_state
+
+        recovered_tag = f"failover-after-{time.time_ns()}"
+        recovered = _send_and_wait(
+            gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+        )
         assert recovered["success"] is True
         assert recovered["httpStatus"] == 200, recovered
     finally:

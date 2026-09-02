@@ -40,27 +40,33 @@ def test_sustained_round_robin_delivery_has_no_loss_or_heap_collapse(mesh):
             assert sender.send_single(
                 node_ids[receiver_id], payload, ack=True, ack_timeout_ms=4000
             )
+            received = None
+            acknowledgement = None
             try:
                 received = receiver.wait_recv(
                     from_node=node_ids[sender_id], timeout=8
                 )
             except TimeoutWaitingFor:
+                pass
+            try:
                 acknowledgement = sender.wait_ack(
                     node_ids[receiver_id], timeout=8
                 )
+            except TimeoutWaitingFor:
+                pass
+            if received is not None and acknowledgement is not None:
+                assert received["msg"] == payload
                 assert acknowledgement["delivered"] is True
-                if observation_attempt == 1:
-                    raise
-                # The radio delivery was proven, but its independent serial
-                # evidence frame was damaged. Retry with a unique payload so
-                # payload-integrity evidence is still mandatory.
-                sender.clear_pending()
-                receiver.clear_pending()
-                continue
-            acknowledgement = sender.wait_ack(node_ids[receiver_id], timeout=8)
-            assert received["msg"] == payload
-            assert acknowledgement["delivered"] is True
-            break
+                break
+            if observation_attempt == 1:
+                pytest.fail(
+                    f"incomplete serial evidence after two delivered attempts: "
+                    f"recv={received is not None}, ack={acknowledgement is not None}"
+                )
+            # Either independent telemetry line was damaged. Retry with a
+            # unique payload so both payload and ACK evidence remain mandatory.
+            sender.clear_pending()
+            receiver.clear_pending()
         delivered += 1
     assert delivered >= len(clients) * 2
     final_heap = {board_id: int(client.info()["freeHeap"]) for board_id, client in clients.items()}

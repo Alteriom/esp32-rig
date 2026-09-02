@@ -135,6 +135,9 @@ void emitGatewayStatus(const char *eventName, bool initialized = true) {
   doc["wifiStatus"] = (int)WiFi.status();
   doc["localIP"] = WiFi.localIP().toString();
   doc["channel"] = WiFi.channel();
+  doc["primaryGateway"] = mesh.getPrimaryGateway();
+  JsonArray gateways = doc["gateways"].to<JsonArray>();
+  for (auto gatewayId : mesh.getGateways()) gateways.add(gatewayId);
   emitEvent(doc);
 }
 
