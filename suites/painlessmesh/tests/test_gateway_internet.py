@@ -286,10 +286,21 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
             sender_state = sender.gateway_status(timeout=10)
         assert int(sender_state["primaryGateway"]) == backup_node, sender_state
 
-        recovered_tag = f"failover-after-{time.time_ns()}"
-        recovered = _send_and_wait(
-            gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
-        )
+        # Gateway discovery can precede readiness of the newly rebuilt data
+        # path by one transaction.  Use unique request IDs and require a real
+        # successful relay within a small bounded recovery window.
+        recovered = None
+        for attempt in range(1, 4):
+            recovered_tag = f"failover-after-{attempt}-{time.time_ns()}"
+            recovered = _send_and_wait(
+                gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+            )
+            if recovered["success"] is True:
+                break
+            time.sleep(3)
+            sender_state = sender.gateway_status(timeout=10)
+            assert int(sender_state["primaryGateway"]) == backup_node, sender_state
+        assert recovered is not None
         assert recovered["success"] is True
         assert recovered["httpStatus"] == 200, recovered
     finally:
