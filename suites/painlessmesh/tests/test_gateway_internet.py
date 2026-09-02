@@ -222,3 +222,58 @@ def test_gateway_relays_again_after_upstream_request_failure(gateway_mesh):
     )
     assert recovered["success"] is True
     assert recovered["httpStatus"] == 200
+
+
+@pytest.mark.capability("gateway.failover", "internet.recovery")
+def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
+    """Remove the active bridge and prove a second physical bridge carries data."""
+    clients = gateway_mesh["clients"]
+    if len(clients) < 3:
+        pytest.skip("gateway failover needs two bridges and one regular node")
+    _require_upstream(gateway_mesh)
+
+    backup_id = next(
+        board_id
+        for board_id in clients
+        if board_id not in {gateway_mesh["gateway_id"], gateway_mesh["sender_id"]}
+    )
+    backup = clients[backup_id]
+    ssid, password, _ = _gateway_settings()
+    backup_started = False
+    try:
+        backup_state = backup.start_gateway(ssid, password)
+        backup_started = True
+        deadline = time.monotonic() + 60
+        while (
+            int(backup_state["wifiStatus"]) != 3
+            and time.monotonic() < deadline
+        ):
+            time.sleep(1)
+            backup_state = backup.gateway_status(timeout=10)
+        assert int(backup_state["wifiStatus"]) == 3, backup_id
+        assert backup_state["isBridge"] is True, backup_id
+
+        backup_node = gateway_mesh["node_ids"][backup_id]
+        sender = gateway_mesh["sender"]
+        sender_peers = _wait_for_peer(sender, backup_node, timeout=120)
+        assert backup_node in sender_peers
+
+        control_tag = f"failover-before-{time.time_ns()}"
+        control = _send_and_wait(
+            gateway_mesh, control_tag, f"/status/200?tag={control_tag}"
+        )
+        assert control["success"] is True
+
+        # This reboots the primary into a regular mesh node, removing its
+        # upstream route without relying on unsupported per-port hub power.
+        gateway_mesh["gateway"].start_regular_mesh(timeout=35)
+
+        recovered_tag = f"failover-after-{time.time_ns()}"
+        recovered = _send_and_wait(
+            gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+        )
+        assert recovered["success"] is True
+        assert recovered["httpStatus"] == 200
+    finally:
+        if backup_started:
+            backup.start_regular_mesh(timeout=35)
