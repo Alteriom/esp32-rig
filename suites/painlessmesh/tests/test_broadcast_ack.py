@@ -1,10 +1,11 @@
-"""Broadcast delivery confirmation: exactly one ack per mesh peer."""
+"""Broadcast delivery confirmation and application-payload integrity."""
 
+import json
 import pytest
 
 
 @pytest.mark.hil_only(reason="radio_timing")
-@pytest.mark.capability("mesh.broadcast", "delivery.ack")
+@pytest.mark.capability("mesh.broadcast", "mesh.payload_integrity", "delivery.ack")
 def test_broadcast_with_ack_confirms_every_node(mesh):
     clients, node_ids = mesh
     if len(clients) < 2:
@@ -12,7 +13,17 @@ def test_broadcast_with_ack_confirms_every_node(mesh):
 
         pytest.skip("needs at least 2 boards")
     for sender_id, sender in clients.items():
-        payload = f"hil-bcast:{sender_id}"
+        payload = json.dumps(
+            {
+                "kind": "hil-broadcast-data",
+                "source": sender_id,
+                "escaped": "quote=\" slash=\\ newline=\\n",
+                "sequence": list(range(24)),
+                "padding": (f"broadcast:{sender_id}|" * 24)[:384],
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
         receivers = {
             board_id: client
             for board_id, client in clients.items()

@@ -1,5 +1,6 @@
 """Every board sees every other board — the baseline for all other tests."""
 
+import json
 import time
 
 import pytest
@@ -27,9 +28,9 @@ def test_all_boards_form_one_mesh(mesh):
 
 
 @pytest.mark.hil_only(reason="radio_timing")
-@pytest.mark.capability("mesh.unicast")
+@pytest.mark.capability("mesh.unicast", "mesh.bidirectional", "mesh.payload_integrity")
 def test_every_board_delivers_to_every_other_board(mesh):
-    """Prove bidirectional unicast across the full physical-board matrix."""
+    """Prove exact bidirectional application data across the full board matrix."""
     clients, node_ids = mesh
     if len(clients) < 2:
         pytest.skip("needs at least 2 boards")
@@ -41,7 +42,22 @@ def test_every_board_delivers_to_every_other_board(mesh):
             receiver_node_id = node_ids[receiver_id]
             last_timeout = None
             for attempt in range(1, 3):
-                payload = f"hil-matrix:{sender_id}->{receiver_id}:{attempt}"
+                # Exercise content that is materially closer to an application
+                # message than a short sentinel.  Exact equality at the receiver
+                # detects truncation, escaping damage, and cross-message mixing.
+                payload = json.dumps(
+                    {
+                        "kind": "hil-mesh-data",
+                        "source": sender_id,
+                        "destination": receiver_id,
+                        "attempt": attempt,
+                        "escaped": "quote=\" slash=\\ newline=\\n",
+                        "sequence": list(range(16)),
+                        "padding": (f"{sender_id}>{receiver_id}|" * 24)[:320],
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
                 assert sender.send_single(receiver_node_id, payload, ack=True)
                 try:
                     ack = sender.wait_ack(node=receiver_node_id, timeout=15)

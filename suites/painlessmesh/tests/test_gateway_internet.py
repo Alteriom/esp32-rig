@@ -204,3 +204,21 @@ def test_gateway_returns_honest_http_failure(gateway_mesh):
     assert result["success"] is False
     assert result["httpStatus"] == 400
     assert "400" in result["error"]
+
+
+@pytest.mark.capability("internet.recovery")
+def test_gateway_relays_again_after_upstream_request_failure(gateway_mesh):
+    """A failed upstream transaction must not poison the relay data path."""
+    failed_tag = f"recovery-fail-{time.time_ns()}"
+    failed = _send_and_wait(
+        gateway_mesh, failed_tag, f"/status/503?tag={failed_tag}"
+    )
+    assert failed["success"] is False
+    assert failed["httpStatus"] == 503
+
+    recovered_tag = f"recovery-ok-{time.time_ns()}"
+    recovered = _send_and_wait(
+        gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+    )
+    assert recovered["success"] is True
+    assert recovered["httpStatus"] == 200
