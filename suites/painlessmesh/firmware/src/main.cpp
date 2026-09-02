@@ -28,7 +28,9 @@
 #include <painlessMesh.h>
 
 #include <ArduinoJson.h>
+#include <MD5Builder.h>
 #include <Preferences.h>
+#include <SPIFFS.h>
 
 #ifndef HIL_MESH_PREFIX
 #define HIL_MESH_PREFIX "AlteriomHILMesh"
@@ -51,6 +53,12 @@
 #ifndef HIL_AGENT_SHA
 #define HIL_AGENT_SHA "unknown"
 #endif
+#ifndef HIL_OTA_GENERATION
+#define HIL_OTA_GENERATION 1
+#endif
+
+constexpr size_t HIL_OTA_PART_SIZE = 1024;
+constexpr const char *HIL_OTA_FILE = "/hil-ota.bin";
 
 Scheduler userScheduler;
 painlessMesh mesh;
@@ -61,6 +69,14 @@ String serialBuffer;
 Preferences rolePreferences;
 String activeMeshPrefix = HIL_MESH_PREFIX;
 String activeMeshPassword = HIL_MESH_PASSWORD;
+File otaUploadFile;
+File otaSourceFile;
+size_t otaExpectedSize = 0;
+size_t otaUploadedSize = 0;
+String otaExpectedMd5;
+String otaSourceMd5;
+String otaSourceRole;
+std::shared_ptr<Task> otaOfferTask;
 
 void receivedCallback(uint32_t from, String &msg);
 void newConnectionCallback(uint32_t nodeId);
@@ -93,6 +109,137 @@ void handleInfo() {
   doc["bootId"] = bootId;
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["meshPrefix"] = activeMeshPrefix;
+  doc["otaGeneration"] = HIL_OTA_GENERATION;
+  emitEvent(doc);
+}
+
+void emitOtaEvent(const char *eventName, bool ok = true) {
+  JsonDocument doc;
+  doc["evt"] = eventName;
+  doc["ok"] = ok;
+  doc["bytes"] = otaUploadedSize;
+  emitEvent(doc);
+}
+
+void handleOtaReceiveEnable(JsonDocument &cmd) {
+  String role = cmd["role"].as<String>();
+  if (role.length() == 0 || role.length() > 31) {
+    emitError("ota_receive_enable requires a 1..31 character role");
+    return;
+  }
+  SPIFFS.begin(true);
+  SPIFFS.remove("/ota_fw.json");
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.putBool("otaReceive", true);
+  rolePreferences.putString("otaRole", role);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "ota_receiver_restarting";
+  doc["role"] = role;
+  emitEvent(doc);
+  Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleOtaUploadBegin(JsonDocument &cmd) {
+  size_t size = cmd["size"] | (size_t)0;
+  String md5 = cmd["md5"].as<String>();
+  String role = cmd["role"].as<String>();
+  if (size == 0 || md5.length() != 32 || role.length() == 0 ||
+      role.length() > 31) {
+    emitError("ota_upload_begin requires size, MD5, and role");
+    return;
+  }
+  if (!SPIFFS.begin(true)) {
+    emitError("unable to mount SPIFFS for OTA source");
+    return;
+  }
+  if (otaUploadFile) otaUploadFile.close();
+  SPIFFS.remove(HIL_OTA_FILE);
+  otaUploadFile = SPIFFS.open(HIL_OTA_FILE, FILE_WRITE);
+  if (!otaUploadFile) {
+    emitError("unable to create OTA source file");
+    return;
+  }
+  otaExpectedSize = size;
+  otaUploadedSize = 0;
+  otaExpectedMd5 = md5;
+  otaSourceRole = role;
+  emitOtaEvent("ota_upload_ready");
+}
+
+void handleOtaUploadChunk(JsonDocument &cmd) {
+  String encoded = cmd["data"].as<String>();
+  size_t offset = cmd["offset"] | (size_t)-1;
+  if (!otaUploadFile || encoded.length() == 0 || offset != otaUploadedSize) {
+    emitError("invalid OTA upload chunk or offset");
+    return;
+  }
+  auto decoded = painlessmesh::base64::decode(encoded);
+  size_t written = otaUploadFile.write(
+      reinterpret_cast<const uint8_t *>(decoded.c_str()), decoded.length());
+  if (written != decoded.length()) {
+    emitError("OTA source write failed");
+    return;
+  }
+  otaUploadedSize += written;
+  emitOtaEvent("ota_upload_chunk");
+}
+
+void handleOtaUploadFinish() {
+  if (otaUploadFile) otaUploadFile.close();
+  if (otaUploadedSize != otaExpectedSize) {
+    emitError("OTA source size mismatch");
+    return;
+  }
+  auto source = SPIFFS.open(HIL_OTA_FILE, FILE_READ);
+  if (!source) {
+    emitError("unable to verify OTA source file");
+    return;
+  }
+  MD5Builder md5;
+  md5.begin();
+  md5.addStream(source, source.size());
+  md5.calculate();
+  source.close();
+  otaSourceMd5 = md5.toString();
+  if (!otaSourceMd5.equalsIgnoreCase(otaExpectedMd5)) {
+    emitError("OTA source MD5 mismatch");
+    return;
+  }
+  emitOtaEvent("ota_upload_verified");
+}
+
+void handleOtaOffer() {
+  if (otaSourceMd5.length() != 32 || otaUploadedSize != otaExpectedSize) {
+    emitError("verified OTA source is required before offer");
+    return;
+  }
+  if (otaSourceFile) otaSourceFile.close();
+  otaSourceFile = SPIFFS.open(HIL_OTA_FILE, FILE_READ);
+  if (!otaSourceFile) {
+    emitError("unable to open OTA source for mesh transfer");
+    return;
+  }
+  mesh.initOTASend(
+      [](painlessmesh::plugin::ota::DataRequest pkg, char *buffer) {
+        size_t offset = HIL_OTA_PART_SIZE * pkg.partNo;
+        if (offset >= otaSourceFile.size()) return (size_t)0;
+        otaSourceFile.seek(offset);
+        return otaSourceFile.readBytes(
+            buffer,
+            min(HIL_OTA_PART_SIZE, otaSourceFile.size() - offset));
+      },
+      HIL_OTA_PART_SIZE);
+  size_t partCount =
+      (otaSourceFile.size() + HIL_OTA_PART_SIZE - 1) / HIL_OTA_PART_SIZE;
+  otaOfferTask = mesh.offerOTA(otaSourceRole, "ESP32", otaSourceMd5,
+                               partCount, true);
+  JsonDocument doc;
+  doc["evt"] = "ota_offered";
+  doc["md5"] = otaSourceMd5;
+  doc["parts"] = partCount;
   emitEvent(doc);
 }
 
@@ -371,6 +518,16 @@ void handleCommandLine(const String &line) {
     startRegularMesh();
   } else if (strcmp(name, "stall") == 0) {
     handleStall(cmd);
+  } else if (strcmp(name, "ota_receive_enable") == 0) {
+    handleOtaReceiveEnable(cmd);
+  } else if (strcmp(name, "ota_upload_begin") == 0) {
+    handleOtaUploadBegin(cmd);
+  } else if (strcmp(name, "ota_upload_chunk") == 0) {
+    handleOtaUploadChunk(cmd);
+  } else if (strcmp(name, "ota_upload_finish") == 0) {
+    handleOtaUploadFinish();
+  } else if (strcmp(name, "ota_offer") == 0) {
+    handleOtaOffer();
   } else {
     emitError("unknown cmd");
   }
@@ -420,6 +577,8 @@ void setup() {
   String routerPassword = rolePreferences.getString("password", "");
   String healthHost = rolePreferences.getString("healthHost", "8.8.8.8");
   uint16_t healthPort = rolePreferences.getUShort("healthPort", 53);
+  bool otaReceive = rolePreferences.getBool("otaReceive", false);
+  String otaRole = rolePreferences.getString("otaRole", "");
   activeMeshPrefix = rolePreferences.getString("meshSsid", HIL_MESH_PREFIX);
   activeMeshPassword = rolePreferences.getString("meshPass", HIL_MESH_PASSWORD);
   if (reportMeshStart) {
@@ -464,6 +623,17 @@ void setup() {
     }
   }
   mesh.enableSendToInternet();
+  if (otaReceive && otaRole.length() > 0) {
+    mesh.initOTAReceive(otaRole, [](int part, int total) {
+      if (part == 0 || part == total - 1 || part % 64 == 0) {
+        JsonDocument progress;
+        progress["evt"] = "ota_progress";
+        progress["part"] = part;
+        progress["total"] = total;
+        emitEvent(progress);
+      }
+    });
+  }
   registerMeshCallbacks();
 
   // initAsBridge/initAsSharedGateway diagnostics are useful during the
@@ -480,6 +650,7 @@ void setup() {
   doc["hilAgentSha"] = HIL_AGENT_SHA;
   doc["bootId"] = bootId;
   doc["meshPrefix"] = activeMeshPrefix;
+  doc["otaGeneration"] = HIL_OTA_GENERATION;
   emitEvent(doc);
   if (sharedGatewayRole) {
     emitGatewayStatus("shared_gateway_started", initialized);

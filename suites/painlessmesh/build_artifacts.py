@@ -129,6 +129,7 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
         PAINLESSMESH_REF=source_sha,
         PAINLESSMESH_DIR=str(source_dir),
         HIL_AGENT_SHA=hil_agent_sha,
+        HIL_OTA_GENERATION="1",
     )
 
     for name in selected:
@@ -158,6 +159,24 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
             if not source.is_file():
                 raise FileNotFoundError(f"missing build component: {source}")
             shutil.copy2(source, target_dir / filename)
+
+        ota = None
+        if name == "esp32":
+            ota_env = dict(build_env, HIL_OTA_GENERATION="2")
+            subprocess.run(
+                [pio, "run", "-d", str(FIRMWARE_DIR), "-e", target.env],
+                check=True,
+                env=ota_env,
+            )
+            ota_image = target_dir / "ota-firmware.bin"
+            shutil.copy2(pio_build / "firmware.bin", ota_image)
+            ota = {
+                "generation": 2,
+                "hardware": "ESP32",
+                "image": f"{name}/ota-firmware.bin",
+                "sha256": sha256(ota_image),
+                "size": ota_image.stat().st_size,
+            }
 
         merged = target_dir / "flash-image.bin"
         subprocess.run(
@@ -195,6 +214,8 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
             "files": files,
             "segments": segment_offsets,
         }
+        if ota is not None:
+            entries[name]["ota"] = ota
 
     manifest = out_dir / "manifest.json"
     manifest.write_text(
@@ -228,6 +249,12 @@ def load_artifacts(directory: Path) -> dict[str, dict]:
         actual = sha256(image)
         if actual != entry["sha256"]:
             raise ValueError(f"artifact checksum mismatch for {name}: {image}")
+        ota = entry.get("ota")
+        if ota:
+            ota_image = directory / ota["image"]
+            if not ota_image.is_file() or sha256(ota_image) != ota["sha256"]:
+                raise ValueError(f"OTA artifact checksum mismatch for {name}: {ota_image}")
+            ota["path"] = ota_image
         merged = image.read_bytes()
         for filename, offset_text in entry.get("segments", {}).items():
             component = directory / name / filename
