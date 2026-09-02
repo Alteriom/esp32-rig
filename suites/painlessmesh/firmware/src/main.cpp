@@ -14,6 +14,7 @@
 //    "includeSelf":false}
 //   {"cmd":"gateway_start","ssid":"x","password":"y"}
 //   {"cmd":"shared_gateway_start","ssid":"x","password":"y"}
+//   {"cmd":"gateway_failover_start","ssid":"x","password":"y"}
 //   {"cmd":"gateway_status"}
 //   {"cmd":"internet_send","tag":"case-1","url":"http://...","payload":""}
 //   {"cmd":"mesh_configure","prefix":"run-x","password":"..."}
@@ -145,6 +146,7 @@ void startRegularMesh() {
   rolePreferences.begin("hil-role", false);
   rolePreferences.remove("bridge");
   rolePreferences.remove("sharedGateway");
+  rolePreferences.remove("failover");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
   rolePreferences.remove("healthHost");
@@ -169,6 +171,7 @@ void handleMeshConfigure(JsonDocument &cmd) {
   rolePreferences.begin("hil-role", false);
   rolePreferences.remove("bridge");
   rolePreferences.remove("sharedGateway");
+  rolePreferences.remove("failover");
   rolePreferences.remove("ssid");
   rolePreferences.remove("password");
   rolePreferences.remove("healthHost");
@@ -196,6 +199,7 @@ void handleGatewayStart(JsonDocument &cmd) {
   rolePreferences.begin("hil-role", false);
   rolePreferences.putBool("bridge", true);
   rolePreferences.remove("sharedGateway");
+  rolePreferences.remove("failover");
   rolePreferences.putString("ssid", ssid);
   rolePreferences.putString("password", password);
   rolePreferences.end();
@@ -205,6 +209,29 @@ void handleGatewayStart(JsonDocument &cmd) {
   doc["passwordLength"] = password.length();
   emitEvent(doc);
   Serial.flush();
+  delay(200);
+  ESP.restart();
+}
+
+void handleGatewayFailoverStart(JsonDocument &cmd) {
+  String ssid = cmd["ssid"].as<String>();
+  String password = cmd["password"].as<String>();
+  if (ssid.length() == 0 || password.length() < 8) {
+    emitError("gateway_failover_start requires ssid and an 8+ character password");
+    return;
+  }
+  rolePreferences.begin("hil-role", false);
+  rolePreferences.remove("bridge");
+  rolePreferences.remove("sharedGateway");
+  rolePreferences.putBool("failover", true);
+  rolePreferences.putString("ssid", ssid);
+  rolePreferences.putString("password", password);
+  rolePreferences.end();
+  JsonDocument doc;
+  doc["evt"] = "gateway_failover_restarting";
+  doc["ssidLength"] = ssid.length();
+  doc["passwordLength"] = password.length();
+  emitEvent(doc);
   delay(200);
   ESP.restart();
 }
@@ -221,6 +248,7 @@ void handleSharedGatewayStart(JsonDocument &cmd) {
   }
   rolePreferences.begin("hil-role", false);
   rolePreferences.remove("bridge");
+  rolePreferences.remove("failover");
   rolePreferences.putBool("sharedGateway", true);
   rolePreferences.putString("ssid", ssid);
   rolePreferences.putString("password", password);
@@ -333,6 +361,8 @@ void handleCommandLine(const String &line) {
     emitGatewayStatus("gateway_status");
   } else if (strcmp(name, "shared_gateway_start") == 0) {
     handleSharedGatewayStart(cmd);
+  } else if (strcmp(name, "gateway_failover_start") == 0) {
+    handleGatewayFailoverStart(cmd);
   } else if (strcmp(name, "internet_send") == 0) {
     handleInternetSend(cmd);
   } else if (strcmp(name, "mesh_configure") == 0) {
@@ -384,6 +414,7 @@ void setup() {
   rolePreferences.begin("hil-role", false);
   bool bridgeRole = rolePreferences.getBool("bridge", false);
   bool sharedGatewayRole = rolePreferences.getBool("sharedGateway", false);
+  bool failoverRole = rolePreferences.getBool("failover", false);
   bool reportMeshStart = rolePreferences.getBool("reportMesh", false);
   String routerSSID = rolePreferences.getString("ssid", "");
   String routerPassword = rolePreferences.getString("password", "");
@@ -421,6 +452,12 @@ void setup() {
   } else {
     mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
               HIL_MESH_PORT);
+    if (failoverRole) {
+      mesh.setRouterCredentials(routerSSID, routerPassword);
+      mesh.enableBridgeFailover(true);
+      mesh.setElectionStartupDelay(5000);
+      mesh.setElectionTimeout(5000);
+    }
   }
   mesh.enableSendToInternet();
   registerMeshCallbacks();
@@ -444,6 +481,8 @@ void setup() {
     emitGatewayStatus("shared_gateway_started", initialized);
   } else if (bridgeRole) {
     emitGatewayStatus("gateway_started", initialized);
+  } else if (failoverRole) {
+    emitGatewayStatus("gateway_failover_started", initialized);
   } else if (reportMeshStart) {
     emitGatewayStatus("mesh_started", initialized);
   }

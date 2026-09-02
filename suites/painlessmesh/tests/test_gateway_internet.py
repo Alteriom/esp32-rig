@@ -241,32 +241,14 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
     ssid, password, _ = _gateway_settings()
     backup_started = False
     try:
-        backup_state = backup.start_gateway(ssid, password)
+        backup_state = backup.start_gateway_failover(ssid, password)
         backup_started = True
-        deadline = time.monotonic() + 60
-        while (
-            int(backup_state["wifiStatus"]) != 3
-            and time.monotonic() < deadline
-        ):
-            time.sleep(1)
-            backup_state = backup.gateway_status(timeout=10)
-        assert int(backup_state["wifiStatus"]) == 3, backup_id
-        assert backup_state["isBridge"] is True, backup_id
+        assert backup_state["isBridge"] is False, backup_id
 
         backup_node = gateway_mesh["node_ids"][backup_id]
         sender = gateway_mesh["sender"]
         sender_peers = _wait_for_peer(sender, backup_node, timeout=120)
         assert backup_node in sender_peers
-
-        discovery_deadline = time.monotonic() + 120
-        sender_state = sender.gateway_status(timeout=10)
-        while (
-            backup_node not in {int(node) for node in sender_state["gateways"]}
-            and time.monotonic() < discovery_deadline
-        ):
-            time.sleep(2)
-            sender_state = sender.gateway_status(timeout=10)
-        assert backup_node in {int(node) for node in sender_state["gateways"]}
 
         control_tag = f"failover-before-{time.time_ns()}"
         control = _send_and_wait(
@@ -285,12 +267,16 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
         sender_state = sender.gateway_status(timeout=10)
         while time.monotonic() < deadline:
             backup_state = backup.gateway_status(timeout=10)
-            assert backup_state["isBridge"] is True
-            assert backup_state["hasInternet"] is True
             sender_state = sender.gateway_status(timeout=10)
-            if int(sender_state["primaryGateway"]) == backup_node:
+            if (
+                backup_state["isBridge"] is True
+                and backup_state["hasInternet"] is True
+                and int(sender_state["primaryGateway"]) == backup_node
+            ):
                 break
             time.sleep(2)
+        assert backup_state["isBridge"] is True, backup_state
+        assert backup_state["hasInternet"] is True, backup_state
         assert int(sender_state["primaryGateway"]) == backup_node, sender_state
 
         recovered_tag = f"failover-after-{time.time_ns()}"
