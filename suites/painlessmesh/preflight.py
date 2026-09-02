@@ -10,8 +10,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
 
-import serial  # noqa: E402
-
 from alteriom_hil.board import BoardMap  # noqa: E402
 from alteriom_hil.protocol import BoardClient  # noqa: E402
 from alteriom_hil.pytest_plugin import _serial_opener  # noqa: E402
@@ -32,6 +30,8 @@ def validate_info(board, info: dict, manifest: dict) -> list[str]:
 
 
 def run(board_map: BoardMap, manifest: dict, log_dir: Path) -> dict:
+    import serial  # pyserial is required only on the physical runner
+
     log_dir.mkdir(parents=True, exist_ok=True)
     results = []
     for board in board_map:
