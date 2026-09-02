@@ -450,8 +450,12 @@ void setup() {
         activeMeshPrefix, activeMeshPassword, routerSSID, routerPassword,
         &userScheduler, HIL_MESH_PORT);
   } else {
+    // Gateway bridges follow the upstream router's channel.  Channel 0 enables
+    // painlessMesh's documented auto-detection path, allowing regular nodes
+    // and failover candidates to follow a promoted bridge instead of forming
+    // a separate mesh on the default channel 1.
     mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
-              HIL_MESH_PORT);
+              HIL_MESH_PORT, WIFI_AP_STA, 0);
     if (failoverRole) {
       mesh.setRouterCredentials(routerSSID, routerPassword);
       mesh.enableBridgeFailover(true);
