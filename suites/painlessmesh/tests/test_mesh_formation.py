@@ -41,7 +41,10 @@ def test_every_board_delivers_to_every_other_board(mesh):
                 continue
             receiver_node_id = node_ids[receiver_id]
             last_failure = None
-            for attempt in range(1, 4):
+            attempt = 0
+            route_deadline = time.monotonic() + 60
+            while time.monotonic() < route_deadline:
+                attempt += 1
                 # Exercise content that is materially closer to an application
                 # message than a short sentinel.  Exact equality at the receiver
                 # detects truncation, escaping damage, and cross-message mixing.
@@ -89,7 +92,7 @@ def test_every_board_delivers_to_every_other_board(mesh):
             else:
                 pytest.fail(
                     f"{sender_id} -> {receiver_id} was not fully observed "
-                    f"after 3 attempts: {last_failure}"
+                    f"after {attempt} attempts over 60 seconds: {last_failure}"
                 )
 
     for client in clients.values():

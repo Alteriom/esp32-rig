@@ -118,10 +118,16 @@ def gateway_mesh(mesh):
         }
     finally:
         if gateway_started:
-            gateway.start_regular_mesh(timeout=30)
-            # Role changes reboot the bridge.  Restore the complete topology
-            # before later modules run so a gateway failure cannot manufacture
-            # unrelated mesh regressions.
+            # A failover exercise rebuilds several overlapping station/AP
+            # routes.  node_list can briefly retain the complete topology even
+            # when one of those routes is no longer usable.  Reboot every role
+            # into the regular mesh so later feature tests start from clean
+            # routing state rather than a stale post-election tree.
+            for client in clients.values():
+                client.start_regular_mesh(timeout=35)
+
+            # Restore the complete topology before later modules run so a
+            # gateway transition cannot manufacture unrelated mesh regressions.
             for board_id, client in clients.items():
                 expected = {
                     node_id for peer_id, node_id in node_ids.items() if peer_id != board_id
