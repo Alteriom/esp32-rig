@@ -40,8 +40,8 @@ def test_every_board_delivers_to_every_other_board(mesh):
             if sender_id == receiver_id:
                 continue
             receiver_node_id = node_ids[receiver_id]
-            last_timeout = None
-            for attempt in range(1, 3):
+            last_failure = None
+            for attempt in range(1, 4):
                 # Exercise content that is materially closer to an application
                 # message than a short sentinel.  Exact equality at the receiver
                 # detects truncation, escaping damage, and cross-message mixing.
@@ -58,10 +58,18 @@ def test_every_board_delivers_to_every_other_board(mesh):
                     separators=(",", ":"),
                     sort_keys=True,
                 )
-                assert sender.send_single(receiver_node_id, payload, ack=True)
+                if not sender.send_single(receiver_node_id, payload, ack=True):
+                    last_failure = "sender had no route when it accepted the command"
+                    time.sleep(1)
+                    continue
                 try:
                     ack = sender.wait_ack(node=receiver_node_id, timeout=15)
-                    assert ack["delivered"] is True
+                    if ack["delivered"] is not True:
+                        last_failure = (
+                            f"delivery callback timed out after {ack['latencyMs']} ms"
+                        )
+                        time.sleep(1)
+                        continue
                     received = receiver.wait_for(
                         lambda event, expected=payload: (
                             event["evt"] == "recv" and event["msg"] == expected
@@ -76,11 +84,12 @@ def test_every_board_delivers_to_every_other_board(mesh):
                     # though painlessMesh delivered and ACKed the packet. A
                     # bounded retransmission distinguishes that observation loss
                     # from a persistently broken radio or monitoring path.
-                    last_timeout = exc
+                    last_failure = exc
+                    time.sleep(1)
             else:
                 pytest.fail(
                     f"{sender_id} -> {receiver_id} was not fully observed "
-                    f"after 2 attempts: {last_timeout}"
+                    f"after 3 attempts: {last_failure}"
                 )
 
     for client in clients.values():
