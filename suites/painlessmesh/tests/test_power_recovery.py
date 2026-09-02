@@ -17,12 +17,12 @@ from alteriom_hil.protocol import TimeoutWaitingFor
 REJOIN_TIMEOUT = 180.0
 
 
-def _node_id_when_ready(client, timeout: float):
+def _info_when_ready(client, timeout: float):
     """Poll a freshly-booted board until it answers an info query."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            return client.node_id(timeout=5.0)
+            return client.info(timeout=5.0)
         except TimeoutWaitingFor:
             time.sleep(1.0)
     raise AssertionError(
@@ -32,6 +32,7 @@ def _node_id_when_ready(client, timeout: float):
 
 
 @pytest.mark.hil_only(reason="power")
+@pytest.mark.capability("power.recovery")
 def test_node_rejoins_mesh_after_power_cut(mesh, power, board_map):
     if board_map is None:
         pytest.skip("no hardware board map")
@@ -57,6 +58,7 @@ def test_node_rejoins_mesh_after_power_cut(mesh, power, board_map):
 
     victim_client = clients[victim.id]
     victim_node = node_ids[victim.id]
+    before_boot_id = victim_client.info(timeout=15)["bootId"]
     survivors = [c for bid, c in clients.items() if bid != victim.id]
 
     power.cycle(victim, off_seconds=2.0)
@@ -64,7 +66,12 @@ def test_node_rejoins_mesh_after_power_cut(mesh, power, board_map):
     # The device node vanished with the power; wait for udev to recreate it.
     victim_client.reattach(timeout=60.0)
 
-    rebooted_node = _node_id_when_ready(victim_client, timeout=60.0)
+    rebooted_info = _info_when_ready(victim_client, timeout=60.0)
+    rebooted_node = int(rebooted_info["nodeId"])
+    assert rebooted_info["bootId"] != before_boot_id, (
+        f"{victim.id} re-enumerated without rebooting; hub coordinate "
+        f"{victim.power_hub}/{victim.power_port} did not cut board power"
+    )
     assert rebooted_node == victim_node, (
         f"{victim.id} changed nodeId across a reboot "
         f"({victim_node} -> {rebooted_node}); mesh routing assumes it is stable"

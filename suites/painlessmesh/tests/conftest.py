@@ -8,6 +8,7 @@ first) and need time to form a mesh — ``mesh`` waits for that.
 from __future__ import annotations
 
 import os
+import secrets
 
 import pytest
 
@@ -23,6 +24,14 @@ def mesh(bank):
     Yields ``(clients, node_ids)`` where node_ids maps board_id -> nodeId.
     """
     clients: dict[str, BoardClient] = bank
+    if os.environ.get("ALTERIOM_HIL_MODE") == "hardware":
+        run_id = os.environ.get("ALTERIOM_HIL_MESH_ID") or secrets.token_hex(5)
+        mesh_prefix = f"AlteriomHIL-{run_id}"[:31]
+        mesh_password = os.environ.get(
+            "ALTERIOM_HIL_MESH_PASSWORD", "hil-isolated-mesh"
+        )
+        for client in clients.values():
+            client.configure_mesh(mesh_prefix, mesh_password)
     expected_peers = len(clients) - 1
     node_ids = {}
     for board_id, client in clients.items():

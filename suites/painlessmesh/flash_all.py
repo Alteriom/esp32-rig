@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flash the HIL agent firmware onto every board in the map.
+"""Build each MCU artifact once, then flash it onto every matching board.
 
 Usage (CI does exactly this):
 
@@ -13,6 +13,9 @@ failure with the pio output, so CI cleanly distinguishes "flash failed"
 from "test failed".
 """
 
+from __future__ import annotations
+
+import argparse
 import os
 import subprocess
 import sys
@@ -20,27 +23,62 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
 from alteriom_hil.board import BoardMap  # noqa: E402
-from alteriom_hil.flash import flash_pio  # noqa: E402
+from alteriom_hil.flash import flash_esptool  # noqa: E402
 
-FIRMWARE_DIR = Path(__file__).resolve().parent / "firmware"
+try:  # script execution and package import use different module roots
+    from .build_artifacts import build_artifacts, load_artifacts  # type: ignore
+except ImportError:
+    from build_artifacts import build_artifacts, load_artifacts  # noqa: E402
+
+DEFAULT_ARTIFACT_DIR = Path(
+    os.environ.get("ALTERIOM_HIL_ARTIFACT_DIR", "hil-firmware")
+)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--artifacts",
+        type=Path,
+        default=DEFAULT_ARTIFACT_DIR,
+        help="artifact directory containing manifest.json",
+    )
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help="verify and flash existing immutable artifacts without rebuilding",
+    )
+    parser.add_argument(
+        "--ref",
+        default=os.environ.get("PAINLESSMESH_REF") or "main",
+        help="painlessMesh ref to build (ignored with --skip-build)",
+    )
+    args = parser.parse_args(argv)
     map_path = os.environ.get("ALTERIOM_HIL_BOARD_MAP")
     if not map_path:
         print("ALTERIOM_HIL_BOARD_MAP not set", file=sys.stderr)
         return 2
-    ref = os.environ.get("PAINLESSMESH_REF") or "main"
     board_map = BoardMap.load(map_path)
-    print(f"Flashing {len(board_map)} board(s) with painlessMesh@{ref}")
+    targets = sorted({board.target for board in board_map})
+    if not args.skip_build:
+        build_artifacts(args.ref, args.artifacts, targets)
+    manifest = load_artifacts(args.artifacts)
+    resolved_ref = manifest["painlessmesh_sha"]
+    print(
+        f"Flashing {len(board_map)} board(s) from {len(targets)} "
+        f"immutable artifact(s) with painlessMesh@{resolved_ref}"
+    )
     for board in board_map:
-        print(f"==> {board.id} ({board.port})")
+        artifact = manifest["targets"][board.target]
+        print(
+            f"==> {board.id} ({board.port}) <- {board.target} "
+            f"sha256:{artifact['sha256'][:12]}"
+        )
         try:
-            flash_pio(
-                FIRMWARE_DIR,
+            flash_esptool(
+                artifact["path"],
                 board,
-                env="esp32dev",
-                extra_env={"PAINLESSMESH_REF": ref},
+                offset=artifact["flash_offset"],
             )
         except subprocess.CalledProcessError as exc:
             print(exc.stdout or "", file=sys.stderr)
