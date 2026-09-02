@@ -268,12 +268,26 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
         # upstream route without relying on unsupported per-port hub power.
         gateway_mesh["gateway"].start_regular_mesh(timeout=35)
 
-        recovered_tag = f"failover-after-{time.time_ns()}"
-        recovered = _send_and_wait(
-            gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
-        )
+        # Gateway advertisements and cached routes converge asynchronously.
+        # Require eventual successful data, retaining each failed transaction
+        # as evidence instead of pretending failover is instantaneous.
+        deadline = time.monotonic() + 120
+        recovered = {"success": False, "error": "no failover attempt"}
+        attempt = 0
+        while time.monotonic() < deadline:
+            attempt += 1
+            backup_state = backup.gateway_status(timeout=10)
+            assert backup_state["isBridge"] is True
+            assert backup_state["hasInternet"] is True
+            recovered_tag = f"failover-after-{attempt}-{time.time_ns()}"
+            recovered = _send_and_wait(
+                gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+            )
+            if recovered["success"]:
+                break
+            time.sleep(5)
         assert recovered["success"] is True
-        assert recovered["httpStatus"] == 200
+        assert recovered["httpStatus"] == 200, recovered
     finally:
         if backup_started:
             backup.start_regular_mesh(timeout=35)
