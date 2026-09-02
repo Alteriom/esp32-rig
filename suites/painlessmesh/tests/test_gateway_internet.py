@@ -260,23 +260,30 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
         # upstream route without relying on unsupported per-port hub power.
         gateway_mesh["gateway"].start_regular_mesh(timeout=35)
 
-        # Gateway advertisements and cached routes converge asynchronously.
-        # Wait until the library itself selects the backup, then prove the
-        # selected route carries application data.
-        deadline = time.monotonic() + 120
-        sender_state = sender.gateway_status(timeout=10)
-        while time.monotonic() < deadline:
+        # Election/promotion and regular-node route convergence are separate
+        # asynchronous phases.  Do not spend the sender's reconnect budget
+        # while the candidate is still waiting for the election monitor, and
+        # avoid continuously polling both radios during that transition.
+        promotion_deadline = time.monotonic() + 120
+        while time.monotonic() < promotion_deadline:
             backup_state = backup.gateway_status(timeout=10)
-            sender_state = sender.gateway_status(timeout=10)
             if (
                 backup_state["isBridge"] is True
                 and backup_state["hasInternet"] is True
-                and int(sender_state["primaryGateway"]) == backup_node
             ):
                 break
             time.sleep(2)
         assert backup_state["isBridge"] is True, backup_state
         assert backup_state["hasInternet"] is True, backup_state
+
+        discovery_deadline = time.monotonic() + 120
+        sender_state = sender.gateway_status(timeout=10)
+        while (
+            int(sender_state["primaryGateway"]) != backup_node
+            and time.monotonic() < discovery_deadline
+        ):
+            time.sleep(2)
+            sender_state = sender.gateway_status(timeout=10)
         assert int(sender_state["primaryGateway"]) == backup_node, sender_state
 
         recovered_tag = f"failover-after-{time.time_ns()}"
