@@ -586,6 +586,6 @@
 <text x="800" y="1008" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Channel map (channel = hub port = board = udev name):</text>
 <text x="800" y="1024" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch1→IN1=GPIO18(pin 12)  ch2→IN2=GPIO23(pin 16)  ch3→IN3=GPIO24(pin 18)  ch4→IN4=GPIO25(pin 22)</text>
 <text x="800" y="1039" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch5→IN5=GPIO12(pin 32)  ch6→IN6=GPIO16(pin 36)  ch7→IN7=GPIO20(pin 38)  ch8→IN8=GPIO21(pin 40)</text>
-<text x="800" y="1056" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 dh   (board 01 cut)   ·   pinctrl get 18</text>
+<text x="800" y="1056" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 op dh   (board 01 cut)   ·   pinctrl get 18</text>
 <text x="800" y="1072" font-size="10" text-anchor="start" font-weight="normal" fill="#8b1a1a" font-family="sans-serif">Never fit the Low jumper: with 12 V on DC+ a 3.3 V GPIO cannot pull IN high enough to switch the relay OFF.</text>
 </svg>

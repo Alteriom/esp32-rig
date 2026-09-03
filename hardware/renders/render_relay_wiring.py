@@ -360,7 +360,7 @@ row = "  ".join(f"ch{ch}→IN{ch}=GPIO{gpio}(pin {pin})" for ch, pin, gpio in CH
 text(TX, TY + 16, row, size=10, anchor="start", family="monospace")
 row = "  ".join(f"ch{ch}→IN{ch}=GPIO{gpio}(pin {pin})" for ch, pin, gpio in CHANNELS[4:])
 text(TX, TY + 31, row, size=10, anchor="start", family="monospace")
-text(TX, TY + 48, "Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 dh   (board 01 cut)   ·   pinctrl get 18",
+text(TX, TY + 48, "Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 op dh   (board 01 cut)   ·   pinctrl get 18",
      size=10, anchor="start", family="monospace")
 text(TX, TY + 64, "Never fit the Low jumper: with 12 V on DC+ a 3.3 V GPIO cannot pull IN high enough to switch the relay OFF.",
      size=10, anchor="start", color=DKRED)
