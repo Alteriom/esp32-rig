@@ -14,8 +14,10 @@ What the drawing encodes, so the code and the doc cannot drift:
   ``/dev/esp32-farm-0n``), boards powered through the **NC** contact so a
   de-energised relay (Pi off, 12 V brick off, GPIO unconfigured) keeps
   every board running;
-* only the USB cable's 5 V core is diverted through the relay; D+, D- and
-  GND stay on the breakout's pass-through;
+* each rig port is a USB-C female pigtail joined (wire nuts) to a USB-C
+  male pigtail; only the red 5 V wire goes through the relay, D+/D-/GND
+  are joined straight through. The hub->rig cable and the board are
+  unmodified, so any board family can sit on any port;
 * relay inputs in **high-level trigger** mode, driven straight from Pi 5
   GPIOs that default to pull-down at boot, with DC- tied to Pi GND;
 * a dedicated 12 V brick on DC+/DC- — nothing from the Pi's 5 V/3V3 pins.
@@ -42,7 +44,7 @@ CHANNELS = [
     (8, 40, 21),
 ]
 GND_PIN = 6  # Pi GND -> relay DC- (the signal return for IN1..IN8)
-HUB_PORTS = 7  # channel 8 has no hub port on a 7-port hub: spare
+HUB_PORTS = 8  # one downstream hub port per rig port / relay channel
 
 # 40-pin header, physical pin -> name (BCM numbers as "GPIOn")
 HEADER = {
@@ -121,6 +123,11 @@ def dot(x, y, color, r=3.5):
     w(f'<circle cx="{x}" cy="{y}" r="{r}" fill="{color}"/>')
 
 
+def nut(x, y):
+    """A twist-on wire nut (the orange caps in the pigtail kit)."""
+    rect(x - 5, y - 7, 10, 14, fill="#e8762b", stroke="#9c4a12", sw=1, rx=3)
+
+
 def terminal(x, y, label=None, size=(26, 36)):
     """One screw terminal: blue block with a screw head; centre-top at (x, y)."""
     wd, ht = size
@@ -139,62 +146,78 @@ w(
 w(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
 text(40, 34, "Per-board USB power switching — 8-channel 12 V relay module wired to the HIL rig",
      size=22, anchor="start", weight="bold")
-text(40, 56, "Channel n switches ONLY the 5 V core of board n's USB cable. Boards run through NC: "
-     "relay de-energised = board powered. Trigger jumpers on HIGH. DC− is common with Pi GND.",
+text(40, 56, "Rig port n = USB-C female pigtail → wire nuts → USB-C male pigtail; only the red 5 V wire passes through relay n. "
+     "Boards run through NC: relay released = board powered. Jumpers on HIGH. DC− is common with Pi GND.",
      size=13, anchor="start", color="#3d4852")
 
 # ------------------------------------------------------------------ USB hub
 HUB_Y0, HUB_Y1 = 78, 128
 hub_x0, hub_x1 = xc(1) - 60, xc(HUB_PORTS) + 60
 rect(hub_x0, HUB_Y0, hub_x1 - hub_x0, HUB_Y1 - HUB_Y0, fill="#eef1f5", stroke=INK, rx=6)
-text((hub_x0 + hub_x1) / 2, HUB_Y0 + 20, "Powered USB hub (existing) — 5 V ≥4 A external PSU, uplink to Pi 5 USB 3.0",
+text((hub_x0 + hub_x1) / 2, HUB_Y0 + 20, "Powered USB hub (existing, 5 V ≥4 A PSU, uplink to Pi 5) — unmodified USB-A→USB-C cables to rig ports 1–8",
      size=13, weight="bold")
 for ch in range(1, HUB_PORTS + 1):
     x = xc(ch)
     rect(x - 12, HUB_Y1 - 14, 24, 14, fill="#ffffff", stroke=INK, rx=1)
     text(x, HUB_Y1 - 3, f"p{ch}", size=10)
-# spare column (channel 8)
-x8 = xc(8)
-rect(x8 - 60, HUB_Y0, 120, HUB_Y1 - HUB_Y0, fill="none", stroke=GREY, dash="6 4", rx=6)
-text(x8, HUB_Y0 + 20, "channel 8: spare", size=11, color="#4a5568")
-text(x8, HUB_Y0 + 36, "(2nd hub p1 / bench)", size=11, color="#4a5568")
 # uplink (unchanged from the blueprint)
 wire([(hub_x1, 103), (1560, 103), (1560, 1090), (776, 1090)], BLUE, sw=3)
 text(1572, 560, "USB 3.0 A–A uplink (existing, unchanged)", size=11, color=BLUE, rot=90)
 
 # --------------------------------------------------------- per-channel columns
-SPL_Y0, SPL_Y1 = 176, 226  # VBUS splice / breakout
-BRD_Y0, BRD_Y1 = 262, 340  # ESP32 board
+FP_Y0, FP_Y1 = 150, 186  # USB-C female pigtail = rig port n
+JOIN_Y = 205  # wire-nut joins
+MP_Y0, MP_Y1 = 224, 258  # USB-C male pigtail -> board
+BRD_Y0, BRD_Y1 = 270, 350  # the board
 MOD_Y0 = 392  # relay module top edge (terminals straddle it)
 T_Y = 386  # top of the NC/COM/NO terminal blocks
 
+# Example placement only: identity is the board's MAC (discovery), the relay
+# channel is the hub-port path. µB = micro-B connector (needs a C→µB adapter
+# on the male pigtail); C = the board has USB-C.
+FAMILY = {
+    1: "ESP32 DevKitC · µB",
+    2: "ESP32-C3 · µB / C",
+    3: "ESP32-S3 · C",
+    4: "ESP32-C5 · C",
+    5: "ESP32-C6 · C",
+    6: "ESP8266 NodeMCU · µB",
+    7: "any family",
+    8: "any family",
+}
+
 for ch, pin, gpio in CHANNELS:
     x = xc(ch)
-    # hub cable (grey: whole cable) down to the splice
-    src_y = HUB_Y1 if ch <= HUB_PORTS else HUB_Y1
-    wire([(x, src_y), (x, SPL_Y0)], GREY, sw=5, dash=None if ch <= HUB_PORTS else "8 5")
-    # splice box
-    rect(x - 40, SPL_Y0, 80, SPL_Y1 - SPL_Y0, fill="#fff7e6", stroke="#b7791f", rx=4)
-    text(x, SPL_Y0 + 15, "VBUS splice", size=10, weight="bold")
-    text(x, SPL_Y0 + 28, "cut red core / A-breakout", size=9)
-    text(x, SPL_Y0 + 42, "D+ D− GND untouched", size=9, color="#4a5568")
-    # splice pins
-    for px in (x - 24, x, x + 24):
-        w(f'<rect x="{px - 4}" y="{SPL_Y1 - 2}" width="8" height="6" fill="#b7791f"/>')
-    # data pass-through to the board
-    wire([(x, SPL_Y1 + 4), (x, BRD_Y0)], GREY, sw=5)
+    # unmodified USB-A -> USB-C cable from hub port n into rig port n
+    wire([(x, HUB_Y1), (x, FP_Y0)], GREY, sw=5)
+    # female pigtail = rig port n
+    rect(x - 40, FP_Y0, 80, FP_Y1 - FP_Y0, fill="#fff7e6", stroke="#b7791f", rx=4)
+    text(x, FP_Y0 + 14, f"rig port {ch}", size=10, weight="bold")
+    text(x, FP_Y0 + 28, "USB-C female pigtail", size=9)
+    # D+ / D- / GND joined straight through with wire nuts
+    for dx_ in (-10, 0, 10):
+        wire([(x + dx_, FP_Y1), (x + dx_, MP_Y0)], GREY, sw=2)
+        nut(x + dx_, JOIN_Y)
+    # male pigtail -> board
+    rect(x - 40, MP_Y0, 80, MP_Y1 - MP_Y0, fill="#fff7e6", stroke="#b7791f", rx=4)
+    text(x, MP_Y0 + 14, "USB-C male pigtail", size=9, weight="bold")
+    text(x, MP_Y0 + 27, "→ board (adapter if µB)", size=8, color="#4a5568")
+    wire([(x, MP_Y1), (x, BRD_Y0)], GREY, sw=5)
     # board
     rect(x - 40, BRD_Y0, 80, BRD_Y1 - BRD_Y0, fill="#e6f4ea", stroke="#276749", rx=5)
-    text(x, BRD_Y0 + 18, f"ESP32 board {ch:02d}", size=11, weight="bold")
-    text(x, BRD_Y0 + 34, f"/dev/esp32-farm-{ch:02d}", size=9, family="monospace")
-    text(x, BRD_Y0 + 50, "USB-powered", size=9, color="#4a5568")
-    text(x, BRD_Y0 + 64, f"hub port {ch}" if ch <= HUB_PORTS else "spare port", size=9, color="#4a5568")
-    # NC -> board 5 V (left side of the column)
-    wire([(x - 32, T_Y), (x - 32, 362), (x - 56, 362), (x - 56, 240), (x - 24, 240), (x - 24, SPL_Y1 + 4)], RED)
-    # hub 5 V -> COM (right side of the column)
-    wire([(x + 24, SPL_Y1 + 4), (x + 24, 240), (x + 56, 240), (x + 56, 374), (x, 374), (x, T_Y)], RED)
+    text(x, BRD_Y0 + 16, f"board on port {ch}", size=10, weight="bold")
+    text(x, BRD_Y0 + 31, f"/dev/esp32-farm-{ch:02d}", size=9, family="monospace")
+    text(x, BRD_Y0 + 47, FAMILY[ch], size=9)
+    text(x, BRD_Y0 + 61, "identity: MAC (discovery)", size=8, color="#4a5568")
+    text(x, BRD_Y0 + 73, "USB-powered", size=8, color="#4a5568")
+    # NC -> board 5 V: up the left side into the male pigtail's red wire
+    wire([(x - 32, T_Y), (x - 32, 362), (x - 56, 362), (x - 56, 200), (x - 26, 200), (x - 26, MP_Y0)], RED)
+    nut(x - 26, 212)
+    # hub 5 V (female pigtail's red wire) -> COM, down the right side
+    wire([(x + 26, FP_Y1), (x + 26, 214), (x + 56, 214), (x + 56, 374), (x, 374), (x, T_Y)], RED)
+    nut(x + 26, 200)
 
-# label the VBUS wires once (channel 1) and the NO once
+# label the VBUS wires once (channel 1)
 text(xc(1) - 62, 300, "5 V → board (from NC)", size=10, color=RED, rot=-90)
 text(xc(1) + 70, 300, "5 V from hub (to COM)", size=10, color=RED, rot=90)
 
@@ -341,8 +364,8 @@ LX, LY = 1100, 872
 rect(LX, LY, 440, 128, fill="#fafafa", stroke="#cbd5e0", rx=6)
 text(LX + 12, LY + 20, "Legend", size=12, anchor="start", weight="bold")
 legend = [
-    (RED, "5 V USB VBUS, switched through NC/COM (2 short wires per board)"),
-    (GREY, "USB cable: D+, D−, GND untouched (breakout pass-through)"),
+    (RED, "5 V: pigtail red wires, hub side → COM, board side ← NC (wire nuts at the pigtails)"),
+    (GREY, "USB data/GND: D+ D− GND joined pigtail-to-pigtail; hub cable and board unmodified"),
     (GRN, "Relay input IN1–IN8 ← Pi GPIO (3.3 V high = relay ON = board OFF)"),
     (BLK, "Pi GND → DC− (must be wired; USB shield is not the return)"),
     (DKRED, "12 V coil supply → DC+ (dedicated brick)"),
@@ -355,7 +378,7 @@ for i, (c, s) in enumerate(legend):
 
 # channel table (top-right free space is used by the uplink; put it bottom-centre)
 TX, TY = 800, 1008
-text(TX, TY, "Channel map (channel = hub port = board = udev name):", size=11, anchor="start", weight="bold")
+text(TX, TY, "Channel map (channel = hub port = rig port = udev name; any board family, identity by MAC):", size=11, anchor="start", weight="bold")
 row = "  ".join(f"ch{ch}→IN{ch}=GPIO{gpio}(pin {pin})" for ch, pin, gpio in CHANNELS[:4])
 text(TX, TY + 16, row, size=10, anchor="start", family="monospace")
 row = "  ".join(f"ch{ch}→IN{ch}=GPIO{gpio}(pin {pin})" for ch, pin, gpio in CHANNELS[4:])

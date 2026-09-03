@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1140" width="1600" height="1140" font-family="sans-serif">
 <rect width="1600" height="1140" fill="#ffffff"/>
 <text x="40" y="34" font-size="22" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Per-board USB power switching — 8-channel 12 V relay module wired to the HIL rig</text>
-<text x="40" y="56" font-size="13" text-anchor="start" font-weight="normal" fill="#3d4852" font-family="sans-serif">Channel n switches ONLY the 5 V core of board n's USB cable. Boards run through NC: relay de-energised = board powered. Trigger jumpers on HIGH. DC− is common with Pi GND.</text>
-<rect x="310" y="78" width="960" height="50" rx="6" fill="#eef1f5" stroke="#1f2933" stroke-width="1.5"/>
-<text x="790.0" y="98" font-size="13" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">Powered USB hub (existing) — 5 V ≥4 A external PSU, uplink to Pi 5 USB 3.0</text>
+<text x="40" y="56" font-size="13" text-anchor="start" font-weight="normal" fill="#3d4852" font-family="sans-serif">Rig port n = USB-C female pigtail → wire nuts → USB-C male pigtail; only the red 5 V wire passes through relay n. Boards run through NC: relay released = board powered. Jumpers on HIGH. DC− is common with Pi GND.</text>
+<rect x="310" y="78" width="1100" height="50" rx="6" fill="#eef1f5" stroke="#1f2933" stroke-width="1.5"/>
+<text x="860.0" y="98" font-size="13" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">Powered USB hub (existing, 5 V ≥4 A PSU, uplink to Pi 5) — unmodified USB-A→USB-C cables to rig ports 1–8</text>
 <rect x="358" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
 <text x="370" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p1</text>
 <rect x="498" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
@@ -18,139 +18,202 @@
 <text x="1070" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p6</text>
 <rect x="1198" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
 <text x="1210" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p7</text>
-<rect x="1290" y="78" width="120" height="50" rx="6" fill="none" stroke="#8a8f98" stroke-width="1.5" stroke-dasharray="6 4"/>
-<text x="1350" y="98" font-size="11" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">channel 8: spare</text>
-<text x="1350" y="114" font-size="11" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">(2nd hub p1 / bench)</text>
-<polyline points="1270,103 1560,103 1560,1090 776,1090" fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1338" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="1350" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p8</text>
+<polyline points="1410,103 1560,103 1560,1090 776,1090" fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="1572" y="560" font-size="11" text-anchor="middle" font-weight="normal" fill="#2b6cb0" font-family="sans-serif" transform="rotate(90 1572 560)">USB 3.0 A–A uplink (existing, unchanged)</text>
-<polyline points="370,128 370,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="330" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="370" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="370" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="370" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="342" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="366" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="390" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="370,230 370,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="330" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="370" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 01</text>
-<text x="370" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-01</text>
-<text x="370" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="370" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 1</text>
-<polyline points="338,386 338,362 314,362 314,240 346,240 346,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="394,230 394,240 426,240 426,374 370,374 370,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="510,128 510,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="470" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="510" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="510" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="510" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="482" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="506" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="530" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="510,230 510,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="470" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="510" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 02</text>
-<text x="510" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-02</text>
-<text x="510" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="510" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 2</text>
-<polyline points="478,386 478,362 454,362 454,240 486,240 486,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="534,230 534,240 566,240 566,374 510,374 510,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="650,128 650,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="610" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="650" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="650" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="650" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="622" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="646" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="670" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="650,230 650,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="610" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="650" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 03</text>
-<text x="650" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-03</text>
-<text x="650" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="650" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 3</text>
-<polyline points="618,386 618,362 594,362 594,240 626,240 626,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="674,230 674,240 706,240 706,374 650,374 650,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="790,128 790,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="750" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="790" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="790" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="790" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="762" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="786" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="810" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="790,230 790,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="750" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="790" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 04</text>
-<text x="790" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-04</text>
-<text x="790" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="790" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 4</text>
-<polyline points="758,386 758,362 734,362 734,240 766,240 766,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="814,230 814,240 846,240 846,374 790,374 790,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="930,128 930,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="890" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="930" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="930" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="930" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="902" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="926" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="950" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="930,230 930,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="890" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="930" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 05</text>
-<text x="930" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-05</text>
-<text x="930" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="930" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 5</text>
-<polyline points="898,386 898,362 874,362 874,240 906,240 906,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="954,230 954,240 986,240 986,374 930,374 930,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1070,128 1070,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="1030" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="1070" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="1070" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="1070" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="1042" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1066" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1090" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="1070,230 1070,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="1030" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="1070" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 06</text>
-<text x="1070" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-06</text>
-<text x="1070" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="1070" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 6</text>
-<polyline points="1038,386 1038,362 1014,362 1014,240 1046,240 1046,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1094,230 1094,240 1126,240 1126,374 1070,374 1070,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1210,128 1210,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="1170" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="1210" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="1210" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="1210" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="1182" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1206" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1230" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="1210,230 1210,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="1170" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="1210" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 07</text>
-<text x="1210" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-07</text>
-<text x="1210" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="1210" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">hub port 7</text>
-<polyline points="1178,386 1178,362 1154,362 1154,240 1186,240 1186,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1234,230 1234,240 1266,240 1266,374 1210,374 1210,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1350,128 1350,176" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="8 5"/>
-<rect x="1310" y="176" width="80" height="50" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
-<text x="1350" y="191" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">VBUS splice</text>
-<text x="1350" y="204" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">cut red core / A-breakout</text>
-<text x="1350" y="218" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">D+ D− GND untouched</text>
-<rect x="1322" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1346" y="224" width="8" height="6" fill="#b7791f"/>
-<rect x="1370" y="224" width="8" height="6" fill="#b7791f"/>
-<polyline points="1350,230 1350,262" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<rect x="1310" y="262" width="80" height="78" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
-<text x="1350" y="280" font-size="11" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">ESP32 board 08</text>
-<text x="1350" y="296" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-08</text>
-<text x="1350" y="312" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
-<text x="1350" y="326" font-size="9" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">spare port</text>
-<polyline points="1318,386 1318,362 1294,362 1294,240 1326,240 1326,230" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1374,230 1374,240 1406,240 1406,374 1350,374 1350,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="370,128 370,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="330" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="370" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 1</text>
+<text x="370" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="360,186 360,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="355" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="370,186 370,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="365" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="380,186 380,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="375" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="330" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="370" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="370" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="370,258 370,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="330" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="370" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 1</text>
+<text x="370" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-01</text>
+<text x="370" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32 DevKitC · µB</text>
+<text x="370" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="370" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="338,386 338,362 314,362 314,200 344,200 344,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="339" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="396,186 396,214 426,214 426,374 370,374 370,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="391" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="510,128 510,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="510" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 2</text>
+<text x="510" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="500,186 500,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="495" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="510,186 510,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="505" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="520,186 520,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="515" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="470" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="510" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="510" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="510,258 510,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="510" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 2</text>
+<text x="510" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-02</text>
+<text x="510" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C3 · µB / C</text>
+<text x="510" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="510" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="478,386 478,362 454,362 454,200 484,200 484,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="479" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="536,186 536,214 566,214 566,374 510,374 510,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="531" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="650,128 650,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="610" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="650" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 3</text>
+<text x="650" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="640,186 640,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="635" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="650,186 650,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="645" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="660,186 660,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="655" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="610" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="650" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="650" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="650,258 650,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="610" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="650" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 3</text>
+<text x="650" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-03</text>
+<text x="650" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-S3 · C</text>
+<text x="650" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="650" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="618,386 618,362 594,362 594,200 624,200 624,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="619" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="676,186 676,214 706,214 706,374 650,374 650,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="671" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="790,128 790,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="750" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="790" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 4</text>
+<text x="790" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="780,186 780,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="775" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="790,186 790,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="785" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="800,186 800,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="795" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="750" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="790" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="790" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="790,258 790,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="750" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="790" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 4</text>
+<text x="790" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-04</text>
+<text x="790" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C5 · C</text>
+<text x="790" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="790" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="758,386 758,362 734,362 734,200 764,200 764,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="759" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="816,186 816,214 846,214 846,374 790,374 790,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="811" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="930,128 930,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="890" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="930" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 5</text>
+<text x="930" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="920,186 920,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="915" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="930,186 930,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="925" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="940,186 940,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="935" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="890" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="930" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="930" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="930,258 930,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="890" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="930" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 5</text>
+<text x="930" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-05</text>
+<text x="930" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C6 · C</text>
+<text x="930" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="930" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="898,386 898,362 874,362 874,200 904,200 904,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="899" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="956,186 956,214 986,214 986,374 930,374 930,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="951" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1070,128 1070,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1030" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1070" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 6</text>
+<text x="1070" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1060,186 1060,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1055" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1070,186 1070,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1065" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1080,186 1080,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1075" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1030" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1070" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1070" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1070,258 1070,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1030" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1070" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 6</text>
+<text x="1070" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-06</text>
+<text x="1070" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP8266 NodeMCU · µB</text>
+<text x="1070" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1070" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1038,386 1038,362 1014,362 1014,200 1044,200 1044,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1039" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1096,186 1096,214 1126,214 1126,374 1070,374 1070,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1091" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1210,128 1210,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1170" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1210" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 7</text>
+<text x="1210" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1200,186 1200,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1195" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1210,186 1210,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1205" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1220,186 1220,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1215" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1170" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1210" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1210" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1210,258 1210,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1170" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1210" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 7</text>
+<text x="1210" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-07</text>
+<text x="1210" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">any family</text>
+<text x="1210" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1210" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1178,386 1178,362 1154,362 1154,200 1184,200 1184,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1179" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1236,186 1236,214 1266,214 1266,374 1210,374 1210,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1231" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1350,128 1350,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1310" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1350" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 8</text>
+<text x="1350" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1340,186 1340,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1335" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1350,186 1350,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1345" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1360,186 1360,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1355" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1310" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1350" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1350" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1350,258 1350,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1310" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1350" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 8</text>
+<text x="1350" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-08</text>
+<text x="1350" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">any family</text>
+<text x="1350" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1350" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1318,386 1318,362 1294,362 1294,200 1324,200 1324,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1319" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1376,186 1376,214 1406,214 1406,374 1350,374 1350,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1371" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
 <text x="308" y="300" font-size="10" text-anchor="middle" font-weight="normal" fill="#d62828" font-family="sans-serif" transform="rotate(-90 308 300)">5 V → board (from NC)</text>
 <text x="440" y="300" font-size="10" text-anchor="middle" font-weight="normal" fill="#d62828" font-family="sans-serif" transform="rotate(90 440 300)">5 V from hub (to COM)</text>
 <rect x="290" y="392" width="1140" height="344" rx="8" fill="#c62839" stroke="#8e1c29" stroke-width="2"/>
@@ -572,9 +635,9 @@
 <rect x="1100" y="872" width="440" height="128" rx="6" fill="#fafafa" stroke="#cbd5e0" stroke-width="1.5"/>
 <text x="1112" y="892" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Legend</text>
 <polyline points="1114,910 1144,910" fill="none" stroke="#d62828" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<text x="1152" y="914" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">5 V USB VBUS, switched through NC/COM (2 short wires per board)</text>
+<text x="1152" y="914" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">5 V: pigtail red wires, hub side → COM, board side ← NC (wire nuts at the pigtails)</text>
 <polyline points="1114,925 1144,925" fill="none" stroke="#8a8f98" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<text x="1152" y="929" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB cable: D+, D−, GND untouched (breakout pass-through)</text>
+<text x="1152" y="929" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB data/GND: D+ D− GND joined pigtail-to-pigtail; hub cable and board unmodified</text>
 <polyline points="1114,940 1144,940" fill="none" stroke="#1b8a3c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="1152" y="944" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">Relay input IN1–IN8 ← Pi GPIO (3.3 V high = relay ON = board OFF)</text>
 <polyline points="1114,955 1144,955" fill="none" stroke="#111111" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
@@ -583,7 +646,7 @@
 <text x="1152" y="974" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">12 V coil supply → DC+ (dedicated brick)</text>
 <polyline points="1114,985 1144,985" fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="1152" y="989" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB 3.0 uplink hub → Pi (unchanged)</text>
-<text x="800" y="1008" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Channel map (channel = hub port = board = udev name):</text>
+<text x="800" y="1008" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Channel map (channel = hub port = rig port = udev name; any board family, identity by MAC):</text>
 <text x="800" y="1024" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch1→IN1=GPIO18(pin 12)  ch2→IN2=GPIO23(pin 16)  ch3→IN3=GPIO24(pin 18)  ch4→IN4=GPIO25(pin 22)</text>
 <text x="800" y="1039" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch5→IN5=GPIO12(pin 32)  ch6→IN6=GPIO16(pin 36)  ch7→IN7=GPIO20(pin 38)  ch8→IN8=GPIO21(pin 40)</text>
 <text x="800" y="1056" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 op dh   (board 01 cut)   ·   pinctrl get 18</text>
