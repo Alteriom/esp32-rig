@@ -71,38 +71,69 @@ print another hub tile + 6 board tiles, add a hub. The Pi drives
 multiple pods (see blueprint §8 for the per-Pi ceiling and when to add a
 second Pi runner node instead).
 
-## Compact chassis (recommended)
+## Chassis
 
-![Compact chassis overview](../renders/compact-overview.png)
+![Chassis overview](../renders/chassis-overview.png)
 
-The flat-tile layout needs a 1.2 m plank because every board lies down
-with its antenna overhanging. Standing the boards **upright** in a card
-rack behind the control deck, and the 12 V brick **on its edge**, brings
-the whole eight-port rig down to **330 × 272 mm** with every printed part
-under 165 mm. Same generator (`generate_chassis.py`, "compact set"), same
-box-only, no-support rules; the posts, relay tray, Pi tile and hub tile
-are shared with the linear set below.
+The tiles above leave the rig open, which is fine for three boards and
+one hub. The relay-switched build in
+[`docs/relay-power-wiring.md`](../../docs/relay-power-wiring.md) adds a
+relay module, a 12 V brick, sixteen red wires and a wire-nut junction per
+board — the **chassis set** in [`generate_chassis.py`](generate_chassis.py)
+encloses all of it. Boards stand **upright** in a card rack behind the
+control deck (antenna up, USB socket down) and the brick stands **on its
+edge**, so the whole eight-port rig is **330 × 272 mm** with every printed
+part under 165 mm. Same rules as the tiles: pure Python, boxes only, no
+supports, screw-to-base; run `python3 generate_chassis.py` after editing.
 
-Renders: [deck lids off, pockets open](../renders/compact-deck.png) ·
-[card rack](../renders/compact-rack.png) ·
-[print set](../renders/compact-printset.png)
-(from [`render_compact.py`](../renders/render_compact.py); interactive
-assembly: `python3 ../renders/build_viewer.py compact` →
-`compact-viewer.html`).
+![Dimensioned drawing](../renders/chassis-dimensions.png)
+
+Renders: [deck lids off, pockets open](../renders/chassis-deck.png) ·
+[card rack](../renders/chassis-rack.png) ·
+[print set](../renders/chassis-printset.png)
+(from [`render_chassis.py`](../renders/render_chassis.py)); the
+dimensioned drawing is [`render_dimensions.py`](../renders/render_dimensions.py),
+and `python3 ../renders/build_viewer.py` writes `chassis-viewer.html`, an
+interactive assembly you can orbit. All three read their numbers from the
+generator.
 
 | STL | Qty | For |
 |-----|-----|-----|
-| `bay-corner-post` / `bay-splice-post` | 4 / 2 | shared with the linear set (50 mm) |
-| `deck-wall-long` | 2 | 159 mm front segments |
+| `bay-corner-post` | 4 | 12 mm post, 50 mm tall; the two walls slide into 6 mm slots; screw foot inside the corner |
+| `bay-splice-post` | 2 | in-line post at the deck midline joining the two segments of a side |
+| `deck-wall-long` | 2 | 159 mm front segments with a 10 mm screw flange along the inside foot |
 | `deck-wall-rear` | 2 | 159 mm rear segments, one 20 × 20 mm notch per board slot: hub cable + the two red wires |
-| `deck-wall-end` | 2 | 178 mm end walls, two cable entries each (Ethernet, Pi USB-C, 12 V barrel, hub PSU) |
-| `deck-lid` | 2 | 165 × 190 mm vented halves |
-| `relay-tray`, `pi5-tile`, `hub-strap-tile` | 1 each | shared |
+| `deck-wall-end` | 2 | 178 mm end walls, two 32 × 22 mm cable entries each (Ethernet, Pi USB-C, 12 V barrel, hub PSU) |
+| `deck-lid` | 2 | 165 × 190 mm vented halves; rails underneath drop inside the walls |
+| `relay-tray` | 1 | 8-channel relay module on four slotted M3 bosses (±3 mm hole-pattern tolerance) |
+| `pi5-tile`, `hub-strap-tile` | 1 each | from `generate_mounts.py` |
 | `psu-cradle-side` | 1 | 12 V brick standing on its long edge (100 × 30 footprint, 48 mm tall under the 50 mm wall) |
 | `rack-4slot` | 2 | four upright board slots at 40 mm pitch: a 118 mm fin per board with a 12 mm rib that sits between the header rows and two strap notches, a ledge under the board's bottom edge, the junction pocket beneath it, and the USB-C socket clamp facing the deck |
 | `rack-pocket-lid` | 8 | pocket lid with a notch for the male pigtail rising to the board |
 
-Layout on a 330 × 272 mm base (plank, MDF, or an acrylic sheet):
+**Measure before printing.** Four constants at the top of
+`generate_chassis.py` are defaults for the parts in the wiring doc and
+must match what you received: `RELAY_HOLES` (module hole pattern),
+`BRICK` (brick length, width, thickness), `SOCKET_W` / `SOCKET_H` (the
+female pigtail's overmold). Everything else is derived.
+
+### Printing
+
+- Structure (posts, walls, trays, rack) in a dark PETG; lids and pocket
+  lids in the accent colour — the renders use charcoal and orange. Same
+  0.2 mm / 3 perimeters / 20 % as the tiles; walls and lids are 2.4 mm =
+  6 perimeters, so they print solid.
+- **Walls**: lie on the outer face, flange pointing up. **Lids**: plate on
+  the bed, rails up. **Rack**: upright, fins are 4 mm thick. **Posts**:
+  upright. Nothing needs supports; the longest part is 178 mm.
+- Print one `rack-4slot` first and check the socket fits its clamp, a
+  board sits on the ledge with its pins clear of the fin, and the wire
+  nuts clear the pocket lid before printing the second.
+
+### Layout on the 330 × 272 mm base
+
+Plank, MDF, or an acrylic sheet; the deck walls sit 2.4 mm in from the
+edge. Coordinates are the origin (front-left corner) of each part.
 
 | x (mm) | y (mm) | Part |
 |---|---|---|
@@ -114,7 +145,7 @@ Layout on a 330 × 272 mm base (plank, MDF, or an acrylic sheet):
 | 6–166 and 165–325 | 192–272 | `rack-4slot` × 2; slots at x = 26 + 40·n |
 
 Board orientation: antenna up, USB socket down, components facing the
-deck. The board's bottom edge rests on the fin's ledge 55 mm above the
+deck. The board's bottom edge rests on the fin's ledge 58 mm above the
 base so the male pigtail's plug fits between the pocket lid and the
 socket. Two cable ties go around board + fin at the notches; the rib
 between the header rows keeps the pins off the fin. Devkits from 25 to
@@ -124,109 +155,29 @@ between the header rows keeps the pins off the fin. Devkits from 25 to
 than blueprint §6's 0.5 m. This is the layout for flash/OTA/serial/power
 coverage and bench space; for mesh-timing results, reduce TX power in the
 agent firmware (§7's first RF-containment candidate) and record the
-pitch in the run summary. The linear set below keeps the spacing.
-
-### Assembly (compact)
-
-1. Screw the posts down at the deck corners and midlines, slide the walls
-   in (rear segments' notches line up with the rack slots), screw every
-   flange.
-2. Deck: relay tray front-left, hub front-right with its ports toward the
-   rear wall, Pi rear-left, brick cradle rear-right. Wire the relay per
-   the wiring doc; the GPIO ribbon and 12 V wires stay in the deck.
-3. Rack modules behind the rear wall, screwed to the base. Per slot: clamp
-   the female pigtail, make the joins in the pocket, pass the hub cable
-   and the two red wires forward through the slot's notch, fit the pocket
-   lid, strap the board to the fin, plug the male pigtail in from below.
-4. Deck lids on. Only the boards and their antennas stand above the rig.
-
-## Linear chassis (1.2 m plank)
-
-![Enclosed chassis overview](../renders/chassis-overview.png)
-
-The tiles above leave the rig open, which is fine for three boards and
-one hub, and keeps the blueprint's RF spacing. The relay-switched build in
-[`docs/relay-power-wiring.md`](../../docs/relay-power-wiring.md) adds a
-relay module, a 12 V brick, sixteen red wires, and a wire-nut junction per
-board — the **chassis set** in
-[`generate_chassis.py`](generate_chassis.py) encloses the control end,
-hides the wiring in a lidded channel, and gives every board a station
-with its junction under a lid. Same rules: pure Python, boxes only, no
-supports, screw-to-plank; run `python3 generate_chassis.py` after editing.
-
-Renders: [control bay, lids off](../renders/chassis-control-bay.png) ·
-[board station](../renders/chassis-station.png) ·
-[print set](../renders/chassis-printset.png)
-(from [`render_chassis.py`](../renders/render_chassis.py)).
-
-| STL | Qty | For |
-|-----|-----|-----|
-| `bay-corner-post` | 4 | 12 mm post; the two walls slide into 6 mm slots; screw foot inside the corner |
-| `bay-splice-post` | 2 | in-line post at the bay midline joining the two long segments of a side |
-| `bay-wall-long` | 4 | 144 mm × 45 mm wall segment with a 10 mm screw flange along its inside foot |
-| `bay-wall-short-outer` | 1 | 188 mm end wall (plank end) with two 32 × 22 mm cable entries: Ethernet, Pi USB-C, 12 V barrel, hub PSU |
-| `bay-wall-short-inner` | 1 | 188 mm end wall with the 36 × 28 mm port the cable channel passes through |
-| `bay-lid` | 2 | 150 × 200 mm vented half-lid; rails underneath drop inside the walls |
-| `relay-tray` | 1 | 8-channel relay module on four slotted M3 bosses (±3 mm hole-pattern tolerance) |
-| `psu-cradle` | 1 | 12 V brick between end stops, two straps |
-| `cable-channel-200` / `-100` | 4 + 1 | 34 × 24 mm U-channel along the front edge, exit notches every 50 mm on the station side |
-| `cable-channel-lid-200` / `-100` | 4 + 1 | press-fit lid |
-| `board-station` | 1 per port | USB-C socket clamp (faces the channel) + wire-nut junction pocket + the 29 mm devkit channel and straps from `esp32-board-tile` |
-| `station-pocket-lid` | 1 per port | friction-fit lid over the nuts |
-
-**Measure before printing.** Four constants at the top of
-`generate_chassis.py` are defaults for the parts in the wiring doc and
-must match what you received: `RELAY_HOLES` (module hole pattern),
-`BRICK` (brick footprint), `SOCKET_W` / `SOCKET_H` (the female pigtail's
-overmold). Everything else is derived.
-
-### Printing
-
-- Structure (posts, walls, channel, trays, stations) in a dark PETG;
-  lids and pocket lids in the accent colour — the renders use charcoal
-  and orange. Same 0.2 mm / 3 perimeters / 20 % as the tiles; walls and
-  lids are 2.4 mm = 6 perimeters, so they print solid.
-- **Walls**: lie on the outer face, flange pointing up. **Lids**: plate on
-  the bed, rails up. **Channel**: upright. **Posts**: upright. No part
-  needs supports; the longest is 200 mm.
-- Print one `board-station` first and check the socket fits its clamp
-  and the wire nuts clear the pocket lid before printing the rest.
-
-### Plank layout (1.2 m)
-
-| x (mm) | y (mm) | Part |
-|---|---|---|
-| 0–300 | 0–200 | control bay (posts at the corners, walls 2.4 mm in from the plank edge) |
-| 16–120 | 100–182 | `pi5-tile` |
-| 16–126 | 22–92 | `hub-strap-tile` |
-| 126–284 | 116–185 | `relay-tray` (terminal row toward the front) |
-| 150–270 | 30–95 | `psu-cradle` |
-| 280–1180 | 16–50 | cable channel: 4 × 200 + 1 × 100, starting inside the bay |
-| 320 + 145·n | 60–130 | `board-station` n = 0…5 (six stations; ports 7–8 spare or a second plank) |
-
-145 mm pitch is the compromise that fits six stations behind the bay on
-one 1.2 m plank; the RF rules in blueprint §6 still prefer ≥0.5 m. Use a
-longer plank or two planks if mesh-timing results look compressed.
+pitch in the run summary. The open tile layout above keeps the spacing
+if a run needs it.
 
 ### Assembly
 
-1. Screw down the four corner posts and two splice posts at the bay
-   corners and midlines, then slide the wall segments into their slots
-   and screw every flange (holes every 50 mm). Cable entries on the outer
-   end wall face the mains side; the channel port on the inner wall faces
-   the plank.
-2. Inside the bay: Pi tile rear-left, hub tile front-left, relay tray
-   rear-right (terminals toward the front), PSU cradle front-right, per
-   the layout table. Wire the relay per the wiring doc before the lids
-   go on; the GPIO ribbon and the two 12 V wires stay inside the bay.
-3. Screw the channel segments end to end along the front edge, starting
-   inside the bay so the hub's cables drop straight in. Lids stay off
-   until the last cable is routed.
-4. One station per board: clamp the female pigtail (strap over it),
-   make the wire-nut joins in the pocket (§6 of the wiring doc), run the
-   two red wires and the unmodified hub cable into the channel through
-   the nearest notch, fit the pocket lid, then strap the devkit on the
-   rails with the antenna overhanging the far edge.
-5. Channel lids on, bay lids on. Every wire is now under a lid; the only
-   exposed cables are the short USB run from each notch to its socket and
-   the male pigtail into each board.
+1. Screw the posts down at the deck corners and midlines, slide the walls
+   in (rear segments' notches line up with the rack slots), screw every
+   flange (holes every 50 mm). Cable entries on the end walls face the
+   mains side.
+2. Deck: relay tray front-left, hub front-right with its ports toward the
+   rear wall, Pi rear-left, brick cradle rear-right, per the layout
+   table. Wire the relay per the wiring doc before the lids go on; the
+   GPIO ribbon and the two 12 V wires stay inside the deck.
+3. Rack modules behind the rear wall, screwed to the base. Per slot: clamp
+   the female pigtail (strap over it), make the wire-nut joins in the
+   pocket (§6 of the wiring doc), pass the hub cable and the two red
+   wires forward through the slot's notch, fit the pocket lid, strap the
+   board to the fin, plug the male pigtail in from below.
+4. Deck lids on. Only the boards and their antennas stand above the rig;
+   every wire is under a lid.
+
+## Scaling
+
+One chassis = one Pi, one hub, eight ports. Growing the farm is
+additive: a second chassis with its own hub on the same Pi (blueprint §8
+for the per-Pi ceiling), or a second Pi runner node.
