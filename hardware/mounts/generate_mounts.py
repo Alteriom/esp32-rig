@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the rig's printable mounting-plate STLs.
+"""Generate the rig's Pi and hub tiles, and the STL primitives.
 
 Dependency-free (stdlib only). All geometry is a union of axis-aligned
 boxes; holes/slots are made by covering a footprint with boxes *around*
@@ -8,13 +8,12 @@ one solid. Rerun after editing dimensions:
 
     python3 generate_mounts.py        # writes stl/*.stl
 
-Units: millimetres. Z=0 is the face that sits on the backing plank.
+Units: millimetres. Z=0 is the face that sits on the base sheet.
 
-Plates produced (see README.md for print settings and assembly):
-  esp32-board-tile.stl  one ESP32 devkit: 29 mm locating channel between
-                        rails + 3 zip-tie stations with under-tile grooves
+Tiles produced (see README.md; the rest of the chassis comes from
+generate_chassis.py, which imports the primitives below):
   pi5-tile.stl          Raspberry Pi 4/5: 58x49 hole pattern on 6 mm bosses
-  hub-strap-tile.stl    universal zip-strap plate (USB hub, relay boards)
+  hub-strap-tile.stl    universal zip-strap plate (the USB hub)
 """
 
 import struct
@@ -103,26 +102,6 @@ def zip_station(bottom_cuts, top_cuts, cx, y_near, y_far):
     top_cuts.append((x0, y_far - SLOT_H, x1, y_far))             # slot B
 
 
-# ---------------------------------------------------------- esp32 board tile
-
-
-def esp32_board_tile():
-    W, D = 80.0, 60.0
-    tris = []
-    corners = [sq(6, 6, PLANK_HOLE), sq(W - 6, 6, PLANK_HOLE),
-               sq(6, D - 6, PLANK_HOLE), sq(W - 6, D - 6, PLANK_HOLE)]
-    bottom, top = list(corners), list(corners)
-    for cx in (18, 40, 62):
-        zip_station(bottom, top, cx, 7, D - 7)
-    layer(tris, (0, 0, W, D), bottom, 0, GROOVE)
-    layer(tris, (0, 0, W, D), top, GROOVE, T)
-    # locating rails: 29 mm channel cradles 25.4–28.5 mm devkits; mount the
-    # board with its antenna overhanging a tile edge (RF, blueprint §6)
-    box(tris, 8, 12.5, T, W - 8, 15.5, T + 3)
-    box(tris, 8, D - 15.5, T, W - 8, D - 12.5, T + 3)
-    write_stl(OUT / "esp32-board-tile.stl", tris)
-
-
 # ----------------------------------------------------------------- pi5 tile
 
 
@@ -161,6 +140,5 @@ def hub_strap_tile():
 
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
-    esp32_board_tile()
     pi5_tile()
     hub_strap_tile()
