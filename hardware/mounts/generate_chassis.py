@@ -78,7 +78,7 @@ BOARD_H = 55.0      # longest common devkit; the fin clears it by 5
 POCKET = (34.0, 40.0)   # junction pocket footprint (x, y), 2 mm walls
 POCKET_H = 16.0
 RACK_GAP = 2.0      # rack modules sit this far behind the deck's rear edge
-RACK_X = (6.0, 165.0)   # rack module origins along X
+RACK_X = (6.0, 6.0 + RACK_W)   # rack module origins along X: 6..166, 166..326
 BASE_W = DECK_W
 BASE_D = DECK_D + RACK_GAP + RACK_D          # 272
 FIN_TOP = T + BOARD_LIFT + BOARD_H + 5       # 118.2 above the base
@@ -164,11 +164,17 @@ def deck_walls():
     seg = (DECK_W - 3 * POST + 4 * SLOT_DEPTH) / 2                 # 159
     end = DECK_D - 2 * POST + 2 * SLOT_DEPTH                        # 178
     wall("deck-wall-long.stl", seg)
-    # rear: one 20 x 20 notch per board slot. Segment 1 starts at base
-    # x = 6 with the first rack module, so slot centres fall at wall
-    # coordinates 20, 60, 100, 140 on both segments.
-    wall("deck-wall-rear.stl", seg,
-         notches=[(c - 10, c + 10, 20) for c in (SLOT_X0 + SLOT_PITCH * i for i in range(4))])
+    # rear: one notch per board slot. The two rear segments are one print,
+    # placed rotated 180 deg with their origins at base x = SLOT_DEPTH + seg
+    # and SLOT_DEPTH + 2 * seg (see render_chassis.deck), so wall coordinate
+    # w maps to base x = origin - w. Each notch spans both segments' slot
+    # positions plus 10 mm either side.
+    slots = slot_centres()
+    rear = []
+    for i in range(4):
+        ws = [SLOT_DEPTH + seg - slots[i], SLOT_DEPTH + 2 * seg - slots[4 + i]]
+        rear.append((min(ws) - 10, max(ws) + 10, 20))
+    wall("deck-wall-rear.stl", seg, notches=rear)
     # end walls: Ethernet / Pi USB-C / 12 V barrel / hub PSU
     wall("deck-wall-end.stl", end, notches=[(40, 72, 22), (104, 136, 22)])
 

@@ -84,7 +84,7 @@ data = {
     "dims": "base <b>330 × 272 mm</b> · deck <b>330 × 190 × 50</b> · boards <b>40 mm pitch</b>",
     "layout": [["0–330", "0–190", "control deck"], ["16–174", "16–85", "relay tray"],
                ["190–300", "16–86", "hub strap tile, ports to the rear"], ["16–120", "90–172", "Pi 5 tile"],
-               ["190–306", "100–142", "PSU cradle, brick on edge"], ["6–166 / 165–325", "192–272", "rack-4slot × 2"],
+               ["190–306", "100–142", "PSU cradle, brick on edge"], ["6–166 / 166–326", "192–272", "rack-4slot × 2"],
                ["26 + 40·n", "—", "board slot n = 0…7"]],
 }
 

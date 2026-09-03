@@ -30,8 +30,8 @@ relay module, a 12 V brick, sixteen red wires and a wire-nut junction per
 board — the **chassis set** in [`generate_chassis.py`](generate_chassis.py)
 encloses all of it. Boards stand **upright** in a card rack behind the
 control deck (antenna up, USB socket down) and the brick stands **on its
-edge**, so the whole eight-port rig is **330 × 272 mm** with every printed
-part under 165 mm. Same rules as the tiles: pure Python, boxes only, no
+edge**, so the whole eight-port rig is **330 × 272 mm** and no printed
+part is longer than 178 mm (a 180 mm bed prints everything). Same rules as the tiles: pure Python, boxes only, no
 supports, screw-to-base; run `python3 generate_chassis.py` after editing.
 
 ![Dimensioned drawing](../renders/chassis-dimensions.png)
@@ -90,7 +90,7 @@ edge. Coordinates are the origin (front-left corner) of each part.
 | 190–300 | 16–86 | `hub-strap-tile`, **ports facing the rack** |
 | 16–120 | 90–172 | `pi5-tile` |
 | 190–306 | 100–142 | `psu-cradle-side` |
-| 6–166 and 165–325 | 192–272 | `rack-4slot` × 2; slots at x = 26 + 40·n |
+| 6–166 and 166–326 | 192–272 | `rack-4slot` × 2; slots at x = 26 + 40·n |
 
 Board orientation: antenna up, USB socket down, components facing the
 deck. The board's bottom edge rests on the fin's ledge 58 mm above the

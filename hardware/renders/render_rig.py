@@ -188,8 +188,8 @@ def hub_node(scene, ox, oy):
     t = lambda g: translate(g, ox, oy, 0)
     scene.append((t(box(5, 14, 3.2, 105, 56, 27)), HUB_BODY))        # body
     ports = []
-    for i in range(7):
-        px = 12 + i * 13
+    for i in range(8):
+        px = 12 + i * 12
         scene.append((t(box(px, 12.6, 8, px + 9, 14.5, 15)), (0.03,) * 3))
         scene.append((t(box(px + 3, 12.6, 17, px + 6, 14.5, 19)), LED))
         ports.append(np.array([ox + px + 4.5, oy + 13, 11]))

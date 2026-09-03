@@ -129,6 +129,8 @@ def deck_contents(scene):
 
 
 def rack(scene, ports, boards=True, pocket_lids=True):
+    if len(ports) < len(SLOTS):
+        raise ValueError(f"hub model has {len(ports)} ports for {len(SLOTS)} rack slots")
     for x0 in gc.RACK_X:
         place(scene, "rack-4slot", CHASSIS, x0, RACK_Y)
     pw, pd = gc.POCKET
@@ -152,7 +154,7 @@ def rack(scene, ports, boards=True, pocket_lids=True):
             scene.append((box(cx - 3.5, FIN_Y - 7.4, zb, cx + 3.5, FIN_Y - 4.6, zb + 7), rr.SHIELD))
             for zt in (zb + 12, zb + 42):
                 scene.append((box(cx - 13.5, FIN_Y - 9, zt, cx + 13.5, FIN_Y + gc.FIN_T + 1.5, zt + 5), rr.TIE))
-        p = ports[i % len(ports)]
+        p = ports[i]
         q3 = np.array([cx, y0 + 0.5, T + 4])
         scene.append((bezier_tube(p, p + np.array([0, 40, 4]), q3 + np.array([0, -40, 8]), q3), rr.CABLE))
 
