@@ -208,7 +208,7 @@
     list.appendChild(li);
   }
   document.getElementById('total').textContent = String(total);
-  document.getElementById('dims').innerHTML = 'plank <b>1200 × 200 mm</b> · bay <b>300 × 200 × 45</b>';
+  document.getElementById('dims').innerHTML = DATA.dims;
   if (typeof THREE === 'undefined') {
     const msg = document.createElement('p');
     msg.className = 'lede'; msg.style.cssText = 'position:absolute;left:24px;top:20px;margin:0';
@@ -279,11 +279,7 @@
 
   // ---- camera: simple orbit around a target (mm, Z-up given, converted)
   const toThree = (v) => new THREE.Vector3(v[0], v[2], -v[1]);
-  const VIEWS = {
-    overview: { eye: [150, -1250, 780], target: [600, 90, -60] },
-    bay:      { eye: [0, -560, 440],   target: [178, 105, 0] },
-    station:  { eye: [DATA.stations[0] - 60, -200, 190], target: [DATA.stations[0] + 62, 95, 4] },
-  };
+  const VIEWS = DATA.views;
   const orbit = { target: new THREE.Vector3(), r: 1, theta: 0, phi: 1 };
   function setView(name) {
     const v = VIEWS[name];

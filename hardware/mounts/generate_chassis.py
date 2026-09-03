@@ -29,6 +29,17 @@ Parts (see README.md "Chassis" for print settings and assembly):
                                    wire-nut junction pocket
     station-pocket-lid.stl     xN  friction-fit lid for the pocket
 
+  compact set (330 x 272 footprint, boards upright in a card rack)
+    deck-wall-long.stl         x2  159 mm front segment
+    deck-wall-rear.stl         x2  159 mm rear segment, one cable notch per slot
+    deck-wall-end.stl          x2  178 mm end wall with two cable entries
+    deck-lid.stl               x2  165 x 190 vented half
+    rack-4slot.stl             x2  four upright board slots: fin + strap
+                                   notches + junction pocket + socket clamp
+    rack-pocket-lid.stl        x8  pocket lid with the male-pigtail notch
+    psu-cradle-side.stl        x1  12 V brick standing on its edge
+    (posts, relay-tray, pi5-tile and hub-strap-tile are shared)
+
 Dimensions marked MEASURE are defaults for the parts pictured in the
 wiring doc; check them against what you actually received before
 printing (slots and clearances absorb a few millimetres, not more).
@@ -56,7 +67,7 @@ OUT = Path(__file__).parent / "stl"
 WALL = 2.4          # wall / lid thickness (6 perimeters at 0.4 mm)
 CLR = 0.3           # sliding clearance per side (post slots, lid rails)
 BAY_W, BAY_D = 300.0, 200.0   # bay footprint = plank width x one end
-BAY_H = 45.0        # clears Pi USB stack (27), hub (30), strapped brick (36)
+BAY_H = 50.0        # clears Pi USB stack (27), hub (30), brick on its edge (48)
 INSET = WALL        # walls sit one wall-thickness in from the plank edge
 FLANGE = 10.0       # screw flange along the inside foot of every wall
 POST = 12.0         # corner / splice post side
@@ -158,16 +169,15 @@ def bay_walls():
              notches=[(c0, c0 + CH_W + 2, CH_H + WALL + 2)])
 
 
-def bay_lid():
-    """Half lid (150 x 200). Rails underneath drop inside the walls; the
-    two halves butt at the bay's midline. Vent slots over the hot parts.
+def bay_lid(name="bay-lid.stl", W=BAY_W / 2, D=BAY_D):
+    """Half lid. Rails underneath drop inside the walls; the two halves
+    butt at the bay's midline. Vent slots over the hot parts.
     """
-    W, D = BAY_W / 2, BAY_D
     tris = []
     vents = []
-    for row in range(4):
+    for row in range(int((D - 60) // 32)):
         y = 40 + row * 32
-        for col in range(3):
+        for col in range(int((W - 30) // 44)):
             x = 18 + col * 44
             vents.append((x, y, x + 36, y + 3))
             vents.append((x, y + 9, x + 36, y + 12))
@@ -181,7 +191,7 @@ def bay_lid():
     box(tris, g, D - inner - WALL, -rail_h, W - g, D - inner, 0)      # rear
     box(tris, inner, g, -rail_h, inner + WALL, D - g, 0)              # outer end
     # print rails-up (plate on the bed); Z=0 is the plate's underside
-    write_stl(OUT / "bay-lid.stl", tris)
+    write_stl(OUT / name, tris)
 
 
 # --------------------------------------------------------------- relay tray
@@ -301,6 +311,107 @@ def station_pocket_lid():
     write_stl(OUT / "station-pocket-lid.stl", tris)
 
 
+# ============================================================= compact set
+#
+# Boards stand upright in a card rack behind the control deck: antenna up,
+# USB socket down, each board strapped to a fin with two cable ties. The
+# junction pocket sits directly under the board, its USB-C socket facing
+# the deck's rear wall, so the hub cable and the two red wires pass
+# straight through one notch. No cable channel, no plank run: the whole
+# rig is 330 x 272 mm.
+
+DECK_W, DECK_D = 330.0, 190.0
+SLOT_PITCH = 40.0        # board pitch; 8 boards = 2 rack modules of 4
+FIN_T = 4.0
+BOARD_LIFT = 55.0        # board's bottom edge above the rack base: room for
+                         # the male pigtail's plug (~30 mm) above the pocket
+BOARD_H = 55.0           # longest common devkit; the fin clears it
+RACK_W, RACK_D = 160.0, 80.0
+
+
+def deck_walls():
+    seg = (DECK_W - 3 * POST + 4 * SLOT_DEPTH) / 2                 # 159
+    end = DECK_D - 2 * POST + 2 * SLOT_DEPTH                        # 178
+    bay_wall("deck-wall-long.stl", seg)
+    # rear: one 20 x 20 notch per board slot (rack modules sit at x = 6 and
+    # 165, slots at 20 + 40 n from each module's origin), same on both
+    # segments
+    bay_wall("deck-wall-rear.stl", seg,
+             notches=[(cx - 10, cx + 10, 20) for cx in (20, 60, 100, 140)])
+    bay_wall("deck-wall-end.stl", end, notches=[(40, 72, 22), (104, 136, 22)])
+    bay_lid("deck-lid.stl", DECK_W / 2, DECK_D)
+
+
+def psu_cradle_side():
+    """12 V brick standing on its long edge: 100 x 30 footprint, 45 tall."""
+    bx, by = BRICK[0], 30.0
+    W, D = bx + 16, by + 12
+    tris = []
+    bottom, top = plank_corners(W, D, 4), plank_corners(W, D, 4)
+    for cx in (W * 0.3, W * 0.7):
+        zip_station(bottom, top, cx, 2, D - 2)
+    layer(tris, (0, 0, W, D), bottom, 0, GROOVE)
+    layer(tris, (0, 0, W, D), top, GROOVE, T)
+    for y0 in (4, D - 6):                                   # side rails
+        box(tris, 10, y0, T, W - 10, y0 + 2, T + 10)
+    for x0 in (6, W - 8):                                   # end stops
+        box(tris, x0, 6, T, x0 + 2, D - 6, T + 14)
+    write_stl(OUT / "psu-cradle-side.stl", tris)
+
+
+def rack_4slot():
+    """Four upright board slots on one 160 x 80 base.
+
+    Per slot (centre cx): socket clamp at the front edge (facing the deck),
+    junction pocket behind it, and a fin at the back. The board hangs on
+    the fin's front face — a 12 mm rib fits between its two header rows —
+    held by two cable ties around board + fin, located by edge notches.
+    Prints upright, fins are 4 mm thick and 118 mm tall.
+    """
+    tris = []
+    bottom, top = plank_corners(RACK_W, RACK_D, 5), plank_corners(RACK_W, RACK_D, 5)
+    slots = [20 + SLOT_PITCH * i for i in range(4)]
+    for cx in slots:
+        zip_station_x(bottom, top, 12, cx - 17, cx + 17)        # socket strap
+    layer(tris, (0, 0, RACK_W, RACK_D), bottom, 0, GROOVE)
+    layer(tris, (0, 0, RACK_W, RACK_D), top, GROOVE, T)
+    fin_y0 = RACK_D - 14
+    fin_top = T + BOARD_LIFT + BOARD_H + 5
+    for cx in slots:
+        # socket clamp ribs, mouth toward y = 0
+        for rx in (cx - SOCKET_W / 2 - 2, cx + SOCKET_W / 2):
+            box(tris, rx, 3, T, rx + 2, 20, T + SOCKET_H)
+        # pocket: 34 x 40, 2 mm walls; front notch (socket wires + red
+        # pair), rear notch (male pigtail up to the board)
+        pocket = (cx - 17, 24, cx + 17, 64)
+        interior = (cx - 15, 26, cx + 15, 62)
+        layer(tris, pocket, [interior], T, T + 6)
+        layer(tris, pocket, [interior, (cx - 9, 24, cx + 9, 26), (cx - 6, 62, cx + 6, 64)],
+              T + 6, T + POCKET_H)
+        # fin with strap notches on both vertical edges
+        fin = (cx - 15, fin_y0, cx + 15, fin_y0 + FIN_T)
+        narrow = (cx - 13, fin_y0, cx + 13, fin_y0 + FIN_T)
+        z = T
+        for z0, z1 in ((T + BOARD_LIFT + 12, T + BOARD_LIFT + 18),
+                       (T + BOARD_LIFT + 42, T + BOARD_LIFT + 48)):
+            layer(tris, fin, [], z, z0)
+            layer(tris, narrow, [], z0, z1)
+            z = z1
+        layer(tris, fin, [], z, fin_top)
+        # rib between the header rows, board rests on it
+        box(tris, cx - 6, fin_y0 - 3, T + BOARD_LIFT - 2, cx + 6, fin_y0, fin_top)
+        # ledge the board's bottom edge sits on
+        box(tris, cx - 15, fin_y0 - 12, T + BOARD_LIFT - 4, cx + 15, fin_y0, T + BOARD_LIFT - 2)
+    write_stl(OUT / "rack-4slot.stl", tris)
+
+
+def rack_pocket_lid():
+    tris = []
+    layer(tris, (0, 0, 34, 40), [(14, 34, 20, 40)], 0, WALL)       # rear notch
+    box(tris, 2 + CLR, 2 + CLR, -3, 34 - 2 - CLR, 34, 0)
+    write_stl(OUT / "rack-pocket-lid.stl", tris)
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     bay_corner_post()
@@ -315,3 +426,7 @@ if __name__ == "__main__":
     cable_channel_lid(100)
     board_station()
     station_pocket_lid()
+    deck_walls()
+    psu_cradle_side()
+    rack_4slot()
+    rack_pocket_lid()
