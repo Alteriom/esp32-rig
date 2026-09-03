@@ -1,0 +1,371 @@
+<title>Alteriom Rig Chassis</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #e6e9ee;
+    --surface: #f6f7f9;
+    --surface-2: #eceef2;
+    --line: #cfd4db;
+    --ink: #1b2027;
+    --muted: #5f6975;
+    --accent: #e07a1f;
+    --accent-ink: #8a4a0f;
+    --chassis: #33373d;
+    --focus: #2b6cb0;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141719;
+      --surface: #1d2126;
+      --surface-2: #252a30;
+      --line: #353b43;
+      --ink: #e9ebee;
+      --muted: #98a2ad;
+      --accent: #f08a2e;
+      --accent-ink: #f5b06e;
+      --chassis: #3d424a;
+      --focus: #6ea4e6;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141719;
+    --surface: #1d2126;
+    --surface-2: #252a30;
+    --line: #353b43;
+    --ink: #e9ebee;
+    --muted: #98a2ad;
+    --accent: #f08a2e;
+    --accent-ink: #f5b06e;
+    --chassis: #3d424a;
+    --focus: #6ea4e6;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 14px/1.5 "IBM Plex Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    height: 100vh;
+    min-height: 560px;
+  }
+  .stage { position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; outline: none; }
+  .hud {
+    position: absolute; left: 16px; bottom: 14px;
+    display: flex; gap: 14px; align-items: baseline;
+    font: 500 12px/1 "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    color: var(--muted); letter-spacing: 0.02em;
+  }
+  .hud b { color: var(--ink); font-weight: 500; }
+  .rail {
+    background: var(--surface);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .rail > section { padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .rail > section:last-child { border-bottom: 0; margin-top: auto; }
+  .eyebrow {
+    font: 600 12px/1 "Barlow Condensed", "Arial Narrow", sans-serif;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-ink);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font: 700 34px/1 "Barlow Condensed", "Arial Narrow", sans-serif;
+    letter-spacing: 0.01em; margin: 0 0 8px; text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--muted); max-width: 32ch; }
+  h2 {
+    font: 600 13px/1 "Barlow Condensed", "Arial Narrow", sans-serif;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .seg { display: flex; gap: 6px; }
+  .seg button, .toggle {
+    font: 500 13px/1 "IBM Plex Sans", system-ui, sans-serif;
+    color: var(--ink); background: var(--surface-2);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 8px 10px; cursor: pointer; flex: 1;
+  }
+  .seg button[aria-pressed="true"] { background: var(--chassis); color: #fff; border-color: var(--chassis); }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .toggle { display: flex; align-items: center; gap: 8px; text-align: left; }
+  .toggle .dot {
+    width: 10px; height: 10px; border-radius: 2px; flex: none;
+    background: var(--line); border: 1px solid var(--muted);
+  }
+  .toggle[aria-pressed="true"] .dot { background: var(--accent); border-color: var(--accent); }
+  button:focus-visible, .part:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .parts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .part {
+    display: grid; grid-template-columns: 1fr auto; column-gap: 10px; row-gap: 1px;
+    padding: 7px 8px; margin: 0 -8px; border-radius: 4px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .part:hover { background: var(--surface-2); }
+  .part[aria-pressed="true"] { border-color: var(--accent); background: var(--surface-2); }
+  .part .name { font-weight: 500; }
+  .part .qty {
+    font: 500 12px/1.3 "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--muted); font-variant-numeric: tabular-nums; align-self: start; padding-top: 2px;
+  }
+  .part .spec { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+  .part .file { grid-column: 1 / -1; font: 400 11px/1.3 "IBM Plex Mono", ui-monospace, monospace; color: var(--muted); }
+  .parts-total { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .parts-total b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: left; padding: 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 500; color: var(--muted); }
+  td.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 10px; }
+  .foot { color: var(--muted); font-size: 12px; }
+  .foot code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; }
+  .swatches { display: flex; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .swatches span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .swatches .c::before { background: #33373d; }
+  .swatches .l::before { background: #e07a1f; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; }
+    .rail { border-left: 0; border-top: 1px solid var(--line); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <div class="stage">
+    <canvas id="c" tabindex="0" aria-label="3D view of the assembled rig chassis"></canvas>
+    <div class="hud"><span>drag <b>orbit</b></span><span>scroll <b>zoom</b></span><span>shift-drag <b>pan</b></span><span id="dims"></span></div>
+  </div>
+  <aside class="rail">
+    <section>
+      <p class="eyebrow">Alteriom ESP32 HIL rig</p>
+      <h1>Rig Chassis</h1>
+      <p class="lede">Boards upright in a card rack behind the control deck: 330 × 272 mm, eight ports, no printed part longer than 178 mm. Every part here is the real STL at its assembly position.</p>
+      <div class="swatches"><span class="c">charcoal PETG, structure</span><span class="l">orange PETG, lids</span></div>
+    </section>
+    <section>
+      <h2>View</h2>
+      <div class="seg" role="group" aria-label="Camera preset">
+        <button data-view="overview" aria-pressed="true">Overview</button>
+        <button data-view="deck" aria-pressed="false">Control bay</button>
+        <button data-view="rack" aria-pressed="false">Board station</button>
+      </div>
+    </section>
+    <section>
+      <h2>Show</h2>
+      <div class="toggles">
+        <button class="toggle" data-toggle="lids" aria-pressed="true"><span class="dot"></span>Lids</button>
+        <button class="toggle" data-toggle="context" aria-pressed="true"><span class="dot"></span>Electronics</button>
+        <button class="toggle" data-toggle="plank" aria-pressed="true"><span class="dot"></span>Base</button>
+      </div>
+    </section>
+    <section>
+      <h2>Printed parts · click to isolate</h2>
+      <ul class="parts" id="parts"></ul>
+      <div class="parts-total"><span>printed parts in this assembly</span><b id="total"></b></div>
+    </section>
+    <section>
+      <h2>Plank layout (mm)</h2>
+      <table>
+        <tr><th>x</th><th>y</th><th>part</th></tr>
+        <tr><td class="num">0–300</td><td class="num">0–200</td><td>control bay</td></tr>
+        <tr><td class="num">16–120</td><td class="num">100–182</td><td>Pi 5 tile</td></tr>
+        <tr><td class="num">16–126</td><td class="num">22–92</td><td>hub strap tile</td></tr>
+        <tr><td class="num">126–284</td><td class="num">116–185</td><td>relay tray</td></tr>
+        <tr><td class="num">150–270</td><td class="num">30–95</td><td>PSU cradle</td></tr>
+        <tr><td class="num">280–1180</td><td class="num">16–50</td><td>cable channel</td></tr>
+        <tr><td class="num">320 + 145·n</td><td class="num">60–130</td><td>board station n = 0…5</td></tr>
+      </table>
+    </section>
+    <section class="foot">
+      Generated by <code>hardware/mounts/generate_chassis.py</code> and <code>generate_mounts.py</code>; assembly from <code>hardware/renders/render_chassis.py</code>. Wiring: <code>docs/relay-power-wiring.md</code>. Measure <code>RELAY_HOLES</code>, <code>BRICK</code>, <code>SOCKET_W/H</code> before printing.
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*__DATA__*/
+
+(function () {
+  const list = document.getElementById('parts');
+  let total = 0;
+  for (const p of DATA.parts) {
+    total += p.qty;
+    const li = document.createElement('li');
+    li.className = 'part'; li.tabIndex = 0; li.dataset.part = p.name; li.setAttribute('role', 'button'); li.setAttribute('aria-pressed', 'false');
+    li.innerHTML = `<span class="name"></span><span class="qty">× ${p.qty}</span><span class="spec"></span><span class="file"></span>`;
+    li.querySelector('.name').textContent = p.label;
+    li.querySelector('.spec').textContent = p.spec;
+    li.querySelector('.file').textContent = p.name + '.stl';
+    list.appendChild(li);
+  }
+  document.getElementById('total').textContent = String(total);
+  document.getElementById('dims').innerHTML = DATA.dims;
+  if (typeof THREE === 'undefined') {
+    const msg = document.createElement('p');
+    msg.className = 'lede'; msg.style.cssText = 'position:absolute;left:24px;top:20px;margin:0';
+    msg.textContent = 'The 3D view needs three.js from cdnjs.cloudflare.com; it could not be loaded here. The parts list and layout still apply.';
+    document.querySelector('.stage').appendChild(msg);
+    return;
+  }
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 5, 20000);
+  const root = new THREE.Group();          // Z-up mm frame from the generators
+  root.rotation.x = -Math.PI / 2;          // -> three.js Y-up
+  scene.add(root);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x777788, 0.55));
+  const key = new THREE.DirectionalLight(0xffffff, 0.75); key.position.set(-450, 750, 500); scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.35); fill.position.set(700, 350, -250); scene.add(fill);
+
+  function decode(b64) {
+    const bin = atob(b64), n = bin.length;
+    const bytes = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+    const q = new Int16Array(bytes.buffer, 0, n >> 1);
+    const f = new Float32Array(q.length);
+    for (let i = 0; i < q.length; i++) f[i] = q[i] / 10;
+    return f;
+  }
+  function geometry(b64) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(decode(b64), 3));
+    g.computeVertexNormals();
+    return g;
+  }
+  const CHASSIS = 0x33373d, LID = 0xe07a1f, HI = 0xf3a55a;
+  function mat(color) {
+    return new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85, metalness: 0.04 });
+  }
+
+  // printed parts, instanced at their placements
+  const partGeo = {}, partMeshes = [], partMats = {};
+  for (const p of DATA.parts) {
+    partGeo[p.name] = geometry(p.data);
+    const base = p.lid ? LID : CHASSIS;
+    partMats[p.name] = {
+      normal: mat(base),
+      dim: Object.assign(mat(base), { transparent: true, opacity: 0.12, depthWrite: false }),
+      hi: mat(p.lid ? HI : 0x5a6270),
+    };
+    partMats[p.name].hi.emissive = new THREE.Color(0xe07a1f); partMats[p.name].hi.emissiveIntensity = 0.35;
+  }
+  for (const pl of DATA.placements) {
+    const m = new THREE.Mesh(partGeo[pl.name], partMats[pl.name].normal);
+    m.position.set(pl.x, pl.y, pl.z);
+    m.rotation.z = pl.k * Math.PI / 2;
+    m.userData = { name: pl.name, lid: DATA.parts.find(p => p.name === pl.name).lid };
+    root.add(m); partMeshes.push(m);
+  }
+  // context: plank, electronics, cables
+  const ctxMeshes = [];
+  for (const c of DATA.context) {
+    const m = new THREE.Mesh(geometry(c.data), mat(new THREE.Color(c.color[0], c.color[1], c.color[2])));
+    m.userData = { kind: c.kind };
+    root.add(m); ctxMeshes.push(m);
+  }
+
+  // ---- camera: simple orbit around a target (mm, Z-up given, converted)
+  const toThree = (v) => new THREE.Vector3(v[0], v[2], -v[1]);
+  const VIEWS = DATA.views;
+  const orbit = { target: new THREE.Vector3(), r: 1, theta: 0, phi: 1 };
+  function setView(name) {
+    const v = VIEWS[name];
+    const eye = toThree(v.eye), t = toThree(v.target);
+    orbit.target.copy(t);
+    const d = eye.clone().sub(t);
+    orbit.r = d.length();
+    orbit.theta = Math.atan2(d.x, d.z);
+    orbit.phi = Math.acos(Math.max(-1, Math.min(1, d.y / orbit.r)));
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === name)));
+  }
+  function applyCamera() {
+    const s = Math.sin(orbit.phi);
+    camera.position.set(
+      orbit.target.x + orbit.r * s * Math.sin(orbit.theta),
+      orbit.target.y + orbit.r * Math.cos(orbit.phi),
+      orbit.target.z + orbit.r * s * Math.cos(orbit.theta));
+    camera.lookAt(orbit.target);
+  }
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, pan: e.shiftKey || e.button === 2 }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {
+      const right = new THREE.Vector3(), up = new THREE.Vector3();
+      camera.matrixWorld.extractBasis(right, up, new THREE.Vector3());
+      const k = orbit.r * 0.0012;
+      orbit.target.addScaledVector(right, -dx * k).addScaledVector(up, dy * k);
+    } else {
+      orbit.theta -= dx * 0.006;
+      orbit.phi = Math.max(0.08, Math.min(Math.PI / 2 - 0.02, orbit.phi - dy * 0.006));
+    }
+    document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    render();
+  });
+  canvas.addEventListener('pointerup', () => { drag = null; });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); orbit.r = Math.max(120, Math.min(6000, orbit.r * (1 + Math.sign(e.deltaY) * 0.1))); render(); }, { passive: false });
+  canvas.addEventListener('keydown', (e) => {
+    const step = 0.08;
+    if (e.key === 'ArrowLeft') orbit.theta += step; else if (e.key === 'ArrowRight') orbit.theta -= step;
+    else if (e.key === 'ArrowUp') orbit.phi = Math.max(0.08, orbit.phi - step); else if (e.key === 'ArrowDown') orbit.phi = Math.min(Math.PI / 2 - 0.02, orbit.phi + step);
+    else if (e.key === '+' || e.key === '=') orbit.r *= 0.9; else if (e.key === '-') orbit.r *= 1.1; else return;
+    e.preventDefault(); render();
+  });
+
+  // ---- UI state
+  const show = { lids: true, context: true, plank: true };
+  let isolated = null;
+  function applyState() {
+    for (const m of partMeshes) {
+      m.visible = show.lids || !m.userData.lid;
+      const mats = partMats[m.userData.name];
+      m.material = isolated === null ? mats.normal : (m.userData.name === isolated ? mats.hi : mats.dim);
+    }
+    for (const m of ctxMeshes) m.visible = m.userData.kind === 'plank' ? show.plank : show.context;
+    document.querySelectorAll('[data-toggle]').forEach(b => b.setAttribute('aria-pressed', String(show[b.dataset.toggle])));
+    document.querySelectorAll('.part').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.part === isolated)));
+    render();
+  }
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { setView(b.dataset.view); render(); }));
+  document.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', () => { show[b.dataset.toggle] = !show[b.dataset.toggle]; applyState(); }));
+
+  document.querySelectorAll('.part').forEach(li => {
+    const pick = () => { isolated = isolated === li.dataset.part ? null : li.dataset.part; applyState(); };
+    li.addEventListener('click', pick);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  });
+
+  // ---- theme-aware ground + resize + render
+  function applyTheme() { renderer.setClearColor(new THREE.Color(css('--ground'))); }
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+  }
+  function render() { resize(); applyCamera(); renderer.render(scene, camera); }
+  window.addEventListener('resize', render);
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); render(); }); } catch (e) {}
+  new MutationObserver(() => { applyTheme(); render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  applyTheme();
+  setView('overview');
+  applyState();
+})();
+</script>

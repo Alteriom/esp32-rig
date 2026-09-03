@@ -1,0 +1,654 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1140" width="1600" height="1140" font-family="sans-serif">
+<rect width="1600" height="1140" fill="#ffffff"/>
+<text x="40" y="34" font-size="22" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Per-board USB power switching — 8-channel 12 V relay module wired to the HIL rig</text>
+<text x="40" y="56" font-size="13" text-anchor="start" font-weight="normal" fill="#3d4852" font-family="sans-serif">Rig port n = USB-C female pigtail → wire nuts → USB-C male pigtail; only the red 5 V wire passes through relay n. Boards run through NC: relay released = board powered. Jumpers on HIGH. DC− is common with Pi GND.</text>
+<rect x="310" y="78" width="1100" height="50" rx="6" fill="#eef1f5" stroke="#1f2933" stroke-width="1.5"/>
+<text x="860.0" y="98" font-size="13" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">Powered USB hub (existing, 5 V ≥4 A PSU, uplink to Pi 5) — unmodified USB-A→USB-C cables to rig ports 1–8</text>
+<rect x="358" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="370" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p1</text>
+<rect x="498" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="510" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p2</text>
+<rect x="638" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="650" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p3</text>
+<rect x="778" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="790" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p4</text>
+<rect x="918" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="930" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p5</text>
+<rect x="1058" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="1070" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p6</text>
+<rect x="1198" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="1210" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p7</text>
+<rect x="1338" y="114" width="24" height="14" rx="1" fill="#ffffff" stroke="#1f2933" stroke-width="1.5"/>
+<text x="1350" y="125" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">p8</text>
+<polyline points="1410,103 1560,103 1560,1090 776,1090" fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1572" y="560" font-size="11" text-anchor="middle" font-weight="normal" fill="#2b6cb0" font-family="sans-serif" transform="rotate(90 1572 560)">USB 3.0 A–A uplink (existing, unchanged)</text>
+<polyline points="370,128 370,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="330" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="370" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 1</text>
+<text x="370" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="360,186 360,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="355" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="370,186 370,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="365" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="380,186 380,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="375" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="330" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="370" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="370" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="370,258 370,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="330" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="370" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 1</text>
+<text x="370" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-01</text>
+<text x="370" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32 DevKitC · µB</text>
+<text x="370" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="370" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="338,386 338,362 314,362 314,200 344,200 344,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="339" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="396,186 396,214 426,214 426,374 370,374 370,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="391" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="510,128 510,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="510" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 2</text>
+<text x="510" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="500,186 500,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="495" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="510,186 510,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="505" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="520,186 520,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="515" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="470" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="510" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="510" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="510,258 510,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="470" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="510" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 2</text>
+<text x="510" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-02</text>
+<text x="510" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C3 · µB / C</text>
+<text x="510" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="510" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="478,386 478,362 454,362 454,200 484,200 484,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="479" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="536,186 536,214 566,214 566,374 510,374 510,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="531" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="650,128 650,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="610" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="650" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 3</text>
+<text x="650" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="640,186 640,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="635" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="650,186 650,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="645" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="660,186 660,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="655" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="610" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="650" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="650" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="650,258 650,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="610" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="650" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 3</text>
+<text x="650" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-03</text>
+<text x="650" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-S3 · C</text>
+<text x="650" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="650" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="618,386 618,362 594,362 594,200 624,200 624,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="619" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="676,186 676,214 706,214 706,374 650,374 650,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="671" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="790,128 790,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="750" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="790" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 4</text>
+<text x="790" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="780,186 780,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="775" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="790,186 790,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="785" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="800,186 800,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="795" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="750" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="790" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="790" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="790,258 790,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="750" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="790" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 4</text>
+<text x="790" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-04</text>
+<text x="790" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C5 · C</text>
+<text x="790" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="790" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="758,386 758,362 734,362 734,200 764,200 764,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="759" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="816,186 816,214 846,214 846,374 790,374 790,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="811" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="930,128 930,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="890" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="930" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 5</text>
+<text x="930" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="920,186 920,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="915" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="930,186 930,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="925" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="940,186 940,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="935" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="890" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="930" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="930" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="930,258 930,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="890" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="930" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 5</text>
+<text x="930" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-05</text>
+<text x="930" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP32-C6 · C</text>
+<text x="930" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="930" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="898,386 898,362 874,362 874,200 904,200 904,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="899" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="956,186 956,214 986,214 986,374 930,374 930,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="951" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1070,128 1070,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1030" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1070" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 6</text>
+<text x="1070" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1060,186 1060,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1055" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1070,186 1070,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1065" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1080,186 1080,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1075" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1030" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1070" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1070" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1070,258 1070,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1030" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1070" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 6</text>
+<text x="1070" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-06</text>
+<text x="1070" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">ESP8266 NodeMCU · µB</text>
+<text x="1070" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1070" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1038,386 1038,362 1014,362 1014,200 1044,200 1044,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1039" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1096,186 1096,214 1126,214 1126,374 1070,374 1070,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1091" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1210,128 1210,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1170" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1210" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 7</text>
+<text x="1210" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1200,186 1200,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1195" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1210,186 1210,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1205" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1220,186 1220,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1215" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1170" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1210" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1210" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1210,258 1210,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1170" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1210" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 7</text>
+<text x="1210" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-07</text>
+<text x="1210" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">any family</text>
+<text x="1210" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1210" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1178,386 1178,362 1154,362 1154,200 1184,200 1184,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1179" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1236,186 1236,214 1266,214 1266,374 1210,374 1210,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1231" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1350,128 1350,150" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1310" y="150" width="80" height="36" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1350" y="164" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">rig port 8</text>
+<text x="1350" y="178" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB-C female pigtail</text>
+<polyline points="1340,186 1340,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1335" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1350,186 1350,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1345" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1360,186 1360,224" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1355" y="198" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<rect x="1310" y="224" width="80" height="34" rx="4" fill="#fff7e6" stroke="#b7791f" stroke-width="1.5"/>
+<text x="1350" y="238" font-size="9" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">USB-C male pigtail</text>
+<text x="1350" y="251" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">→ board (adapter if µB)</text>
+<polyline points="1350,258 1350,270" fill="none" stroke="#8a8f98" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1310" y="270" width="80" height="80" rx="5" fill="#e6f4ea" stroke="#276749" stroke-width="1.5"/>
+<text x="1350" y="286" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">board on port 8</text>
+<text x="1350" y="301" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="monospace">/dev/esp32-farm-08</text>
+<text x="1350" y="317" font-size="9" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">any family</text>
+<text x="1350" y="331" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">identity: MAC (discovery)</text>
+<text x="1350" y="343" font-size="8" text-anchor="middle" font-weight="normal" fill="#4a5568" font-family="sans-serif">USB-powered</text>
+<polyline points="1318,386 1318,362 1294,362 1294,200 1324,200 1324,224" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1319" y="205" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<polyline points="1376,186 1376,214 1406,214 1406,374 1350,374 1350,386" fill="none" stroke="#d62828" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1371" y="193" width="10" height="14" rx="3" fill="#e8762b" stroke="#9c4a12" stroke-width="1"/>
+<text x="308" y="300" font-size="10" text-anchor="middle" font-weight="normal" fill="#d62828" font-family="sans-serif" transform="rotate(-90 308 300)">5 V → board (from NC)</text>
+<text x="440" y="300" font-size="10" text-anchor="middle" font-weight="normal" fill="#d62828" font-family="sans-serif" transform="rotate(90 440 300)">5 V from hub (to COM)</text>
+<rect x="290" y="392" width="1140" height="344" rx="8" fill="#c62839" stroke="#8e1c29" stroke-width="2"/>
+<circle cx="304" cy="406" r="5" fill="#ffffff" stroke="#8e1c29"/>
+<circle cx="1416" cy="406" r="5" fill="#ffffff" stroke="#8e1c29"/>
+<circle cx="304" cy="722" r="5" fill="#ffffff" stroke="#8e1c29"/>
+<circle cx="1416" cy="722" r="5" fill="#ffffff" stroke="#8e1c29"/>
+<text x="320" y="628" font-size="11" text-anchor="start" font-weight="normal" fill="#ffffff" font-family="sans-serif">8-ch relay module, 12 V coils, opto-isolated inputs, high/low trigger jumpers (as received)</text>
+<rect x="325.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="338" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="334" y1="404.0" x2="342" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="357.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="370" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="366" y1="404.0" x2="374" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="389.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="402" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="398" y1="404.0" x2="406" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="338" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC1</text>
+<text x="370" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM1</text>
+<text x="402" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO1</text>
+<rect x="322" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="370" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="370" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="370" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="370" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="370" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 1</text>
+<rect x="324" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="339" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="378" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="378" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED1</text>
+<rect x="392" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="403" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="465.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="478" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="474" y1="404.0" x2="482" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="497.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="510" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="506" y1="404.0" x2="514" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="529.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="542" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="538" y1="404.0" x2="546" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="478" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC2</text>
+<text x="510" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM2</text>
+<text x="542" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO2</text>
+<rect x="462" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="510" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="510" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="510" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="510" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="510" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 2</text>
+<rect x="464" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="479" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="518" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="518" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED2</text>
+<rect x="532" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="543" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="605.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="618" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="614" y1="404.0" x2="622" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="637.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="650" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="646" y1="404.0" x2="654" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="669.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="682" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="678" y1="404.0" x2="686" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="618" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC3</text>
+<text x="650" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM3</text>
+<text x="682" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO3</text>
+<rect x="602" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="650" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="650" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="650" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="650" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="650" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 3</text>
+<rect x="604" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="619" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="658" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="658" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED3</text>
+<rect x="672" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="683" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="745.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="758" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="754" y1="404.0" x2="762" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="777.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="790" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="786" y1="404.0" x2="794" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="809.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="822" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="818" y1="404.0" x2="826" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="758" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC4</text>
+<text x="790" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM4</text>
+<text x="822" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO4</text>
+<rect x="742" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="790" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="790" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="790" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="790" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="790" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 4</text>
+<rect x="744" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="759" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="798" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="798" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED4</text>
+<rect x="812" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="823" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="885.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="898" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="894" y1="404.0" x2="902" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="917.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="930" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="926" y1="404.0" x2="934" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="949.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="962" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="958" y1="404.0" x2="966" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="898" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC5</text>
+<text x="930" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM5</text>
+<text x="962" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO5</text>
+<rect x="882" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="930" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="930" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="930" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="930" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="930" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 5</text>
+<rect x="884" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="899" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="938" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="938" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED5</text>
+<rect x="952" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="963" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="1025.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1038" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1034" y1="404.0" x2="1042" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1057.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1070" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1066" y1="404.0" x2="1074" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1089.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1102" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1098" y1="404.0" x2="1106" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="1038" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC6</text>
+<text x="1070" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM6</text>
+<text x="1102" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO6</text>
+<rect x="1022" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="1070" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="1070" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="1070" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="1070" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="1070" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 6</text>
+<rect x="1024" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1039" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="1078" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="1078" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED6</text>
+<rect x="1092" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="1103" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="1165.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1178" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1174" y1="404.0" x2="1182" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1197.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1210" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1206" y1="404.0" x2="1214" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1229.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1242" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1238" y1="404.0" x2="1246" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="1178" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC7</text>
+<text x="1210" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM7</text>
+<text x="1242" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO7</text>
+<rect x="1162" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="1210" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="1210" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="1210" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="1210" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="1210" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 7</text>
+<rect x="1164" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1179" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="1218" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="1218" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED7</text>
+<rect x="1232" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="1243" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<rect x="1305.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1318" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1314" y1="404.0" x2="1322" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1337.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1350" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1346" y1="404.0" x2="1354" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<rect x="1369.0" y="386" width="26" height="36" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1382" cy="404.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1378" y1="404.0" x2="1386" y2="404.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="1318" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">NC8</text>
+<text x="1350" y="436" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">COM8</text>
+<text x="1382" y="436" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">NO8</text>
+<rect x="1302" y="452" width="96" height="100" rx="3" fill="#2f6fd1" stroke="#1a3d7a" stroke-width="1.5"/>
+<text x="1350" y="476" font-size="10" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">SONGLE</text>
+<text x="1350" y="494" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">SRD-12VDC-SL-C</text>
+<text x="1350" y="512" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">10 A 250 VAC / 30 VDC</text>
+<text x="1350" y="530" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">coil 12 V, ≈30 mA</text>
+<text x="1350" y="546" font-size="9" text-anchor="middle" font-weight="normal" fill="#dbe7ff" font-family="sans-serif">relay 8</text>
+<rect x="1304" y="570" width="30" height="22" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1319" y="585" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">817</text>
+<circle cx="1358" cy="581" r="5" fill="#ff5a5a" stroke="#7a0000"/>
+<text x="1358" y="604" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">LED8</text>
+<rect x="1372" y="574" width="22" height="14" rx="1" fill="#333" stroke="#000" stroke-width="1.5"/>
+<text x="1383" y="584" font-size="8" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">Q</text>
+<text x="282" y="410" font-size="10" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">NO terminals:</text>
+<text x="282" y="424" font-size="10" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">leave empty</text>
+<rect x="320" y="636" width="150" height="80" rx="3" fill="#f6d5d9" stroke="#8e1c29" stroke-width="1.5"/>
+<text x="395" y="650" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">trigger select S1–S4: shunt on Com–High</text>
+<text x="342" y="668" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">Low</text>
+<circle cx="360" cy="664" r="3" fill="#333"/>
+<circle cx="390" cy="664" r="3" fill="#333"/>
+<circle cx="420" cy="664" r="3" fill="#333"/>
+<circle cx="450" cy="664" r="3" fill="#333"/>
+<text x="342" y="684" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">Com</text>
+<circle cx="360" cy="680" r="3" fill="#333"/>
+<circle cx="390" cy="680" r="3" fill="#333"/>
+<circle cx="420" cy="680" r="3" fill="#333"/>
+<circle cx="450" cy="680" r="3" fill="#333"/>
+<text x="342" y="700" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">High</text>
+<circle cx="360" cy="696" r="3" fill="#333"/>
+<circle cx="390" cy="696" r="3" fill="#333"/>
+<circle cx="420" cy="696" r="3" fill="#333"/>
+<circle cx="450" cy="696" r="3" fill="#333"/>
+<rect x="354" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="360" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S1</text>
+<rect x="384" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="390" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S2</text>
+<rect x="414" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="420" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S3</text>
+<rect x="444" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="450" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S4</text>
+<rect x="1250" y="636" width="150" height="80" rx="3" fill="#f6d5d9" stroke="#8e1c29" stroke-width="1.5"/>
+<text x="1325" y="650" font-size="10" text-anchor="middle" font-weight="bold" fill="#1f2933" font-family="sans-serif">trigger select S5–S8: shunt on Com–High</text>
+<text x="1272" y="668" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">Low</text>
+<circle cx="1290" cy="664" r="3" fill="#333"/>
+<circle cx="1320" cy="664" r="3" fill="#333"/>
+<circle cx="1350" cy="664" r="3" fill="#333"/>
+<circle cx="1380" cy="664" r="3" fill="#333"/>
+<text x="1272" y="684" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">Com</text>
+<circle cx="1290" cy="680" r="3" fill="#333"/>
+<circle cx="1320" cy="680" r="3" fill="#333"/>
+<circle cx="1350" cy="680" r="3" fill="#333"/>
+<circle cx="1380" cy="680" r="3" fill="#333"/>
+<text x="1272" y="700" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">High</text>
+<circle cx="1290" cy="696" r="3" fill="#333"/>
+<circle cx="1320" cy="696" r="3" fill="#333"/>
+<circle cx="1350" cy="696" r="3" fill="#333"/>
+<circle cx="1380" cy="696" r="3" fill="#333"/>
+<rect x="1284" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1290" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S5</text>
+<rect x="1314" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1320" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S6</text>
+<rect x="1344" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1350" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S7</text>
+<rect x="1374" y="674" width="12" height="28" rx="2" fill="#111111" stroke="#000" stroke-width="1.5"/>
+<text x="1380" y="712" font-size="8" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">S8</text>
+<rect x="625.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="640" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="636" y1="716.0" x2="644" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="640" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">DC+</text>
+<rect x="669.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="684" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="680" y1="716.0" x2="688" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="684" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">DC−</text>
+<rect x="713.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="728" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="724" y1="716.0" x2="732" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="728" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN1</text>
+<rect x="757.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="772" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="768" y1="716.0" x2="776" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="772" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN2</text>
+<rect x="801.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="816" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="812" y1="716.0" x2="820" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="816" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN3</text>
+<rect x="845.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="860" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="856" y1="716.0" x2="864" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="860" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN4</text>
+<rect x="889.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="904" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="900" y1="716.0" x2="908" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="904" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN5</text>
+<rect x="933.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="948" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="944" y1="716.0" x2="952" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="948" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN6</text>
+<rect x="977.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="992" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="988" y1="716.0" x2="996" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="992" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN7</text>
+<rect x="1021.0" y="694" width="30" height="44" rx="2" fill="#2c5aa0" stroke="#1b3a6b" stroke-width="1.5"/>
+<circle cx="1036" cy="716.0" r="7" fill="#dfe7f5" stroke="#1b3a6b" stroke-width="1"/>
+<line x1="1032" y1="716.0" x2="1040" y2="716.0" stroke="#1b3a6b" stroke-width="1.5"/>
+<text x="1036" y="688" font-size="11" text-anchor="middle" font-weight="bold" fill="#ffffff" font-family="sans-serif">IN8</text>
+<text x="838.0" y="672" font-size="10" text-anchor="middle" font-weight="normal" fill="#ffffff" font-family="sans-serif">power supply + signal trigger terminal</text>
+<rect x="20" y="728" width="150" height="56" rx="5" fill="#fff" stroke="#8b1a1a" stroke-width="2"/>
+<text x="95" y="746" font-size="12" text-anchor="middle" font-weight="bold" fill="#8b1a1a" font-family="sans-serif">12 V DC brick</text>
+<text x="95" y="761" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">≥1 A, 5.5×2.1 barrel</text>
+<text x="95" y="775" font-size="10" text-anchor="middle" font-weight="normal" fill="#1f2933" font-family="sans-serif">+ barrel→screw adapter</text>
+<text x="178" y="756" font-size="13" text-anchor="start" font-weight="bold" fill="#8b1a1a" font-family="sans-serif">+</text>
+<text x="178" y="772" font-size="13" text-anchor="start" font-weight="bold" fill="#111111" font-family="sans-serif">−</text>
+<polyline points="170,752 640,752 640,738" fill="none" stroke="#8b1a1a" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="170,768 684,768 684,738" fill="none" stroke="#111111" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="400" y="747" font-size="10" text-anchor="start" font-weight="normal" fill="#8b1a1a" font-family="sans-serif">12 V +  (relay coils only — never from the Pi)</text>
+<rect x="100" y="862" width="670" height="246" rx="8" fill="#e8f0e3" stroke="#2f855a" stroke-width="2"/>
+<text x="116" y="1048" font-size="13" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Raspberry Pi 5 (runner host) — 40-pin header, board seen from above,</text>
+<text x="116" y="1066" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">pin 1 at the microSD end; outer row = even pins. Own 27 W USB-C PSU.</text>
+<text x="116" y="1086" font-size="11" text-anchor="start" font-weight="normal" fill="#3d4852" font-family="sans-serif">Access: /dev/gpiochip* (label pinctrl-rp1), group gpio. GPIOs 12/16/18/20/21/23/24/25 are pull-down at boot.</text>
+<rect x="764" y="1078" width="14" height="24" rx="1" fill="#dfe7f5" stroke="#2b6cb0" stroke-width="1.5"/>
+<text x="758" y="1094" font-size="10" text-anchor="end" font-weight="normal" fill="#2b6cb0" font-family="sans-serif">USB 3.0 →</text>
+<rect x="115" y="868" width="600" height="56" rx="3" fill="#2d2d2d" stroke="#000" stroke-width="1.5"/>
+<circle cx="130" cy="882" r="8" fill="#f56565" stroke="#000" stroke-width="0.8"/>
+<text x="130" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">2</text>
+<circle cx="130" cy="910" r="8" fill="#f6ad55" stroke="#000" stroke-width="0.8"/>
+<text x="130" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">1</text>
+<circle cx="160" cy="882" r="8" fill="#f56565" stroke="#000" stroke-width="0.8"/>
+<text x="160" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">4</text>
+<circle cx="160" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="160" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">3</text>
+<circle cx="190" cy="882" r="8" fill="#ffffff" stroke="#000" stroke-width="0.8"/>
+<text x="190" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">6</text>
+<circle cx="190" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="190" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">5</text>
+<circle cx="220" cy="882" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="220" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">8</text>
+<circle cx="220" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="220" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">7</text>
+<circle cx="250" cy="882" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="250" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">10</text>
+<circle cx="250" cy="910" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="250" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">9</text>
+<circle cx="280" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="280" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">12</text>
+<circle cx="280" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="280" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">11</text>
+<circle cx="310" cy="882" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="310" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">14</text>
+<circle cx="310" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="310" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">13</text>
+<circle cx="340" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="340" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">16</text>
+<circle cx="340" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="340" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">15</text>
+<circle cx="370" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="370" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">18</text>
+<circle cx="370" cy="910" r="8" fill="#f6ad55" stroke="#000" stroke-width="0.8"/>
+<text x="370" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">17</text>
+<circle cx="400" cy="882" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="400" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">20</text>
+<circle cx="400" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="400" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">19</text>
+<circle cx="430" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="430" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">22</text>
+<circle cx="430" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="430" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">21</text>
+<circle cx="460" cy="882" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="460" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">24</text>
+<circle cx="460" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="460" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">23</text>
+<circle cx="490" cy="882" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="490" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">26</text>
+<circle cx="490" cy="910" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="490" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">25</text>
+<circle cx="520" cy="882" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="520" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">28</text>
+<circle cx="520" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="520" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">27</text>
+<circle cx="550" cy="882" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="550" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">30</text>
+<circle cx="550" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="550" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">29</text>
+<circle cx="580" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="580" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">32</text>
+<circle cx="580" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="580" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">31</text>
+<circle cx="610" cy="882" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="610" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">34</text>
+<circle cx="610" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="610" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">33</text>
+<circle cx="640" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="640" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">36</text>
+<circle cx="640" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="640" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">35</text>
+<circle cx="670" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="670" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">38</text>
+<circle cx="670" cy="910" r="8" fill="#4a5568" stroke="#000" stroke-width="0.8"/>
+<text x="670" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">37</text>
+<circle cx="700" cy="882" r="8" fill="#1b8a3c" stroke="#000" stroke-width="0.8"/>
+<text x="700" y="885.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#000" font-family="sans-serif">40</text>
+<circle cx="700" cy="910" r="8" fill="#9aa0a6" stroke="#000" stroke-width="0.8"/>
+<text x="700" y="913.5" font-size="7.5" text-anchor="middle" font-weight="normal" fill="#fff" font-family="sans-serif">39</text>
+<text x="280" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 280 936)">GPIO18</text>
+<text x="340" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 340 936)">GPIO23</text>
+<text x="370" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 370 936)">GPIO24</text>
+<text x="430" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 430 936)">GPIO25</text>
+<text x="580" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 580 936)">GPIO12</text>
+<text x="640" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 640 936)">GPIO16</text>
+<text x="670" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 670 936)">GPIO20</text>
+<text x="700" y="936" font-size="8.5" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 700 936)">GPIO21</text>
+<text x="190" y="936" font-size="8.5" text-anchor="end" font-weight="bold" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 190 936)">GND</text>
+<text x="115" y="940" font-size="9" text-anchor="start" font-weight="normal" fill="#4a5568" font-family="sans-serif">pin 1 = 3V3 · pin 2 = 5V — neither is used</text>
+<polyline points="190,874 190,796 684,796 684,738" fill="none" stroke="#111111" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="280,874 280,804 728,804 728,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="740" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 740 794)">GPIO18 · p12</text>
+<polyline points="340,874 340,812 772,812 772,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="784" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 784 794)">GPIO23 · p16</text>
+<polyline points="370,874 370,820 816,820 816,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="828" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 828 794)">GPIO24 · p18</text>
+<polyline points="430,874 430,828 860,828 860,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="872" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 872 794)">GPIO25 · p22</text>
+<polyline points="580,874 580,836 904,836 904,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="916" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 916 794)">GPIO12 · p32</text>
+<polyline points="640,874 640,844 948,844 948,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="960" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 960 794)">GPIO16 · p36</text>
+<polyline points="670,874 670,852 992,852 992,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1004" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 1004 794)">GPIO20 · p38</text>
+<polyline points="700,874 700,860 1036,860 1036,738" fill="none" stroke="#1b8a3c" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1048" y="794" font-size="9" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif" transform="rotate(-90 1048 794)">GPIO21 · p40</text>
+<circle cx="684" cy="768" r="3.5" fill="#111111"/>
+<text x="676" y="782" font-size="9" text-anchor="end" font-weight="normal" fill="#1f2933" font-family="sans-serif">Pi GND joins DC− here (signal return)</text>
+<rect x="1100" y="872" width="440" height="128" rx="6" fill="#fafafa" stroke="#cbd5e0" stroke-width="1.5"/>
+<text x="1112" y="892" font-size="12" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Legend</text>
+<polyline points="1114,910 1144,910" fill="none" stroke="#d62828" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="914" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">5 V: pigtail red wires, hub side → COM, board side ← NC (wire nuts at the pigtails)</text>
+<polyline points="1114,925 1144,925" fill="none" stroke="#8a8f98" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="929" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB data/GND: D+ D− GND joined pigtail-to-pigtail; hub cable and board unmodified</text>
+<polyline points="1114,940 1144,940" fill="none" stroke="#1b8a3c" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="944" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">Relay input IN1–IN8 ← Pi GPIO (3.3 V high = relay ON = board OFF)</text>
+<polyline points="1114,955 1144,955" fill="none" stroke="#111111" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="959" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">Pi GND → DC− (must be wired; USB shield is not the return)</text>
+<polyline points="1114,970 1144,970" fill="none" stroke="#8b1a1a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="974" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">12 V coil supply → DC+ (dedicated brick)</text>
+<polyline points="1114,985 1144,985" fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1152" y="989" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="sans-serif">USB 3.0 uplink hub → Pi (unchanged)</text>
+<text x="800" y="1008" font-size="11" text-anchor="start" font-weight="bold" fill="#1f2933" font-family="sans-serif">Channel map (channel = hub port = rig port = udev name; any board family, identity by MAC):</text>
+<text x="800" y="1024" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch1→IN1=GPIO18(pin 12)  ch2→IN2=GPIO23(pin 16)  ch3→IN3=GPIO24(pin 18)  ch4→IN4=GPIO25(pin 22)</text>
+<text x="800" y="1039" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">ch5→IN5=GPIO12(pin 32)  ch6→IN6=GPIO16(pin 36)  ch7→IN7=GPIO20(pin 38)  ch8→IN8=GPIO21(pin 40)</text>
+<text x="800" y="1056" font-size="10" text-anchor="start" font-weight="normal" fill="#1f2933" font-family="monospace">Drive test:  pinctrl set 18 op dl   (board 01 on)   ·   pinctrl set 18 op dh   (board 01 cut)   ·   pinctrl get 18</text>
+<text x="800" y="1072" font-size="10" text-anchor="start" font-weight="normal" fill="#8b1a1a" font-family="sans-serif">Never fit the Low jumper: with 12 V on DC+ a 3.3 V GPIO cannot pull IN high enough to switch the relay OFF.</text>
+</svg>

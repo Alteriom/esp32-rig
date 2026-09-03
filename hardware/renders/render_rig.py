@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Render preview images of the assembled MVP rig.
+"""Software rasterizer and shared models for the rig renders.
 
-Loads the real printable tiles from ../mounts/stl/ and combines them with
-simply-modelled parts (plank, Pi, hub, ESP32 devkits, zip ties, USB
-cables) so the pictures match what the blueprint + mounts actually build.
+render_chassis.py imports this: STL loading, box/cable primitives, the
+perspective z-buffer renderer, the annotated-PNG writer, and the Pi 5 and
+USB hub models placed on their printed tiles.
 
 Not part of CI. Needs numpy + matplotlib:
 
     python3 -m pip install numpy matplotlib
-    python3 render_rig.py            # writes ./*.png
+    python3 render_chassis.py        # writes chassis-*.png
 
 Renderer: perspective camera + per-triangle z-buffer rasterizer (no GPU,
 no external 3D packages), 2x supersampled. Units: mm, Z up.
@@ -167,27 +167,8 @@ CABLE = (0.16, 0.16, 0.18)
 UPLINK = (0.16, 0.30, 0.65)
 LED = (0.25, 0.95, 0.35)
 
-TILE_ESP = load_stl(STL / "esp32-board-tile.stl")
 TILE_PI = load_stl(STL / "pi5-tile.stl")
 TILE_HUB = load_stl(STL / "hub-strap-tile.stl")
-
-
-def esp32_node(scene, ox, oy, label_pts):
-    """Board tile + devkit + two zip ties at plank position (ox, oy)."""
-    scene.append((translate(TILE_ESP, ox, oy, 0), TILE))
-    t = lambda g: translate(g, ox, oy, 0)
-    scene.append((t(box(30, 16, 3.2, 83, 44, 4.8)), PCB_DARK))     # PCB
-    scene.append((t(box(62, 21, 4.8, 77, 39, 7.9)), SHIELD))       # module can
-    scene.append((t(box(77, 21, 4.8, 83, 39, 6.2)), PCB_DARK))     # antenna
-    scene.append((t(box(31, 26.5, 4.8, 38, 33.5, 7.6)), SHIELD))   # micro-USB
-    scene.append((t(box(40, 17.5, 4.8, 44, 21.5, 6.8)), HUB_BODY)) # button
-    scene.append((t(box(40, 38.5, 4.8, 44, 42.5, 6.8)), HUB_BODY)) # button
-    for cx in (40, 62):                                            # zip ties
-        scene.append((t(box(cx - 2.5, 8, 3.2, cx + 2.5, 11, 9.2)), TIE))
-        scene.append((t(box(cx - 2.5, 49, 3.2, cx + 2.5, 52, 9.2)), TIE))
-        scene.append((t(box(cx - 2.5, 8, 9.2, cx + 2.5, 52, 10.4)), TIE))
-    label_pts["usb"] = np.array([ox + 31, oy + 30, 7])
-    label_pts["antenna"] = np.array([ox + 83, oy + 30, 6])
 
 
 def pi_node(scene, ox, oy):
@@ -207,8 +188,8 @@ def hub_node(scene, ox, oy):
     t = lambda g: translate(g, ox, oy, 0)
     scene.append((t(box(5, 14, 3.2, 105, 56, 27)), HUB_BODY))        # body
     ports = []
-    for i in range(7):
-        px = 12 + i * 13
+    for i in range(8):
+        px = 12 + i * 12
         scene.append((t(box(px, 12.6, 8, px + 9, 14.5, 15)), (0.03,) * 3))
         scene.append((t(box(px + 3, 12.6, 17, px + 6, 14.5, 19)), LED))
         ports.append(np.array([ox + px + 4.5, oy + 13, 11]))
@@ -218,33 +199,6 @@ def hub_node(scene, ox, oy):
         scene.append((t(box(cx - 2.5, 7, 28, cx + 2.5, 63, 29.2)), TIE))
     uplink = np.array([ox + 2, oy + 35, 15])
     return ports, uplink
-
-
-def build_rig():
-    """The full MVP rig on a 1.2 m plank. Returns scene + label anchors."""
-    scene, labels = [], {}
-    scene.append((box(0, 0, -18, 1200, 200, 0), WOOD))               # plank
-    pi_usb = pi_node(scene, 22, 62)
-    labels["pi"] = np.array([75, 100, 26])
-    ports, uplink = hub_node(scene, 150, 66)
-    labels["hub"] = np.array([205, 100, 29])
-    node_x = [360, 720, 1080]
-    for i, bx in enumerate(node_x):
-        pts = {}
-        esp32_node(scene, bx, 70, pts)
-        labels[f"esp{i}"] = pts["usb"] + np.array([25, 0, 4])
-        # USB cable: hub port -> front lane -> board's micro-USB
-        p0 = ports[i]
-        p3 = pts["usb"] + np.array([-4, 0, 0])
-        p1 = p0 + np.array([15, -55, -6])
-        p2 = p3 + np.array([-120, -45, -4])
-        scene.append((bezier_tube(p0, p1, p2, p3), CABLE))
-    scene.append(  # hub uplink to the Pi's USB stack
-        (bezier_tube(pi_usb, pi_usb + np.array([35, -35, 2]),
-                     uplink + np.array([-25, -40, 4]), uplink, r=2.2), UPLINK)
-    )
-    labels["cable"] = np.array([560, 55, 4])
-    return scene, labels
 
 
 def save(path, img, view=None, notes=(), title=None, footer=None):
@@ -277,65 +231,5 @@ def save(path, img, view=None, notes=(), title=None, footer=None):
     print(path)
 
 
-def main():
-    scene, labels = build_rig()
-
-    # 1 — annotated overview
-    view = View((300, -880, 560), (612, 110, -30), fovy=37)
-    img = render(scene, view)
-    save(
-        "rig-overview.png", img, view,
-        notes=[
-            ("Raspberry Pi 4/5 — self-hosted runner:\nesptool flash + pytest + serial capture",
-             labels["pi"], 60, 110),
-            ("Powered USB hub (uhubctl)\nper-port power on/off = power HAL",
-             labels["hub"], 330, 240),
-            ("ESP32 node 01 on printed tile\n(zip-tied, antenna overhangs)",
-             labels["esp0"], 620, 140),
-            ("One USB cable per board:\nflash + serial + power",
-             labels["cable"], 830, 620),
-            ("nodes at ≥0.5 m pitch (RF)", labels["esp2"], 1240, 300),
-        ],
-        title="Alteriom ESP32 HIL rig — MVP (3 nodes, wired for 6)",
-        footer="Flow: PR labelled run-hil → GitHub Actions (self-hosted) → flash agent firmware\n"
-               "→ pytest drives JSON serial protocol → pass/fail on the PR + serial-log artifacts",
-    )
-
-    # 2 — control end: Pi + hub
-    view = View((30, -420, 330), (170, 110, 10), fovy=30)
-    save("rig-detail-control.png", render(scene, view), view,
-         notes=[
-             ("pi5-tile.stl — 6 mm standoff bosses", labels["pi"] - np.array([40, 30, 20]), 90, 780),
-             ("hub-strap-tile.stl — zip-strapped hub", np.array([260, 100, 20]), 950, 180),
-             ("per-port power LEDs", np.array([230, 80, 19]), 1050, 620),
-         ],
-         title="Control end — runner + switchable hub")
-
-    # 3 — node close-up
-    view = View((310, -240, 205), (408, 96, 0), fovy=31)
-    save("rig-detail-node.png", render(scene, view), view,
-         notes=[
-             ("29 mm channel locates any devkit clone", np.array([395, 86, 5]), 120, 750),
-             ("zip tie through tile,\ngroove underneath", np.array([422, 121, 10]), 990, 160),
-             ("antenna end overhangs the tile", np.array([445, 100, 6]), 1050, 560),
-         ],
-         title="ESP32 node — esp32-board-tile.stl")
-
-    # 4 — the three printable tiles
-    tiles = []
-    tiles.append((translate(TILE_ESP, 0, 20, 0), TILE))
-    tiles.append((translate(TILE_PI, 110, 0, 0), TILE))
-    tiles.append((translate(TILE_HUB, 244, 6, 0), TILE))
-    tiles.append((box(-40, -40, -10, 400, 130, 0), (0.88, 0.88, 0.90)))
-    view = View((150, -330, 300), (172, 45, -5), fovy=30)
-    save("tiles-printset.png", render(tiles, view), view,
-         notes=[
-             ("esp32-board-tile", np.array([40, 25, 4]), 150, 800),
-             ("pi5-tile", np.array([162, 40, 8]), 700, 830),
-             ("hub-strap-tile", np.array([300, 40, 3]), 1150, 800),
-         ],
-         title="Printable mount set (hardware/mounts/stl)")
-
-
 if __name__ == "__main__":
-    main()
+    print("library only: run render_chassis.py")
