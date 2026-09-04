@@ -40,6 +40,29 @@ TARGETS = {
     "esp8266": Target("esp8266", "esp8266", "nodemcuv2", "0x0", layout="esp8266"),
 }
 
+# [esp32_arduino3] in firmware/platformio.ini: the families that build on
+# pioarduino's platform rather than the pinned espressif32@7.0.1.
+ARDUINO3_TARGETS = frozenset({"esp32-c5", "esp32-c6"})
+
+
+def core_dir_for(name: str) -> Path:
+    """The PlatformIO core directory a target must build in.
+
+    Both platforms ship a package *named* `framework-arduinoespressif32` —
+    Arduino core 2.x for the pinned `espressif32`, 3.x for pioarduino's.
+    PlatformIO treats that requirement as satisfied by name, so in one core
+    directory whichever installs first keeps the directory and the other
+    platform never reinstalls its own: it then resolves its framework to
+    None and dies inside its builder with
+    `TypeError: argument should be a str ... not NoneType`, naming nothing
+    that leads back here. Two core directories give each platform its own
+    package namespace, so neither can satisfy or evict the other.
+    """
+    base = Path(os.environ.get("PLATFORMIO_CORE_DIR") or Path.home() / ".platformio")
+    if name not in ARDUINO3_TARGETS:
+        return base
+    return base.with_name(base.name + "-pioarduino")
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -143,11 +166,12 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
 
     for name in selected:
         target = TARGETS[name]
-        print(f"==> build {name} ({target.board}) with painlessMesh@{ref}")
+        core_dir = core_dir_for(name)
+        print(f"==> build {name} ({target.board}) with painlessMesh@{ref} in {core_dir}")
         subprocess.run(
             [pio, "run", "-d", str(FIRMWARE_DIR), "-e", target.env],
             check=True,
-            env=build_env,
+            env={**build_env, "PLATFORMIO_CORE_DIR": str(core_dir)},
         )
         pio_build = FIRMWARE_DIR / ".pio" / "build" / target.env
         target_dir = out_dir / name
