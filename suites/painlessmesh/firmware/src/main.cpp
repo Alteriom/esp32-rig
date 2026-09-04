@@ -66,6 +66,11 @@ painlessMesh mesh;
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
 String serialBuffer;
+#if HIL_HAS_SECOND_CONSOLE
+// One buffer per console: bytes from two ports interleaved into a single
+// buffer would splice two commands into nonsense.
+String secondConsoleBuffer;
+#endif
 RoleStore rolePreferences;
 String activeMeshPrefix = HIL_MESH_PREFIX;
 String activeMeshPassword = HIL_MESH_PASSWORD;
@@ -84,14 +89,41 @@ std::shared_ptr<Task> otaOfferTask;
 void receivedCallback(uint32_t from, String &msg);
 void newConnectionCallback(uint32_t nodeId);
 
+// Every console this board exposes, so the rig sees the protocol whichever
+// socket is cabled. The native USB CDC is skipped while nothing is attached
+// to it: HWCDC blocks for its transmit timeout when no host is listening, and
+// paying that on every frame would slow the agent to a crawl on a board wired
+// through its UART socket.
+void consoleWriteLine(const String &frame) {
+#if HIL_HAS_SECOND_CONSOLE
+  if (Serial) {
+    Serial.println(frame);
+    Serial.flush();
+  }
+  HIL_SECOND_CONSOLE.println(frame);
+  HIL_SECOND_CONSOLE.flush();
+#else
+  Serial.println(frame);
+  Serial.flush();
+#endif
+}
+
+void consoleFlush() {
+#if HIL_HAS_SECOND_CONSOLE
+  if (Serial) Serial.flush();
+  HIL_SECOND_CONSOLE.flush();
+#else
+  Serial.flush();
+#endif
+}
+
 void emitEvent(JsonDocument &doc) {
   // Build one complete frame before writing it. This avoids damaged JSON
   // prefixes on inexpensive USB-UART bridges under concurrent mesh traffic.
   String frame;
   frame.reserve(measureJson(doc) + 1);
   serializeJson(doc, frame);
-  Serial.println(frame);
-  Serial.flush();
+  consoleWriteLine(frame);
 }
 
 void emitError(const char *message) {
@@ -140,7 +172,7 @@ void handleOtaReceiveEnable(JsonDocument &cmd) {
   doc["evt"] = "ota_receiver_restarting";
   doc["role"] = role;
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   delay(200);
   ESP.restart();
 }
@@ -338,7 +370,7 @@ void startRegularMesh() {
   JsonDocument doc;
   doc["evt"] = "mesh_restarting";
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   delay(200);
   ESP.restart();
 }
@@ -366,7 +398,7 @@ void handleMeshConfigure(JsonDocument &cmd) {
   doc["evt"] = "mesh_restarting";
   doc["meshPrefix"] = prefix;
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   delay(200);
   ESP.restart();
 }
@@ -390,7 +422,7 @@ void handleGatewayStart(JsonDocument &cmd) {
   doc["ssidLength"] = ssid.length();
   doc["passwordLength"] = password.length();
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   delay(200);
   ESP.restart();
 }
@@ -442,7 +474,7 @@ void handleSharedGatewayStart(JsonDocument &cmd) {
   doc["ssidLength"] = ssid.length();
   doc["passwordLength"] = password.length();
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   delay(200);
   ESP.restart();
 }
@@ -517,7 +549,7 @@ void handleStall(JsonDocument &cmd) {
   doc["evt"] = "stalled";
   doc["ms"] = ms;
   emitEvent(doc);
-  Serial.flush();
+  consoleFlush();
   stallUntil = millis() + ms;
 }
 
@@ -568,18 +600,25 @@ void handleCommandLine(const String &line) {
   }
 }
 
-void pumpSerial() {
-  while (Serial.available()) {
-    char c = (char)Serial.read();
+void pumpConsole(Stream &port, String &buffer) {
+  while (port.available()) {
+    char c = (char)port.read();
     if (c == '\n') {
-      serialBuffer.trim();
-      if (serialBuffer.length() > 0) handleCommandLine(serialBuffer);
-      serialBuffer = "";
+      buffer.trim();
+      if (buffer.length() > 0) handleCommandLine(buffer);
+      buffer = "";
     } else {
-      serialBuffer += c;
-      if (serialBuffer.length() > 4096) serialBuffer = "";  // runaway guard
+      buffer += c;
+      if (buffer.length() > 4096) buffer = "";  // runaway guard
     }
   }
+}
+
+void pumpSerial() {
+  pumpConsole(Serial, serialBuffer);
+#if HIL_HAS_SECOND_CONSOLE
+  pumpConsole(HIL_SECOND_CONSOLE, secondConsoleBuffer);
+#endif
 }
 
 void receivedCallback(uint32_t from, String &msg) {
@@ -601,6 +640,13 @@ void setup() {
   bootId = hilRandom();
   Serial.setRxBufferSize(2048);
   Serial.begin(115200);
+#if HIL_HAS_SECOND_CONSOLE
+  // The UART socket of a dual-port devkit. Started unconditionally: which
+  // socket is cabled is not knowable from the firmware, and an unattached
+  // UART costs nothing to keep open.
+  HIL_SECOND_CONSOLE.setRxBufferSize(2048);
+  HIL_SECOND_CONSOLE.begin(115200);
+#endif
   // Quiet library logging: JSON protocol lines must dominate the port
   mesh.setDebugMsgTypes(ERROR);
   rolePreferences.begin("hil-role", false);

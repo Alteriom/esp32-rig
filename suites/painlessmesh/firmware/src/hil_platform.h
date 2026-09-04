@@ -9,6 +9,24 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+// Console transport. The C3/C5/C6/S3 devkits carry two USB-C sockets: the
+// chip's own USB-Serial/JTAG and a UART bridge. Either may be the one cabled
+// to the rig, and the board gives no hint which. With ARDUINO_USB_CDC_ON_BOOT
+// the Arduino `Serial` is the native USB CDC and `Serial0` is UART0, so a
+// board plugged into its UART socket sees none of the agent's protocol — the
+// port carries ESP-IDF's own logging and nothing else, which looks exactly
+// like a dead board.
+//
+// The agent therefore speaks on both: every frame is written to each console
+// and commands are accepted from either. One artifact per family still covers
+// the family, whichever socket an operator used.
+#if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+#define HIL_HAS_SECOND_CONSOLE 1
+#define HIL_SECOND_CONSOLE Serial0
+#else
+#define HIL_HAS_SECOND_CONSOLE 0
+#endif
+
 #if defined(ESP8266)
 #include <LittleFS.h>
 #define HIL_FS LittleFS
