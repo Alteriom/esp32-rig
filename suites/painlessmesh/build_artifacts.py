@@ -76,8 +76,12 @@ def normalize_targets(names: list[str] | None) -> list[str]:
 
 def _boot_app0() -> Path:
     core_dir = Path(os.environ.get("PLATFORMIO_CORE_DIR", Path.home() / ".platformio"))
-    candidates = list(
-        core_dir.glob("packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin")
+    # Two Arduino cores coexist once the C5/C6 environments install
+    # pioarduino's package next to the pinned platform's; PlatformIO suffixes
+    # the second directory with "@<version>". boot_app0.bin is identical in
+    # both (a fixed OTA-data image).
+    candidates = sorted(
+        core_dir.glob("packages/framework-arduinoespressif32*/tools/partitions/boot_app0.bin")
     )
     if not candidates:
         raise FileNotFoundError("PlatformIO boot_app0.bin was not installed")
