@@ -40,28 +40,44 @@ TARGETS = {
     "esp8266": Target("esp8266", "esp8266", "nodemcuv2", "0x0", layout="esp8266"),
 }
 
-# [esp32_arduino3] in firmware/platformio.ini: the families that build on
-# pioarduino's platform rather than the pinned espressif32@7.0.1.
-ARDUINO3_TARGETS = frozenset({"esp32-c5", "esp32-c6"})
+
+# One PlatformIO core directory per MCU family, all under one parent so a
+# single path can be granted to the farm service, cached by CI, and cleaned.
+# Override the parent with ALTERIOM_PIO_CORES.
+PIO_CORES_DIRNAME = ".platformio-cores"
 
 
 def core_dir_for(name: str) -> Path:
-    """The PlatformIO core directory a target must build in.
+    """The PlatformIO core directory a family builds in. Nothing is shared.
 
-    Both platforms ship a package *named* `framework-arduinoespressif32` —
-    Arduino core 2.x for the pinned `espressif32`, 3.x for pioarduino's.
-    PlatformIO treats that requirement as satisfied by name, so in one core
-    directory whichever installs first keeps the directory and the other
-    platform never reinstalls its own: it then resolves its framework to
-    None and dies inside its builder with
-    `TypeError: argument should be a str ... not NoneType`, naming nothing
-    that leads back here. Two core directories give each platform its own
-    package namespace, so neither can satisfy or evict the other.
+    One directory per family under ~/.platformio-cores, so esp32-c5 builds
+    in ~/.platformio-cores/esp32-c5. Two reasons, one forced and one chosen.
+
+    Forced: the pinned `espressif32` platform and pioarduino's both ship a
+    package *named* `framework-arduinoespressif32` — Arduino core 2.x and
+    3.x. PlatformIO treats that requirement as satisfied by name and then
+    resolves it by spec, so in one directory whichever installs first keeps
+    it, the other platform's core is never reinstalled, and its builder gets
+    None for the framework and dies with `TypeError: argument should be a
+    str ... not NoneType`, naming nothing that leads back here. The state
+    cannot be repaired from outside: asking PlatformIO to reinstall the
+    missing core does nothing, because the name is already satisfied.
+
+    Chosen: a per-family directory is what makes a build reproducible from
+    what this repository declares. A directory shared between families
+    carries whatever an earlier family installed into it, so the same commit
+    can build differently depending on what ran before it on that host —
+    which is exactly how this bug stayed invisible for so long.
+
+    The cost is disk and a slow first build per family; both are cheap next
+    to a build whose result depends on its host's history.
+
+    They live under one parent so there is a single path to grant, cache, and
+    clean: the farm service runs with ProtectHome=read-only and an explicit
+    ReadWritePaths, and sibling directories would each need granting.
     """
-    base = Path(os.environ.get("PLATFORMIO_CORE_DIR") or Path.home() / ".platformio")
-    if name not in ARDUINO3_TARGETS:
-        return base
-    return base.with_name(base.name + "-pioarduino")
+    root = Path(os.environ.get("ALTERIOM_PIO_CORES") or Path.home() / PIO_CORES_DIRNAME)
+    return root / name
 
 
 def sha256(path: Path) -> str:
@@ -97,17 +113,19 @@ def normalize_targets(names: list[str] | None) -> list[str]:
     return selected
 
 
-def _boot_app0() -> Path:
-    core_dir = Path(os.environ.get("PLATFORMIO_CORE_DIR", Path.home() / ".platformio"))
-    # Two Arduino cores coexist once the C5/C6 environments install
-    # pioarduino's package next to the pinned platform's; PlatformIO suffixes
-    # the second directory with "@<version>". boot_app0.bin is identical in
-    # both (a fixed OTA-data image).
+def _boot_app0(core_dir: Path) -> Path:
+    """The fixed OTA-data image, from the core directory this family built in.
+
+    It must come from the family's own core directory: with one directory per
+    family there is no shared `~/.platformio` left to fall back on, and a
+    stray copy from another family's cache would defeat the isolation even
+    though the file itself is identical everywhere.
+    """
     candidates = sorted(
         core_dir.glob("packages/framework-arduinoespressif32*/tools/partitions/boot_app0.bin")
     )
     if not candidates:
-        raise FileNotFoundError("PlatformIO boot_app0.bin was not installed")
+        raise FileNotFoundError(f"PlatformIO boot_app0.bin was not installed under {core_dir}")
     return candidates[0]
 
 
@@ -183,7 +201,7 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
             components = {
                 "bootloader.bin": pio_build / "bootloader.bin",
                 "partitions.bin": pio_build / "partitions.bin",
-                "boot_app0.bin": _boot_app0(),
+                "boot_app0.bin": _boot_app0(core_dir),
                 "firmware.bin": pio_build / "firmware.bin",
             }
             segment_offsets = {
