@@ -23,16 +23,21 @@ class Target:
     chip: str
     board: str
     bootloader_offset: str
+    # "esp32": bootloader + partition table + OTA boot selector + app, merged
+    # into one image at offset 0. "esp8266": PlatformIO already emits one
+    # self-contained image that flashes at 0x0; nothing to merge.
+    layout: str = "esp32"
 
 
+# Bootloader offsets are silicon facts: 0x1000 on the original ESP32, 0x0 on
+# C3/C6/S3, 0x2000 on C5. Keep them in sync with the esptool defaults.
 TARGETS = {
     "esp32": Target("esp32", "esp32", "esp32dev", "0x1000"),
-    "esp32-c3": Target(
-        "esp32-c3", "esp32c3", "esp32-c3-devkitm-1", "0x0"
-    ),
-    "esp32-s3": Target(
-        "esp32-s3", "esp32s3", "esp32-s3-devkitc-1", "0x0"
-    ),
+    "esp32-c3": Target("esp32-c3", "esp32c3", "esp32-c3-devkitm-1", "0x0"),
+    "esp32-c5": Target("esp32-c5", "esp32c5", "esp32-c5-devkitc-1", "0x2000"),
+    "esp32-c6": Target("esp32-c6", "esp32c6", "esp32-c6-devkitc-1", "0x0"),
+    "esp32-s3": Target("esp32-s3", "esp32s3", "esp32-s3-devkitc-1", "0x0"),
+    "esp8266": Target("esp8266", "esp8266", "nodemcuv2", "0x0", layout="esp8266"),
 }
 
 
@@ -71,8 +76,12 @@ def normalize_targets(names: list[str] | None) -> list[str]:
 
 def _boot_app0() -> Path:
     core_dir = Path(os.environ.get("PLATFORMIO_CORE_DIR", Path.home() / ".platformio"))
-    candidates = list(
-        core_dir.glob("packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin")
+    # Two Arduino cores coexist once the C5/C6 environments install
+    # pioarduino's package next to the pinned platform's; PlatformIO suffixes
+    # the second directory with "@<version>". boot_app0.bin is identical in
+    # both (a fixed OTA-data image).
+    candidates = sorted(
+        core_dir.glob("packages/framework-arduinoespressif32*/tools/partitions/boot_app0.bin")
     )
     if not candidates:
         raise FileNotFoundError("PlatformIO boot_app0.bin was not installed")
@@ -143,18 +152,22 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
         pio_build = FIRMWARE_DIR / ".pio" / "build" / target.env
         target_dir = out_dir / name
         target_dir.mkdir(parents=True, exist_ok=True)
-        components = {
-            "bootloader.bin": pio_build / "bootloader.bin",
-            "partitions.bin": pio_build / "partitions.bin",
-            "boot_app0.bin": _boot_app0(),
-            "firmware.bin": pio_build / "firmware.bin",
-        }
-        segment_offsets = {
-            "bootloader.bin": target.bootloader_offset,
-            "partitions.bin": "0x8000",
-            "boot_app0.bin": "0xe000",
-            "firmware.bin": "0x10000",
-        }
+        if target.layout == "esp8266":
+            components = {"firmware.bin": pio_build / "firmware.bin"}
+            segment_offsets = {"firmware.bin": "0x0"}
+        else:
+            components = {
+                "bootloader.bin": pio_build / "bootloader.bin",
+                "partitions.bin": pio_build / "partitions.bin",
+                "boot_app0.bin": _boot_app0(),
+                "firmware.bin": pio_build / "firmware.bin",
+            }
+            segment_offsets = {
+                "bootloader.bin": target.bootloader_offset,
+                "partitions.bin": "0x8000",
+                "boot_app0.bin": "0xe000",
+                "firmware.bin": "0x10000",
+            }
         for filename, source in components.items():
             if not source.is_file():
                 raise FileNotFoundError(f"missing build component: {source}")
@@ -179,27 +192,13 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
             }
 
         merged = target_dir / "flash-image.bin"
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "esptool",
-                "--chip",
-                target.chip,
-                "merge-bin",
-                "-o",
-                str(merged),
-                target.bootloader_offset,
-                str(target_dir / "bootloader.bin"),
-                "0x8000",
-                str(target_dir / "partitions.bin"),
-                "0xe000",
-                str(target_dir / "boot_app0.bin"),
-                "0x10000",
-                str(target_dir / "firmware.bin"),
-            ],
-            check=True,
-        )
+        if target.layout == "esp8266":
+            shutil.copy2(target_dir / "firmware.bin", merged)
+        else:
+            merge = [sys.executable, "-m", "esptool", "--chip", target.chip, "merge-bin", "-o", str(merged)]
+            for filename, offset in segment_offsets.items():
+                merge.extend((offset, str(target_dir / filename)))
+            subprocess.run(merge, check=True)
         files = {
             path.name: {"sha256": sha256(path), "size": path.stat().st_size}
             for path in sorted(target_dir.glob("*.bin"))

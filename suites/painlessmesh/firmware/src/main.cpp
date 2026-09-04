@@ -29,8 +29,8 @@
 
 #include <ArduinoJson.h>
 #include <MD5Builder.h>
-#include <Preferences.h>
-#include <SPIFFS.h>
+
+#include "hil_platform.h"
 
 #ifndef HIL_MESH_PREFIX
 #define HIL_MESH_PREFIX "AlteriomHILMesh"
@@ -66,7 +66,7 @@ painlessMesh mesh;
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
 String serialBuffer;
-Preferences rolePreferences;
+RoleStore rolePreferences;
 String activeMeshPrefix = HIL_MESH_PREFIX;
 String activeMeshPassword = HIL_MESH_PASSWORD;
 File otaUploadFile;
@@ -130,8 +130,8 @@ void handleOtaReceiveEnable(JsonDocument &cmd) {
     emitError("ota_receive_enable requires a 1..31 character role");
     return;
   }
-  SPIFFS.begin(true);
-  SPIFFS.remove("/ota_fw.json");
+  HIL_FS_BEGIN();
+  HIL_FS.remove("/ota_fw.json");
   rolePreferences.begin("hil-role", false);
   rolePreferences.putBool("otaReceive", true);
   rolePreferences.putString("otaRole", role);
@@ -154,13 +154,13 @@ void handleOtaUploadBegin(JsonDocument &cmd) {
     emitError("ota_upload_begin requires size, MD5, and role");
     return;
   }
-  if (!SPIFFS.begin(true)) {
-    emitError("unable to mount SPIFFS for OTA source");
+  if (!HIL_FS_BEGIN()) {
+    emitError("unable to mount the filesystem for OTA source");
     return;
   }
   if (otaUploadFile) otaUploadFile.close();
-  SPIFFS.remove(HIL_OTA_FILE);
-  otaUploadFile = SPIFFS.open(HIL_OTA_FILE, FILE_WRITE);
+  HIL_FS.remove(HIL_OTA_FILE);
+  otaUploadFile = HIL_FS.open(HIL_OTA_FILE, HIL_FILE_WRITE);
   if (!otaUploadFile) {
     emitError("unable to create OTA source file");
     return;
@@ -228,7 +228,7 @@ void handleOtaUploadFinish() {
     emitError("OTA source size mismatch");
     return;
   }
-  auto source = SPIFFS.open(HIL_OTA_FILE, FILE_READ);
+  auto source = HIL_FS.open(HIL_OTA_FILE, HIL_FILE_READ);
   if (!source) {
     emitError("unable to verify OTA source file");
     return;
@@ -252,7 +252,7 @@ void handleOtaOffer() {
     return;
   }
   if (otaSourceFile) otaSourceFile.close();
-  otaSourceFile = SPIFFS.open(HIL_OTA_FILE, FILE_READ);
+  otaSourceFile = HIL_FS.open(HIL_OTA_FILE, HIL_FILE_READ);
   if (!otaSourceFile) {
     emitError("unable to open OTA source for mesh transfer");
     return;
@@ -262,14 +262,14 @@ void handleOtaOffer() {
         size_t offset = HIL_OTA_PART_SIZE * pkg.partNo;
         if (offset >= otaSourceFile.size()) return (size_t)0;
         otaSourceFile.seek(offset);
+        size_t remaining = otaSourceFile.size() - offset;
         return otaSourceFile.readBytes(
-            buffer,
-            min(HIL_OTA_PART_SIZE, otaSourceFile.size() - offset));
+            buffer, remaining < HIL_OTA_PART_SIZE ? remaining : HIL_OTA_PART_SIZE);
       },
       HIL_OTA_PART_SIZE);
   size_t partCount =
       (otaSourceFile.size() + HIL_OTA_PART_SIZE - 1) / HIL_OTA_PART_SIZE;
-  otaOfferTask = mesh.offerOTA(otaSourceRole, "ESP32", otaSourceMd5,
+  otaOfferTask = mesh.offerOTA(otaSourceRole, HIL_OTA_HARDWARE, otaSourceMd5,
                                partCount, true);
   JsonDocument doc;
   doc["evt"] = "ota_offered";
@@ -598,7 +598,7 @@ void newConnectionCallback(uint32_t nodeId) {
 }
 
 void setup() {
-  bootId = esp_random();
+  bootId = hilRandom();
   Serial.setRxBufferSize(2048);
   Serial.begin(115200);
   // Quiet library logging: JSON protocol lines must dominate the port
