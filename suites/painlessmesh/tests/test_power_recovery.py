@@ -89,3 +89,55 @@ def test_node_rejoins_mesh_after_power_cut(mesh, power, board_map):
     victim_client.clear_pending()
     for client in survivors:
         client.clear_pending()
+
+
+@pytest.mark.hil_only(reason="radio_timing")
+@pytest.mark.capability("node.reset_recovery")
+def test_node_rejoins_mesh_after_reset(mesh, board_map):
+    """A node that reboots under the mesh must come back and be routed to.
+
+    The power-cut test above needs a switchable hub and has therefore never
+    run on this rig, leaving node recovery unvalidated entirely. Driving
+    EN over RTS/DTR reboots the chip without a hub. It is deliberately a
+    separate capability: it does not remove power, so it proves the mesh
+    heals around a reboot, not that the rig survives re-enumeration.
+    """
+    if board_map is None:
+        pytest.skip("no hardware board map")
+
+    clients, node_ids = mesh
+    if len(clients) < 2:
+        pytest.skip("needs at least 2 boards to observe a mesh heal")
+
+    # Never the first board: the survivors are who the heal is asserted
+    # against, and the first is the one other fixtures treat as the gateway.
+    victim_id = list(clients)[-1]
+    victim_client = clients[victim_id]
+    victim_node = node_ids[victim_id]
+    survivors = [c for bid, c in clients.items() if bid != victim_id]
+
+    before = victim_client.info(timeout=20)
+    victim_client.hard_reset(timeout=30.0)
+
+    rebooted = _info_when_ready(victim_client, timeout=60.0)
+    assert rebooted["bootId"] != before["bootId"], (
+        f"{victim_id} answered without rebooting; the reset did not take"
+    )
+    assert int(rebooted["nodeId"]) == victim_node, (
+        f"{victim_id} changed nodeId across a reset "
+        f"({victim_node} -> {rebooted['nodeId']}); mesh routing assumes it is stable"
+    )
+
+    # Leave the mesh whole for whatever runs next, and fail here rather than
+    # somewhere later if it never heals.
+    for client in survivors:
+        client.wait_mesh_size(len(clients) - 1, timeout=REJOIN_TIMEOUT)
+    for client in survivors:
+        assert victim_node in client.node_list(), (
+            f"{client.board_id} never saw {victim_id} ({victim_node}) rejoin "
+            f"within {REJOIN_TIMEOUT:.0f}s of a reset"
+        )
+
+    victim_client.clear_pending()
+    for client in survivors:
+        client.clear_pending()
