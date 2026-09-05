@@ -228,7 +228,15 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
 
         ota = None
         if name == "esp32":
-            ota_env = dict(build_env, HIL_OTA_GENERATION="2")
+            # Same core directory as the image above: without it this build
+            # fell back to ~/.platformio, which on the farm host has no
+            # platform at all, and every run died in its build stage — while
+            # CI passed, because the sim host still had a stale one.
+            ota_env = dict(
+                build_env,
+                HIL_OTA_GENERATION="2",
+                PLATFORMIO_CORE_DIR=str(core_dir),
+            )
             subprocess.run(
                 [pio, "run", "-d", str(FIRMWARE_DIR), "-e", target.env],
                 check=True,
