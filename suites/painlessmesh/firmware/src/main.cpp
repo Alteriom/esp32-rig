@@ -24,6 +24,8 @@
 // board -> host events (one JSON object per line):
 //   boot, info, node_list, send_result, recv, ack, connection, stalled,
 //   error
+//   mesh_log — painlessMesh's own log lines, framed so they cannot splice
+//   into a protocol frame; the HAL keeps them in the serial log only
 //************************************************************
 #include <painlessMesh.h>
 
@@ -132,6 +134,93 @@ void emitError(const char *message) {
   doc["error"] = message;
   emitEvent(doc);
 }
+
+#ifdef ESP32
+// painlessMesh logs from the Wi-Fi event task as well as from loop().
+// Written straight to Serial they splice into a JSON frame byte-for-byte,
+// which is why regular nodes used to run at ERROR only — and why a node
+// that sat associated-without-an-address for eighty seconds left no trace
+// of what its radio was doing. The library hands each line to the sink;
+// it is queued under a critical section and framed between protocol
+// frames by loop(). The ring is small on purpose: a burst beyond it is
+// counted, not paid for in RAM.
+constexpr size_t MESH_LOG_LINES = 24;
+constexpr size_t MESH_LOG_LINE_MAX = 160;
+struct MeshLogRing {
+  char lines[MESH_LOG_LINES][MESH_LOG_LINE_MAX];
+  uint16_t levels[MESH_LOG_LINES];
+  size_t head = 0;
+  size_t count = 0;
+  size_t dropped = 0;
+  portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+} meshLog;
+
+void meshLogSink(painlessmesh::logger::LogLevel type, const char *message) {
+  portENTER_CRITICAL(&meshLog.mux);
+  if (meshLog.count == MESH_LOG_LINES) {
+    meshLog.dropped++;
+    portEXIT_CRITICAL(&meshLog.mux);
+    return;
+  }
+  size_t slot = (meshLog.head + meshLog.count) % MESH_LOG_LINES;
+  strncpy(meshLog.lines[slot], message, MESH_LOG_LINE_MAX - 1);
+  meshLog.lines[slot][MESH_LOG_LINE_MAX - 1] = '\0';
+  meshLog.levels[slot] = type;
+  meshLog.count++;
+  portEXIT_CRITICAL(&meshLog.mux);
+}
+
+const char *meshLogLevelName(uint16_t type) {
+  using namespace painlessmesh::logger;
+  switch (type) {
+    case ERROR: return "ERROR";
+    case STARTUP: return "STARTUP";
+    case MESH_STATUS: return "MESH_STATUS";
+    case CONNECTION: return "CONNECTION";
+    case SYNC: return "SYNC";
+    case S_TIME: return "S_TIME";
+    case COMMUNICATION: return "COMMUNICATION";
+    case GENERAL: return "GENERAL";
+    case MSG_TYPES: return "MSG_TYPES";
+    case REMOTE: return "REMOTE";
+    case APPLICATION: return "APPLICATION";
+    case DEBUG: return "DEBUG";
+  }
+  return "OTHER";
+}
+
+// Two lines per pass: a scan logs a dozen at once, and each frame costs a
+// flush at 115200 baud that mesh.update() should not wait long for.
+void drainMeshLog() {
+  for (int n = 0; n < 2; ++n) {
+    char line[MESH_LOG_LINE_MAX];
+    uint16_t level;
+    size_t dropped;
+    portENTER_CRITICAL(&meshLog.mux);
+    if (meshLog.count == 0) {
+      portEXIT_CRITICAL(&meshLog.mux);
+      return;
+    }
+    memcpy(line, meshLog.lines[meshLog.head], MESH_LOG_LINE_MAX);
+    level = meshLog.levels[meshLog.head];
+    meshLog.head = (meshLog.head + 1) % MESH_LOG_LINES;
+    meshLog.count--;
+    dropped = meshLog.dropped;
+    meshLog.dropped = 0;
+    portEXIT_CRITICAL(&meshLog.mux);
+    size_t len = strlen(line);
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+      line[--len] = '\0';
+    }
+    JsonDocument doc;
+    doc["evt"] = "mesh_log";
+    doc["level"] = meshLogLevelName(level);
+    doc["line"] = line;
+    if (dropped > 0) doc["dropped"] = dropped;
+    emitEvent(doc);
+  }
+}
+#endif
 
 void handleInfo() {
   JsonDocument doc;
@@ -700,6 +789,14 @@ void setup() {
     // a separate mesh on the default channel 1.
     mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
               HIL_MESH_PORT, WIFI_AP_STA, 0);
+    // This mesh is meant to contain a bridge, and painlessMesh asks every
+    // node of such a mesh to say so (mesh.hpp, setContainsRoot). The flag is
+    // local, not propagated, and it is what lets a node that is still
+    // connected — to a partition the bridge has left — notice it has no root
+    // and go looking for the channel the bridge moved to. Without it, only
+    // nodes that lost their station link ever re-detected, and a suite's
+    // bridge start stranded the rest on the old channel.
+    mesh.setContainsRoot(true);
     if (failoverRole) {
       mesh.setRouterCredentials(routerSSID, routerPassword);
       mesh.enableBridgeFailover(true);
@@ -725,6 +822,16 @@ void setup() {
   // blocking initialization above, but asynchronous Wi-Fi callbacks can
   // otherwise splice text into a JSON control event byte-for-byte.
   mesh.setDebugMsgTypes(ERROR);
+#ifdef ESP32
+  if (!bridgeRole && !sharedGatewayRole) {
+    // A regular node's radio state is the evidence every failover failure
+    // has lacked. Through the sink it costs no frame integrity, so the
+    // connection log is on; a bridge keeps writing straight to Serial
+    // because its blocking init wants the lines as they happen.
+    Log.setSink(meshLogSink);
+    mesh.setDebugMsgTypes(ERROR | CONNECTION);
+  }
+#endif
 
   JsonDocument doc;
   doc["evt"] = "boot";
@@ -757,5 +864,8 @@ void loop() {
     stallUntil = 0;
   }
   mesh.update();
+#ifdef ESP32
+  drainMeshLog();
+#endif
   pumpSerial();
 }
