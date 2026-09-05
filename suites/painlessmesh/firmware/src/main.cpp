@@ -155,6 +155,10 @@ constexpr size_t MESH_LOG_LINE_MAX = 160;
 struct MeshLogRing {
   char lines[MESH_LOG_LINES][MESH_LOG_LINE_MAX];
   uint16_t levels[MESH_LOG_LINES];
+  // millis() when the line was produced, not when it is drained: draining is
+  // deferred behind commands, so a drain-time stamp would not order these
+  // against the protocol events they need to be read alongside.
+  uint32_t stamps[MESH_LOG_LINES];
   size_t head = 0;
   size_t count = 0;
   size_t dropped = 0;
@@ -172,6 +176,7 @@ void meshLogSink(painlessmesh::logger::LogLevel type, const char *message) {
   strncpy(meshLog.lines[slot], message, MESH_LOG_LINE_MAX - 1);
   meshLog.lines[slot][MESH_LOG_LINE_MAX - 1] = '\0';
   meshLog.levels[slot] = type;
+  meshLog.stamps[slot] = millis();
   meshLog.count++;
   portEXIT_CRITICAL(&meshLog.mux);
 }
@@ -201,6 +206,7 @@ void drainMeshLog() {
   for (int n = 0; n < 2; ++n) {
     char line[MESH_LOG_LINE_MAX];
     uint16_t level;
+    uint32_t stamp;
     size_t dropped;
     portENTER_CRITICAL(&meshLog.mux);
     if (meshLog.count == 0) {
@@ -209,6 +215,7 @@ void drainMeshLog() {
     }
     memcpy(line, meshLog.lines[meshLog.head], MESH_LOG_LINE_MAX);
     level = meshLog.levels[meshLog.head];
+    stamp = meshLog.stamps[meshLog.head];
     meshLog.head = (meshLog.head + 1) % MESH_LOG_LINES;
     meshLog.count--;
     dropped = meshLog.dropped;
@@ -220,6 +227,7 @@ void drainMeshLog() {
     }
     JsonDocument doc;
     doc["evt"] = "mesh_log";
+    doc["ms"] = stamp;
     doc["level"] = meshLogLevelName(level);
     doc["line"] = line;
     if (dropped > 0) doc["dropped"] = dropped;
