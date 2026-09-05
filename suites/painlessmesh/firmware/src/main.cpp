@@ -859,7 +859,12 @@ void setup() {
     // fresh link — an invalid subtree, or already being connected to that
     // node — are both logged at SYNC. It costs about one line per connection
     // per nodeSync interval when the mesh is settled.
-    mesh.setDebugMsgTypes(ERROR | CONNECTION | SYNC);
+    // GENERAL carries the bridge and gateway diagnostics — "Broadcasting
+    // status", "Bridge status received from %u" — which are what separate
+    // "the promoted bridge never announced itself" from "it announced and
+    // nobody heard". They were unusable while a per-tick scheduler trace
+    // also sat at GENERAL; that trace is DEBUG now.
+    mesh.setDebugMsgTypes(ERROR | CONNECTION | SYNC | GENERAL);
   }
 #endif
 
