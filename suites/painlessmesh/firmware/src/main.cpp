@@ -600,8 +600,12 @@ void handleCommandLine(const String &line) {
   }
 }
 
+// Bounded per call. An uncabled socket leaves its RX pin floating, and a
+// floating line delivers framing noise indefinitely: an unbounded drain would
+// then never return, starving mesh.update() and the other console. The budget
+// is far more than a real command and far less than a stuck port can produce.
 void pumpConsole(Stream &port, String &buffer) {
-  while (port.available()) {
+  for (int budget = 2048; budget > 0 && port.available(); --budget) {
     char c = (char)port.read();
     if (c == '\n') {
       buffer.trim();
