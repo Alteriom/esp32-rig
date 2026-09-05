@@ -700,6 +700,14 @@ void setup() {
     // a separate mesh on the default channel 1.
     mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
               HIL_MESH_PORT, WIFI_AP_STA, 0);
+    // This mesh is meant to contain a bridge, and painlessMesh asks every
+    // node of such a mesh to say so (mesh.hpp, setContainsRoot). The flag is
+    // local, not propagated, and it is what lets a node that is still
+    // connected — to a partition the bridge has left — notice it has no root
+    // and go looking for the channel the bridge moved to. Without it, only
+    // nodes that lost their station link ever re-detected, and a suite's
+    // bridge start stranded the rest on the old channel.
+    mesh.setContainsRoot(true);
     if (failoverRole) {
       mesh.setRouterCredentials(routerSSID, routerPassword);
       mesh.enableBridgeFailover(true);
