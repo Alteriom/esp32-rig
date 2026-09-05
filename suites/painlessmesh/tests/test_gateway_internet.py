@@ -77,11 +77,41 @@ def _restore_regular_mesh(clients, node_ids, attempts: int = 3) -> None:
                     continue
                 if not peers >= expected:
                     complete = False
-            if complete:
+            if complete and _delivery_works(clients, node_ids, last):
                 return
             time.sleep(2)
 
-    pytest.fail(f"regular mesh did not recover complete topology: {last}")
+    pytest.fail(f"regular mesh did not recover usable routing after the gateway phase: {last}")
+
+
+def _delivery_works(clients, node_ids, last: dict) -> bool:
+    """Can every node still deliver, not merely list its peers?
+
+    ``node_list`` is an optimistic signal after a failover: it retains the
+    complete topology while some of the rebuilt station/AP routes no longer
+    carry traffic, which this module's own teardown comment warns about. A
+    teardown that trusts it hands the next test file a mesh that looks healthy
+    and drops messages, and the failure then lands on an unrelated test — a
+    gateway defect reported as a mesh-formation defect.
+
+    One acknowledged message per node is enough to tell the two apart, and it
+    keeps the failure attributed to the phase that caused it.
+    """
+    board_ids = list(clients)
+    for index, board_id in enumerate(board_ids):
+        peer_id = board_ids[(index + 1) % len(board_ids)]
+        if peer_id == board_id:
+            continue
+        try:
+            if not clients[board_id].send_single(
+                node_ids[peer_id], "post-gateway routing probe", ack=True
+            ):
+                last[board_id] = f"no ack from {peer_id} despite listing it as a peer"
+                return False
+        except TimeoutWaitingFor as exc:
+            last[board_id] = str(exc).splitlines()[0]
+            return False
+    return True
 
 
 @pytest.fixture(scope="module")
