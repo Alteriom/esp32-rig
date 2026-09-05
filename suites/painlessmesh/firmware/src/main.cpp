@@ -96,17 +96,23 @@ void newConnectionCallback(uint32_t nodeId);
 // to it: HWCDC blocks for its transmit timeout when no host is listening, and
 // paying that on every frame would slow the agent to a crawl on a board wired
 // through its UART socket.
-void consoleWriteLine(const String &frame) {
+// flushNow=false is for diagnostics. flush() blocks until the bytes are out:
+// on a real UART that is ~9 ms per frame at 115200, and on HWCDC up to the
+// transmit timeout. Paying that on every mesh_log line stalls loop() — and a
+// loop that is not running is not reading commands, which is how the C5 came
+// to miss a mesh_configure it answers in 60 ms when idle. A reply the host is
+// waiting on still flushes; diagnostics leave with the next one.
+void consoleWriteLine(const String &frame, bool flushNow = true) {
 #if HIL_HAS_SECOND_CONSOLE
   if (Serial) {
     Serial.println(frame);
-    Serial.flush();
+    if (flushNow) Serial.flush();
   }
   HIL_SECOND_CONSOLE.println(frame);
-  HIL_SECOND_CONSOLE.flush();
+  if (flushNow) HIL_SECOND_CONSOLE.flush();
 #else
   Serial.println(frame);
-  Serial.flush();
+  if (flushNow) Serial.flush();
 #endif
 }
 
@@ -119,13 +125,13 @@ void consoleFlush() {
 #endif
 }
 
-void emitEvent(JsonDocument &doc) {
+void emitEvent(JsonDocument &doc, bool flushNow = true) {
   // Build one complete frame before writing it. This avoids damaged JSON
   // prefixes on inexpensive USB-UART bridges under concurrent mesh traffic.
   String frame;
   frame.reserve(measureJson(doc) + 1);
   serializeJson(doc, frame);
-  consoleWriteLine(frame);
+  consoleWriteLine(frame, flushNow);
 }
 
 void emitError(const char *message) {
@@ -217,7 +223,7 @@ void drainMeshLog() {
     doc["level"] = meshLogLevelName(level);
     doc["line"] = line;
     if (dropped > 0) doc["dropped"] = dropped;
-    emitEvent(doc);
+    emitEvent(doc, /*flushNow=*/false);
   }
 }
 #endif
@@ -714,6 +720,16 @@ void pumpSerial() {
 #endif
 }
 
+// A command already in the receive buffer outranks any diagnostic waiting to
+// go out: the host is blocked on the reply, nothing is blocked on a log line.
+bool consoleHasInput() {
+#if HIL_HAS_SECOND_CONSOLE
+  return Serial.available() || HIL_SECOND_CONSOLE.available();
+#else
+  return Serial.available();
+#endif
+}
+
 void receivedCallback(uint32_t from, String &msg) {
   JsonDocument doc;
   doc["evt"] = "recv";
@@ -829,7 +845,13 @@ void setup() {
     // connection log is on; a bridge keeps writing straight to Serial
     // because its blocking init wants the lines as they happen.
     Log.setSink(meshLogSink);
-    mesh.setDebugMsgTypes(ERROR | CONNECTION);
+    // SYNC as well as CONNECTION: nodes were seen connecting to one peer
+    // after another, each link established and dropped within a second, and
+    // CONNECTION alone never says why. The two reasons painlessMesh closes a
+    // fresh link — an invalid subtree, or already being connected to that
+    // node — are both logged at SYNC. It costs about one line per connection
+    // per nodeSync interval when the mesh is settled.
+    mesh.setDebugMsgTypes(ERROR | CONNECTION | SYNC);
   }
 #endif
 
@@ -864,8 +886,11 @@ void loop() {
     stallUntil = 0;
   }
   mesh.update();
-#ifdef ESP32
-  drainMeshLog();
-#endif
+  // Commands first, then diagnostics, and only while nothing is waiting to be
+  // read. Draining before pumping let a burst of scan logging sit in front of
+  // a command that had already arrived.
   pumpSerial();
+#ifdef ESP32
+  if (!consoleHasInput()) drainMeshLog();
+#endif
 }
