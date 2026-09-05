@@ -148,10 +148,21 @@ def checkout_painlessmesh(ref: str) -> tuple[Path, str]:
             ],
             check=True,
         )
-    subprocess.run(
+    fetch = subprocess.run(
         ["git", "-C", str(source), "fetch", "--depth", "1", "origin", ref],
-        check=True,
+        capture_output=True,
+        text=True,
     )
+    if fetch.returncode:
+        # The common cause is a ref that no longer exists — a branch deleted
+        # when its pull request merged, most often. Say that, rather than
+        # raising a CalledProcessError whose traceback buries the ref among
+        # subprocess internals and reads like a farm fault.
+        raise RuntimeError(
+            f"cannot fetch painlessMesh ref {ref!r}: it does not exist on the "
+            f"remote, or the host cannot reach GitHub. git said: "
+            f"{fetch.stderr.strip().splitlines()[-1] if fetch.stderr.strip() else 'nothing'}"
+        )
     subprocess.run(
         ["git", "-C", str(source), "checkout", "--detach", "--force", "FETCH_HEAD"],
         check=True,

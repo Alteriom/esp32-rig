@@ -118,20 +118,34 @@ def gateway_mesh(mesh):
         )
         gateway_peers: set[int] = set()
         sender_peers: set[int] = set()
+        converged = False
         if upstream_ready:
             deadline = time.monotonic() + 120
             while time.monotonic() < deadline:
                 try:
-                    gateway_peers = _wait_for_peer(
+                    seen_gateway = _wait_for_peer(
                         gateway, node_ids[sender_id], timeout=10
                     )
-                    sender_peers = _wait_for_peer(
+                    seen_sender = _wait_for_peer(
                         sender, node_ids[gateway_id], timeout=10
                     )
-                    if (
-                        node_ids[sender_id] not in gateway_peers
-                        or node_ids[gateway_id] not in sender_peers
-                    ):
+                    both_see_each_other = (
+                        node_ids[sender_id] in seen_gateway
+                        and node_ids[gateway_id] in seen_sender
+                    )
+                    # Keep the converged observation once it happens. A poll
+                    # taken while the mesh reorganises sees a partial topology,
+                    # and `_wait_for_peer` returns what it last saw even when
+                    # the peer never appeared. Overwriting a good reading with
+                    # that is what failed the bridge assertion on a mesh that
+                    # had in fact formed: the peers were there, the last
+                    # snapshot was not.
+                    if both_see_each_other:
+                        gateway_peers, sender_peers = seen_gateway, seen_sender
+                        converged = True
+                    elif not converged:
+                        gateway_peers, sender_peers = seen_gateway, seen_sender
+                    if not converged:
                         continue
                     sender_state = sender.gateway_status(timeout=10)
                     if sender_state["hasInternet"]:
@@ -153,6 +167,7 @@ def gateway_mesh(mesh):
             "gateway_peers": gateway_peers,
             "sender_peers": sender_peers,
             "upstream_ready": upstream_ready,
+            "converged": converged,
         }
     finally:
         if gateway_started:
@@ -181,9 +196,15 @@ def test_dedicated_bridge_has_upstream_wifi_and_mesh(gateway_mesh):
     assert int(state["wifiStatus"]) == 3  # Arduino WL_CONNECTED
     assert state["localIP"] != "0.0.0.0"
     assert 1 <= int(state["channel"]) <= 13
-    assert gateway_mesh["node_ids"][gateway_mesh["sender_id"]] in gateway_mesh[
-        "gateway_peers"
-    ]
+    # Named rather than a bare set-membership failure: "the mesh did not form"
+    # and "the bridge lost a peer" are different problems and used to look
+    # identical in the report.
+    seen = sorted(gateway_mesh["gateway_peers"])
+    expected = gateway_mesh["node_ids"][gateway_mesh["sender_id"]]
+    assert gateway_mesh["converged"], (
+        f"bridge and sender never saw each other within 120s: "
+        f"expected {expected} among the bridge's peers, last saw {seen}"
+    )
 
 
 @pytest.mark.capability("gateway.discovery")
