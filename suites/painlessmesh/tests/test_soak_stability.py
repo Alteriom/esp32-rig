@@ -37,14 +37,24 @@ def test_sustained_round_robin_delivery_has_no_loss_or_heap_collapse(mesh):
             payload = (
                 f"soak:{delivered}:{observation_attempt}:{sender_id}:{receiver_id}"
             )
+            # The ack window and the receive wait must agree: with the ack at
+            # 4 s and the wait at 8 s, a message delivered in between was
+            # "received" and "not delivered" at once, and a sound delivery
+            # that was merely slow failed the run as loss.
             assert sender.send_single(
-                node_ids[receiver_id], payload, ack=True, ack_timeout_ms=4000
+                node_ids[receiver_id], payload, ack=True, ack_timeout_ms=8000
             )
             received = None
             acknowledgement = None
             try:
-                received = receiver.wait_recv(
-                    from_node=node_ids[sender_id], timeout=8
+                # By payload, not merely by sender: the previous attempt's
+                # message can arrive after its wait expired and after the
+                # clear below, and it is not this attempt's evidence.
+                received = receiver.wait_for(
+                    lambda e, want=payload: e["evt"] == "recv"
+                    and e.get("msg") == want,
+                    f"recv of {payload}",
+                    timeout=8,
                 )
             except TimeoutWaitingFor:
                 pass
