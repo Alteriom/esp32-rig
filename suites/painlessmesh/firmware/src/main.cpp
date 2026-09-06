@@ -67,12 +67,22 @@ painlessMesh mesh;
 
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
-String serialBuffer;
+// One line buffer per console: bytes from two ports interleaved into a
+// single buffer would splice two commands into nonsense. lastByteMs is
+// what lets a frame that lost its newline be reported instead of sitting
+// in the buffer until the next command's newline turns both into one
+// "bad json" — or, worse, sitting there silently.
+struct ConsoleLine {
+  String buffer;
+  uint32_t lastByteMs = 0;
+};
+ConsoleLine serialLine;
 #if HIL_HAS_SECOND_CONSOLE
-// One buffer per console: bytes from two ports interleaved into a single
-// buffer would splice two commands into nonsense.
-String secondConsoleBuffer;
+ConsoleLine secondLine;
 #endif
+// Longer than any command but an OTA chunk, which is chunked by the host.
+constexpr size_t CONSOLE_LINE_RESERVE = 768;
+constexpr uint32_t CONSOLE_LINE_STALE_MS = 500;
 RoleStore rolePreferences;
 String activeMeshPrefix = HIL_MESH_PREFIX;
 String activeMeshPassword = HIL_MESH_PASSWORD;
@@ -707,24 +717,43 @@ void handleCommandLine(const String &line) {
 // floating line delivers framing noise indefinitely: an unbounded drain would
 // then never return, starving mesh.update() and the other console. The budget
 // is far more than a real command and far less than a stuck port can produce.
-void pumpConsole(Stream &port, String &buffer) {
+// A command that reaches this board damaged must be *said* to have been
+// dropped, so the host can resend it: the host's only other signal is a
+// timeout, and a timeout cannot tell a lost command from a lost reply. Two
+// ways a frame used to vanish without a word — the ESP8266 lost a role
+// change to each of them, and the whole module's fixture failed with the
+// board healthy:
+//   - its tail, newline included, never arrived: the head sat in the buffer
+//     until the *next* command's newline fused the two into one "bad json";
+//   - String::concat failed on a board down to 8 K of heap, which returns
+//     false and keeps the old contents, and the return value was ignored.
+void pumpConsole(Stream &port, ConsoleLine &line) {
   for (int budget = 2048; budget > 0 && port.available(); --budget) {
     char c = (char)port.read();
+    line.lastByteMs = millis();
     if (c == '\n') {
-      buffer.trim();
-      if (buffer.length() > 0) handleCommandLine(buffer);
-      buffer = "";
-    } else {
-      buffer += c;
-      if (buffer.length() > 4096) buffer = "";  // runaway guard
+      line.buffer.trim();
+      if (line.buffer.length() > 0) handleCommandLine(line.buffer);
+      line.buffer = "";
+    } else if (!line.buffer.concat(c)) {
+      emitError("frame dropped: no memory");
+      line.buffer = "";
+    } else if (line.buffer.length() > 4096) {
+      emitError("frame dropped: runaway");
+      line.buffer = "";
     }
+  }
+  if (line.buffer.length() > 0 &&
+      millis() - line.lastByteMs > CONSOLE_LINE_STALE_MS) {
+    emitError("frame dropped: incomplete");
+    line.buffer = "";
   }
 }
 
 void pumpSerial() {
-  pumpConsole(Serial, serialBuffer);
+  pumpConsole(Serial, serialLine);
 #if HIL_HAS_SECOND_CONSOLE
-  pumpConsole(HIL_SECOND_CONSOLE, secondConsoleBuffer);
+  pumpConsole(HIL_SECOND_CONSOLE, secondLine);
 #endif
 }
 
@@ -755,6 +784,12 @@ void newConnectionCallback(uint32_t nodeId) {
 
 void setup() {
   bootId = hilRandom();
+  // Reserve once, so a command never needs a reallocation on a board that
+  // may be down to a few kilobytes of fragmented heap by the end of a suite.
+  serialLine.buffer.reserve(CONSOLE_LINE_RESERVE);
+#if HIL_HAS_SECOND_CONSOLE
+  secondLine.buffer.reserve(CONSOLE_LINE_RESERVE);
+#endif
   Serial.setRxBufferSize(2048);
   Serial.begin(115200);
 #if HIL_HAS_SECOND_CONSOLE
