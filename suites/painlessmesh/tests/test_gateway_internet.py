@@ -114,14 +114,30 @@ def _delivery_works(clients, node_ids, last: dict) -> bool:
     return True
 
 
+def _can_serve_as_bridge(board_id, board_map) -> bool:
+    """A bridge has mesh children behind it. The ESP8266 is specified as a
+    leaf in a mesh this size and the agent runs it station-only, so it can
+    neither bridge nor stand in as the failover backup; every ESP32 family
+    can. Without a board map (simulation) every board qualifies."""
+    if board_map is None:
+        return True
+    board = next((b for b in board_map if b.id == board_id), None)
+    return board is None or board.target != "esp8266"
+
+
 @pytest.fixture(scope="module")
-def gateway_mesh(mesh):
+def gateway_mesh(mesh, board_map):
     clients, node_ids = mesh
     if len(clients) < 2:
         pytest.skip("gateway validation needs a bridge and a regular node")
     ssid, password, endpoint = _gateway_settings()
     requested = os.environ.get("ALTERIOM_HIL_GATEWAY_BOARD")
-    gateway_id = requested or next(iter(clients))
+    gateway_id = requested or next(
+        (board_id for board_id in clients if _can_serve_as_bridge(board_id, board_map)),
+        None,
+    )
+    if gateway_id is None:
+        pytest.skip("gateway validation needs a board that can serve as a bridge")
     if gateway_id not in clients:
         pytest.fail(f"configured gateway board is absent: {gateway_id}")
     sender_id = next(board_id for board_id in clients if board_id != gateway_id)
@@ -187,6 +203,7 @@ def gateway_mesh(mesh):
         yield {
             "clients": clients,
             "node_ids": node_ids,
+            "board_map": board_map,
             "gateway_id": gateway_id,
             "gateway": gateway,
             "sender_id": sender_id,
@@ -314,10 +331,16 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
     _require_upstream(gateway_mesh)
 
     backup_id = next(
-        board_id
-        for board_id in clients
-        if board_id not in {gateway_mesh["gateway_id"], gateway_mesh["sender_id"]}
+        (
+            board_id
+            for board_id in clients
+            if board_id not in {gateway_mesh["gateway_id"], gateway_mesh["sender_id"]}
+            and _can_serve_as_bridge(board_id, gateway_mesh.get("board_map"))
+        ),
+        None,
     )
+    if backup_id is None:
+        pytest.skip("gateway failover needs a second board that can serve as a bridge")
     backup = clients[backup_id]
     ssid, password, _ = _gateway_settings()
     backup_started = False

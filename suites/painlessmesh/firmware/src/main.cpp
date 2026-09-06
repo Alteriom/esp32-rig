@@ -848,8 +848,21 @@ void setup() {
     // painlessMesh's documented auto-detection path, allowing regular nodes
     // and failover candidates to follow a promoted bridge instead of forming
     // a separate mesh on the default channel 1.
+#ifdef ESP8266
+    // The ESP8266 is specified as a leaf in a mesh this size, and on this
+    // rig that is now a fact rather than a warning: station-only, no AP,
+    // no children. With an AP it was an interior node in every run —
+    // peers picked it as parent five to fifteen times a suite — and as
+    // the relay for a subtree its heap fell to 2.8 KB, below anything
+    // that can forward an OTA announce; the receiver behind it never saw
+    // one. The AP and its DHCP server were also several KB of that heap.
+    // painlessMesh's own leaf configuration is init() with WIFI_STA.
+    mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
+              HIL_MESH_PORT, WIFI_STA, 0);
+#else
     mesh.init(activeMeshPrefix, activeMeshPassword, &userScheduler,
               HIL_MESH_PORT, WIFI_AP_STA, 0);
+#endif
     // This mesh is meant to contain a bridge, and painlessMesh asks every
     // node of such a mesh to say so (mesh.hpp, setContainsRoot). The flag is
     // local, not propagated, and it is what lets a node that is still
