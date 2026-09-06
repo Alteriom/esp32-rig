@@ -26,6 +26,8 @@
 //   error
 //   mesh_log — painlessMesh's own log lines, framed so they cannot splice
 //   into a protocol frame; the HAL keeps them in the serial log only
+//   capacity_warning — ESP8266 only: below 12 KB free with more than one
+//   AP child; the part is specified as a leaf in meshes that size
 //************************************************************
 #include <painlessMesh.h>
 
@@ -67,12 +69,22 @@ painlessMesh mesh;
 
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
-String serialBuffer;
+// One line buffer per console: bytes from two ports interleaved into a
+// single buffer would splice two commands into nonsense. lastByteMs is
+// what lets a frame that lost its newline be reported instead of sitting
+// in the buffer until the next command's newline turns both into one
+// "bad json" — or, worse, sitting there silently.
+struct ConsoleLine {
+  String buffer;
+  uint32_t lastByteMs = 0;
+};
+ConsoleLine serialLine;
 #if HIL_HAS_SECOND_CONSOLE
-// One buffer per console: bytes from two ports interleaved into a single
-// buffer would splice two commands into nonsense.
-String secondConsoleBuffer;
+ConsoleLine secondLine;
 #endif
+// Longer than any command but an OTA chunk, which is chunked by the host.
+constexpr size_t CONSOLE_LINE_RESERVE = 768;
+constexpr uint32_t CONSOLE_LINE_STALE_MS = 500;
 RoleStore rolePreferences;
 String activeMeshPrefix = HIL_MESH_PREFIX;
 String activeMeshPassword = HIL_MESH_PASSWORD;
@@ -96,17 +108,23 @@ void newConnectionCallback(uint32_t nodeId);
 // to it: HWCDC blocks for its transmit timeout when no host is listening, and
 // paying that on every frame would slow the agent to a crawl on a board wired
 // through its UART socket.
-void consoleWriteLine(const String &frame) {
+// flushNow=false is for diagnostics. flush() blocks until the bytes are out:
+// on a real UART that is ~9 ms per frame at 115200, and on HWCDC up to the
+// transmit timeout. Paying that on every mesh_log line stalls loop() — and a
+// loop that is not running is not reading commands, which is how the C5 came
+// to miss a mesh_configure it answers in 60 ms when idle. A reply the host is
+// waiting on still flushes; diagnostics leave with the next one.
+void consoleWriteLine(const String &frame, bool flushNow = true) {
 #if HIL_HAS_SECOND_CONSOLE
   if (Serial) {
     Serial.println(frame);
-    Serial.flush();
+    if (flushNow) Serial.flush();
   }
   HIL_SECOND_CONSOLE.println(frame);
-  HIL_SECOND_CONSOLE.flush();
+  if (flushNow) HIL_SECOND_CONSOLE.flush();
 #else
   Serial.println(frame);
-  Serial.flush();
+  if (flushNow) Serial.flush();
 #endif
 }
 
@@ -119,13 +137,13 @@ void consoleFlush() {
 #endif
 }
 
-void emitEvent(JsonDocument &doc) {
+void emitEvent(JsonDocument &doc, bool flushNow = true) {
   // Build one complete frame before writing it. This avoids damaged JSON
   // prefixes on inexpensive USB-UART bridges under concurrent mesh traffic.
   String frame;
   frame.reserve(measureJson(doc) + 1);
   serializeJson(doc, frame);
-  consoleWriteLine(frame);
+  consoleWriteLine(frame, flushNow);
 }
 
 void emitError(const char *message) {
@@ -149,6 +167,10 @@ constexpr size_t MESH_LOG_LINE_MAX = 160;
 struct MeshLogRing {
   char lines[MESH_LOG_LINES][MESH_LOG_LINE_MAX];
   uint16_t levels[MESH_LOG_LINES];
+  // millis() when the line was produced, not when it is drained: draining is
+  // deferred behind commands, so a drain-time stamp would not order these
+  // against the protocol events they need to be read alongside.
+  uint32_t stamps[MESH_LOG_LINES];
   size_t head = 0;
   size_t count = 0;
   size_t dropped = 0;
@@ -166,6 +188,7 @@ void meshLogSink(painlessmesh::logger::LogLevel type, const char *message) {
   strncpy(meshLog.lines[slot], message, MESH_LOG_LINE_MAX - 1);
   meshLog.lines[slot][MESH_LOG_LINE_MAX - 1] = '\0';
   meshLog.levels[slot] = type;
+  meshLog.stamps[slot] = millis();
   meshLog.count++;
   portEXIT_CRITICAL(&meshLog.mux);
 }
@@ -195,6 +218,7 @@ void drainMeshLog() {
   for (int n = 0; n < 2; ++n) {
     char line[MESH_LOG_LINE_MAX];
     uint16_t level;
+    uint32_t stamp;
     size_t dropped;
     portENTER_CRITICAL(&meshLog.mux);
     if (meshLog.count == 0) {
@@ -203,6 +227,7 @@ void drainMeshLog() {
     }
     memcpy(line, meshLog.lines[meshLog.head], MESH_LOG_LINE_MAX);
     level = meshLog.levels[meshLog.head];
+    stamp = meshLog.stamps[meshLog.head];
     meshLog.head = (meshLog.head + 1) % MESH_LOG_LINES;
     meshLog.count--;
     dropped = meshLog.dropped;
@@ -214,10 +239,11 @@ void drainMeshLog() {
     }
     JsonDocument doc;
     doc["evt"] = "mesh_log";
+    doc["ms"] = stamp;
     doc["level"] = meshLogLevelName(level);
     doc["line"] = line;
     if (dropped > 0) doc["dropped"] = dropped;
-    emitEvent(doc);
+    emitEvent(doc, /*flushNow=*/false);
   }
 }
 #endif
@@ -693,24 +719,53 @@ void handleCommandLine(const String &line) {
 // floating line delivers framing noise indefinitely: an unbounded drain would
 // then never return, starving mesh.update() and the other console. The budget
 // is far more than a real command and far less than a stuck port can produce.
-void pumpConsole(Stream &port, String &buffer) {
+// A command that reaches this board damaged must be *said* to have been
+// dropped, so the host can resend it: the host's only other signal is a
+// timeout, and a timeout cannot tell a lost command from a lost reply. Two
+// ways a frame used to vanish without a word — the ESP8266 lost a role
+// change to each of them, and the whole module's fixture failed with the
+// board healthy:
+//   - its tail, newline included, never arrived: the head sat in the buffer
+//     until the *next* command's newline fused the two into one "bad json";
+//   - String::concat failed on a board down to 8 K of heap, which returns
+//     false and keeps the old contents, and the return value was ignored.
+void pumpConsole(Stream &port, ConsoleLine &line) {
   for (int budget = 2048; budget > 0 && port.available(); --budget) {
     char c = (char)port.read();
+    line.lastByteMs = millis();
     if (c == '\n') {
-      buffer.trim();
-      if (buffer.length() > 0) handleCommandLine(buffer);
-      buffer = "";
-    } else {
-      buffer += c;
-      if (buffer.length() > 4096) buffer = "";  // runaway guard
+      line.buffer.trim();
+      if (line.buffer.length() > 0) handleCommandLine(line.buffer);
+      line.buffer = "";
+    } else if (!line.buffer.concat(c)) {
+      emitError("frame dropped: no memory");
+      line.buffer = "";
+    } else if (line.buffer.length() > 4096) {
+      emitError("frame dropped: runaway");
+      line.buffer = "";
     }
+  }
+  if (line.buffer.length() > 0 &&
+      millis() - line.lastByteMs > CONSOLE_LINE_STALE_MS) {
+    emitError("frame dropped: incomplete");
+    line.buffer = "";
   }
 }
 
 void pumpSerial() {
-  pumpConsole(Serial, serialBuffer);
+  pumpConsole(Serial, serialLine);
 #if HIL_HAS_SECOND_CONSOLE
-  pumpConsole(HIL_SECOND_CONSOLE, secondConsoleBuffer);
+  pumpConsole(HIL_SECOND_CONSOLE, secondLine);
+#endif
+}
+
+// A command already in the receive buffer outranks any diagnostic waiting to
+// go out: the host is blocked on the reply, nothing is blocked on a log line.
+bool consoleHasInput() {
+#if HIL_HAS_SECOND_CONSOLE
+  return Serial.available() || HIL_SECOND_CONSOLE.available();
+#else
+  return Serial.available();
 #endif
 }
 
@@ -731,6 +786,12 @@ void newConnectionCallback(uint32_t nodeId) {
 
 void setup() {
   bootId = hilRandom();
+  // Reserve once, so a command never needs a reallocation on a board that
+  // may be down to a few kilobytes of fragmented heap by the end of a suite.
+  serialLine.buffer.reserve(CONSOLE_LINE_RESERVE);
+#if HIL_HAS_SECOND_CONSOLE
+  secondLine.buffer.reserve(CONSOLE_LINE_RESERVE);
+#endif
   Serial.setRxBufferSize(2048);
   Serial.begin(115200);
 #if HIL_HAS_SECOND_CONSOLE
@@ -829,7 +890,18 @@ void setup() {
     // connection log is on; a bridge keeps writing straight to Serial
     // because its blocking init wants the lines as they happen.
     Log.setSink(meshLogSink);
-    mesh.setDebugMsgTypes(ERROR | CONNECTION);
+    // SYNC as well as CONNECTION: nodes were seen connecting to one peer
+    // after another, each link established and dropped within a second, and
+    // CONNECTION alone never says why. The two reasons painlessMesh closes a
+    // fresh link — an invalid subtree, or already being connected to that
+    // node — are both logged at SYNC. It costs about one line per connection
+    // per nodeSync interval when the mesh is settled.
+    // GENERAL carries the bridge and gateway diagnostics — "Broadcasting
+    // status", "Bridge status received from %u" — which are what separate
+    // "the promoted bridge never announced itself" from "it announced and
+    // nobody heard". They were unusable while a per-tick scheduler trace
+    // also sat at GENERAL; that trace is DEBUG now.
+    mesh.setDebugMsgTypes(ERROR | CONNECTION | SYNC | GENERAL);
   }
 #endif
 
@@ -864,8 +936,38 @@ void loop() {
     stallUntil = 0;
   }
   mesh.update();
-#ifdef ESP32
-  drainMeshLog();
+#ifdef ESP8266
+  // The ESP8266 is specified for small meshes, or as a leaf in larger ones:
+  // as an interior node of a seven-node mesh it runs at 10–13 KB free, and
+  // an 8 KB package or an OTA part can then fail to allocate. That is the
+  // part's limit, not a defect, and the rig must record when a run has put
+  // the board outside its envelope — so the condition is a structured
+  // event, not only the library's ERROR line. Computed here rather than
+  // read from the library so this agent builds against any painlessMesh
+  // ref the farm is asked to validate.
+  static uint32_t capacityCheckedAt = 0;
+  if (millis() - capacityCheckedAt > 30000) {
+    capacityCheckedAt = millis();
+    size_t children = 0;
+    for (auto &sub : mesh.subs) {
+      if (sub && sub->connected() && !sub->station) ++children;
+    }
+    uint32_t freeHeap = ESP.getFreeHeap();
+    if (freeHeap < 12 * 1024 && children > 1) {
+      JsonDocument doc;
+      doc["evt"] = "capacity_warning";
+      doc["freeHeap"] = freeHeap;
+      doc["apChildren"] = children;
+      doc["spec"] = "esp8266: leaf only in meshes this size";
+      emitEvent(doc);
+    }
+  }
 #endif
+  // Commands first, then diagnostics, and only while nothing is waiting to be
+  // read. Draining before pumping let a burst of scan logging sit in front of
+  // a command that had already arrived.
   pumpSerial();
+#ifdef ESP32
+  if (!consoleHasInput()) drainMeshLog();
+#endif
 }
