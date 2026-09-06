@@ -19,6 +19,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
@@ -74,17 +75,32 @@ def main(argv: list[str] | None = None) -> int:
             f"==> {board.id} ({board.port}) <- {board.target} "
             f"sha256:{artifact['sha256'][:12]}"
         )
-        try:
-            flash_esptool(
-                artifact["path"],
-                board,
-                offset=artifact["flash_offset"],
-            )
-        except subprocess.CalledProcessError as exc:
-            print(exc.stdout or "", file=sys.stderr)
-            print(exc.stderr or "", file=sys.stderr)
-            print(f"FLASH FAILED: {board.id}", file=sys.stderr)
-            return 1
+        # One retry, after a pause. esptool lost the serial stream once
+        # mid-write on a UART-bridge board ("possible serial noise or
+        # corruption") — the only such failure in dozens of suites — and a
+        # single transient cost the run its twenty-five minutes before a
+        # test had started. A second failure is a board that needs a
+        # person, and still fails the run.
+        for attempt in (1, 2):
+            try:
+                flash_esptool(
+                    artifact["path"],
+                    board,
+                    offset=artifact["flash_offset"],
+                )
+                break
+            except subprocess.CalledProcessError as exc:
+                print(exc.stdout or "", file=sys.stderr)
+                print(exc.stderr or "", file=sys.stderr)
+                if attempt == 1:
+                    print(
+                        f"    flash of {board.id} failed once; retrying in 3 s",
+                        file=sys.stderr,
+                    )
+                    time.sleep(3)
+                    continue
+                print(f"FLASH FAILED: {board.id}", file=sys.stderr)
+                return 1
         print(f"    ok")
     return 0
 
