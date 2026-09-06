@@ -10,7 +10,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from alteriom_hil.protocol import TimeoutWaitingFor
+from alteriom_hil.protocol import BoardClient, TimeoutWaitingFor
 
 pytestmark = [
     pytest.mark.hil_only(reason="peripheral"),
@@ -56,8 +56,10 @@ def _restore_regular_mesh(clients, node_ids, attempts: int = 3) -> None:
     """
     last: dict[str, set[int] | str] = {}
     for _ in range(attempts):
-        for client in clients.values():
-            client.start_regular_mesh(timeout=35)
+        # Together, not in turn: one at a time left the mesh split across
+        # two channels for minutes, long enough for the nodes already back
+        # to follow the ones still in gateway mode.
+        BoardClient.restart_all_regular(clients, timeout=35)
 
         deadline = time.monotonic() + 120
         while time.monotonic() < deadline:
