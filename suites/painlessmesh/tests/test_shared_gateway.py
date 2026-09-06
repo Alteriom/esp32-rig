@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from alteriom_hil.protocol import BoardClient
+
 pytestmark = [
     pytest.mark.hil_only(reason="peripheral"),
     pytest.mark.failure_class("real_bug"),
@@ -47,8 +49,9 @@ def shared_gateway_mesh(mesh):
             time.sleep(2)
         yield clients, states, endpoint
     finally:
+        # Together, not in turn: see BoardClient.restart_all_regular.
+        BoardClient.restart_all_regular(clients, timeout=35)
         for client in clients.values():
-            client.start_regular_mesh(timeout=35)
             client.clear_pending()
         for board_id, client in clients.items():
             expected = len(clients) - 1
