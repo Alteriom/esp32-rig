@@ -26,6 +26,8 @@
 //   error
 //   mesh_log — painlessMesh's own log lines, framed so they cannot splice
 //   into a protocol frame; the HAL keeps them in the serial log only
+//   capacity_warning — ESP8266 only: below 12 KB free with more than one
+//   AP child; the part is specified as a leaf in meshes that size
 //************************************************************
 #include <painlessMesh.h>
 
@@ -934,6 +936,33 @@ void loop() {
     stallUntil = 0;
   }
   mesh.update();
+#ifdef ESP8266
+  // The ESP8266 is specified for small meshes, or as a leaf in larger ones:
+  // as an interior node of a seven-node mesh it runs at 10–13 KB free, and
+  // an 8 KB package or an OTA part can then fail to allocate. That is the
+  // part's limit, not a defect, and the rig must record when a run has put
+  // the board outside its envelope — so the condition is a structured
+  // event, not only the library's ERROR line. Computed here rather than
+  // read from the library so this agent builds against any painlessMesh
+  // ref the farm is asked to validate.
+  static uint32_t capacityCheckedAt = 0;
+  if (millis() - capacityCheckedAt > 30000) {
+    capacityCheckedAt = millis();
+    size_t children = 0;
+    for (auto &sub : mesh.subs) {
+      if (sub && sub->connected() && !sub->station) ++children;
+    }
+    uint32_t freeHeap = ESP.getFreeHeap();
+    if (freeHeap < 12 * 1024 && children > 1) {
+      JsonDocument doc;
+      doc["evt"] = "capacity_warning";
+      doc["freeHeap"] = freeHeap;
+      doc["apChildren"] = children;
+      doc["spec"] = "esp8266: leaf only in meshes this size";
+      emitEvent(doc);
+    }
+  }
+#endif
   // Commands first, then diagnostics, and only while nothing is waiting to be
   // read. Draining before pumping let a burst of scan logging sit in front of
   // a command that had already arrived.
