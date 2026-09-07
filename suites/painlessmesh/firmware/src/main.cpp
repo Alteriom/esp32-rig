@@ -67,6 +67,17 @@ constexpr const char *HIL_OTA_FILE = "/hil-ota.bin";
 Scheduler userScheduler;
 painlessMesh mesh;
 
+// Every reboot the host asks for is an orderly one: the mesh is stopped
+// first, so a bridge announces that it is stepping down and the candidates
+// hold their election now rather than a minute after its last status. A
+// node that loses power says nothing, and that path stays as slow as the
+// status timeout makes it.
+void restartAgent() {
+  mesh.stop();
+  delay(200);
+  ESP.restart();
+}
+
 uint32_t stallUntil = 0;
 uint32_t bootId = 0;
 // One line buffer per console: bytes from two ports interleaved into a
@@ -288,8 +299,7 @@ void handleOtaReceiveEnable(JsonDocument &cmd) {
   doc["role"] = role;
   emitEvent(doc);
   consoleFlush();
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleOtaUploadBegin(JsonDocument &cmd) {
@@ -486,8 +496,7 @@ void startRegularMesh() {
   doc["evt"] = "mesh_restarting";
   emitEvent(doc);
   consoleFlush();
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleMeshConfigure(JsonDocument &cmd) {
@@ -514,8 +523,7 @@ void handleMeshConfigure(JsonDocument &cmd) {
   doc["meshPrefix"] = prefix;
   emitEvent(doc);
   consoleFlush();
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleGatewayStart(JsonDocument &cmd) {
@@ -538,8 +546,7 @@ void handleGatewayStart(JsonDocument &cmd) {
   doc["passwordLength"] = password.length();
   emitEvent(doc);
   consoleFlush();
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleGatewayFailoverStart(JsonDocument &cmd) {
@@ -561,8 +568,7 @@ void handleGatewayFailoverStart(JsonDocument &cmd) {
   doc["ssidLength"] = ssid.length();
   doc["passwordLength"] = password.length();
   emitEvent(doc);
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleSharedGatewayStart(JsonDocument &cmd) {
@@ -590,8 +596,7 @@ void handleSharedGatewayStart(JsonDocument &cmd) {
   doc["passwordLength"] = password.length();
   emitEvent(doc);
   consoleFlush();
-  delay(200);
-  ESP.restart();
+  restartAgent();
 }
 
 void handleInternetSend(JsonDocument &cmd) {
