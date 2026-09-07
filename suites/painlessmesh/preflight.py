@@ -26,6 +26,12 @@ def validate_info(board, info: dict, manifest: dict) -> list[str]:
     for field, value in expected.items():
         if info.get(field) != value:
             errors.append(f"{field}: expected {value!r}, got {info.get(field)!r}")
+    # The base image is OTA generation 1. A board still running the
+    # generation-2 image the OTA test sent it matches on every other field,
+    # and a run that reuses a flash on the strength of this check must not
+    # take it for the base image.
+    if "otaGeneration" in info and info["otaGeneration"] != 1:
+        errors.append(f"otaGeneration: expected 1, got {info['otaGeneration']!r}")
     return errors
 
 
