@@ -6,6 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 import pytest
@@ -322,6 +323,153 @@ def test_gateway_relays_again_after_upstream_request_failure(gateway_mesh):
     )
     assert recovered["success"] is True
     assert recovered["httpStatus"] == 200
+
+
+def _unreachable_targets(endpoint: str, tag: str) -> dict:
+    """Destinations that fail *below* HTTP, where HTTPClient returns a negative
+    code rather than a status.
+
+    Every error case this module had before pointed at the probe and asked it
+    for a status — 400, 503 — which is a positive int on the wire. The branch
+    that handles a request which never reached a server had no hardware
+    coverage at all, and that is where painlessMesh #446 lived.
+    """
+    host = urlparse(endpoint).hostname
+    return {
+        # TCP refused: the discard port has nothing listening on it.
+        "refused": f"http://{host}:9/refused?tag={tag}",
+        # DNS failure: .invalid is reserved and never resolves (RFC 2606).
+        "unresolvable": f"http://probe.invalid/nowhere?tag={tag}",
+        # Read timeout: the probe stalls well past GATEWAY_HTTP_TIMEOUT_MS,
+        # which is NODE_TIMEOUT/5 — two seconds at the library's defaults.
+        "timeout": f"{endpoint}/delay/5?tag={tag}",
+    }
+
+
+@pytest.mark.capability("gateway.local_internet")
+def test_bridge_reports_internet_on_its_own_uplink(gateway_mesh):
+    """painlessMesh #445.
+
+    `sendToInternet()` short-circuits on `hasLocalInternet()` so a node with its
+    own uplink serves the request itself instead of routing it to a peer. That
+    flag is driven only by the Internet health checker, and `initAsBridge()`
+    never started it — only `initAsSharedGateway()` did. On a bridge the flag
+    was therefore false for the life of the node.
+
+    This suite did assert on `hasLocalInternet`, but only on the *sender*, where
+    it asserts False. Nothing here has ever asserted that a bridge reports True,
+    which is exactly the flag that was never being set.
+    """
+    _require_upstream(gateway_mesh)
+    gateway = gateway_mesh["gateway"]
+
+    # The checker's first run happens before the station has associated, and it
+    # then waits a full interval (30 s by default). Allow three.
+    deadline = time.monotonic() + 100
+    state = gateway.gateway_status(timeout=10)
+    while not state["hasLocalInternet"] and time.monotonic() < deadline:
+        time.sleep(2)
+        state = gateway.gateway_status(timeout=10)
+
+    assert state["isBridge"] is True, state
+    assert state["hasLocalInternet"] is True, (
+        "the bridge has an associated station and an IP but never reported "
+        f"local Internet, so sendToInternet() cannot use its own uplink: {state}"
+    )
+
+
+@pytest.mark.capability("internet.self", "internet.get")
+def test_bridge_relays_its_own_request(gateway_mesh):
+    """painlessMesh #445, the user-visible half.
+
+    Every other test in this module makes the *sender* the originator. The
+    bridge is never asked to call `sendToInternet()` itself, which is what the
+    reporter's sketch did and what failed with "No active mesh connections".
+
+    The bridge is the only gateway in this mesh, so a successful relay here
+    cannot have gone through a peer: `getPrimaryBridge()` would return the
+    bridge itself and there is no route from a node to itself. Success proves
+    the local path ran.
+    """
+    _require_upstream(gateway_mesh)
+    gateway = gateway_mesh["gateway"]
+    tag = f"self-{time.time_ns()}"
+
+    message_id = gateway.send_to_internet(
+        tag, f"{gateway_mesh['endpoint']}/status/200?tag={tag}"
+    )
+    assert message_id > 0
+    result = gateway.wait_internet_result(tag, timeout=90)
+
+    assert result["success"] is True, result
+    assert result["httpStatus"] == 200, result
+
+    with urlopen(f"{gateway_mesh['endpoint']}/requests/{tag}", timeout=5) as response:
+        observed = json.load(response)
+    assert observed["tag"] == tag
+
+
+@pytest.mark.capability("internet.transport_errors")
+@pytest.mark.parametrize("failure", ["refused", "unresolvable", "timeout"])
+def test_transport_failure_is_reported_as_a_network_error(gateway_mesh, failure):
+    """painlessMesh #446.
+
+    The gateway stored `HTTPClient`'s `int` result in a `uint16_t`, so
+    `HTTPC_ERROR_CONNECTION_REFUSED` (-1) wrapped to 65535 — a value that passes
+    `httpCode > 0`. Three things followed: the node was told "HTTP 65535", the
+    `errorToString()` branch was unreachable, and `handleGatewayAck()` filed a
+    retryable network failure as a permanent HTTP status.
+
+    A transport failure must arrive as status 0 — the value the origin node
+    already treats as retryable — carrying the real reason in the error string.
+    """
+    _require_upstream(gateway_mesh)
+    sender = gateway_mesh["sender"]
+    tag = f"{failure}-{time.time_ns()}"
+    url = _unreachable_targets(gateway_mesh["endpoint"], tag)[failure]
+
+    message_id = sender.send_to_internet(tag, url)
+    assert message_id > 0
+    # Generous: the library retries with exponential backoff before reporting,
+    # and the timeout case spends GATEWAY_HTTP_TIMEOUT_MS on every attempt.
+    result = sender.wait_internet_result(tag, timeout=120)
+
+    assert result["success"] is False, result
+    assert result["httpStatus"] == 0, (
+        "a request that never reached a server has no HTTP status; 65535 is the "
+        f"truncated -1 from issue #446: {result}"
+    )
+    assert result["error"], f"a transport failure must carry a real reason: {result}"
+    assert "65535" not in str(result["error"]), result
+
+
+@pytest.mark.capability("internet.transport_errors", "internet.recovery")
+def test_relay_still_works_after_a_transport_failure(gateway_mesh):
+    """A failure below HTTP must not poison the relay.
+
+    The module already proves this for an HTTP-level failure (503). A transport
+    failure takes a different path through the gateway — no `http.begin()`
+    success, no response to read — so it needs its own recovery evidence.
+    """
+    _require_upstream(gateway_mesh)
+    sender = gateway_mesh["sender"]
+
+    failed_tag = f"transport-fail-{time.time_ns()}"
+    failed = sender.send_to_internet(
+        failed_tag,
+        _unreachable_targets(gateway_mesh["endpoint"], failed_tag)["refused"],
+    )
+    assert failed > 0
+    failure = sender.wait_internet_result(failed_tag, timeout=120)
+    assert failure["success"] is False, failure
+    assert failure["httpStatus"] == 0, failure
+
+    recovered_tag = f"transport-ok-{time.time_ns()}"
+    recovered = _send_and_wait(
+        gateway_mesh, recovered_tag, f"/status/200?tag={recovered_tag}"
+    )
+    assert recovered["success"] is True, recovered
+    assert recovered["httpStatus"] == 200, recovered
 
 
 @pytest.mark.capability("gateway.failover", "internet.recovery")
