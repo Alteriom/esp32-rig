@@ -1,0 +1,81 @@
+# painlessMesh: the farm's first consumer.
+#
+# This document describes what farm_service.py used to hardcode. It is the
+# reference for the schema in runner/profiles.py -- if a field here is unclear,
+# that module is where it is validated and rendered.
+#
+# Behaviour must stay identical to the pre-profile service. painlessMesh is the
+# production consumer and the release gate in docs/validation-matrix.md; this
+# file is a description of a working pipeline, not a place to tune it.
+
+schema: 1
+name: painlessmesh
+label: painlessMesh reference validation
+
+source:
+  # The suite lives in THIS repository, under suites/painlessmesh/, and that is
+  # deliberate rather than legacy: painlessMesh is a public library and can hold
+  # no credential for this private farm. The farm therefore owns the suite and
+  # polls the library (see runner/watch_painlessmesh.py).
+  location: farm
+  repo: https://github.com/Alteriom/painlessMesh.git
+  default_ref: main
+
+build:
+  command:
+    - "{python}"
+    - suites/painlessmesh/build_artifacts.py
+    - --ref
+    - "{ref}"
+    - --out
+    - "{artifact_dir}"
+  # Repeated once per requested MCU family.
+  target_option: --target
+  # The manifest key carrying the commit the build actually resolved to. A
+  # branch is a moving name; every downstream stage is pinned to this.
+  revision_key: painlessmesh_sha
+
+flash:
+  command:
+    - "{python}"
+    - suites/painlessmesh/flash_all.py
+    - --skip-build
+    - --artifacts
+    - "{artifact_dir}"
+
+preflight:
+  # The HIL agent answers a JSON info command with the revision it is running,
+  # which is what lets a re-run skip the flash when the boards already carry
+  # this build. A profile running stock product firmware has no such protocol
+  # and simply omits this section.
+  command:
+    - "{python}"
+    - suites/painlessmesh/preflight.py
+    - --board-map
+    - "{board_map}"
+    - --manifest
+    - "{manifest}"
+    - --out
+    - "{preflight}"
+    - --log-dir
+    - "{log_dir}"
+  timeout_seconds: 180
+
+suite:
+  path: suites/painlessmesh/tests
+  # A mesh needs peers: one board cannot form one, and the suite's own
+  # assertions start at two.
+  min_boards: 2
+  # Takes the whole bank. A second run touching any board would corrupt the
+  # mesh under test.
+  exclusive: true
+  # A healthy suite takes about fourteen minutes; a failing failover test adds
+  # seven or more of waits and restores. The limit exists so a wedged fixture
+  # cannot hold the farm, not to cut a failing run short of its evidence.
+  timeout_seconds: 1800
+
+env:
+  PAINLESSMESH_REF: "{revision}"
+
+report:
+  title: "HIL painlessMesh {revision}"
