@@ -13,6 +13,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# The manifest contract moved to the HAL: it is the build/flash interface for
+# every consumer, not something painlessMesh owns. Re-exported here so this
+# module stays the import site its callers already use.
+from alteriom_hil.artifacts import load_artifacts, sha256  # noqa: F401
+
 FIRMWARE_DIR = Path(__file__).resolve().parent / "firmware"
 DEFAULT_OUT = Path(os.environ.get("ALTERIOM_HIL_ARTIFACT_DIR", "hil-firmware"))
 
@@ -80,12 +85,6 @@ def core_dir_for(name: str) -> Path:
     return root / name
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def agent_source_sha() -> str:
@@ -294,40 +293,6 @@ def build_artifacts(ref: str, out_dir: Path, names: list[str] | None = None) -> 
         encoding="utf-8",
     )
     print(f"artifact manifest: {manifest}")
-    return manifest
-
-
-def load_artifacts(directory: Path) -> dict[str, dict]:
-    manifest_path = directory / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != 2:
-        raise ValueError(f"unsupported artifact manifest: {manifest_path}")
-    for name, entry in manifest.get("targets", {}).items():
-        image = directory / entry["image"]
-        if not image.is_file():
-            raise FileNotFoundError(f"artifact image missing for {name}: {image}")
-        actual = sha256(image)
-        if actual != entry["sha256"]:
-            raise ValueError(f"artifact checksum mismatch for {name}: {image}")
-        ota = entry.get("ota")
-        if ota:
-            ota_image = directory / ota["image"]
-            if not ota_image.is_file() or sha256(ota_image) != ota["sha256"]:
-                raise ValueError(f"OTA artifact checksum mismatch for {name}: {ota_image}")
-            ota["path"] = ota_image
-        merged = image.read_bytes()
-        for filename, offset_text in entry.get("segments", {}).items():
-            component = directory / name / filename
-            metadata = entry["files"][filename]
-            if not component.is_file() or sha256(component) != metadata["sha256"]:
-                raise ValueError(f"component checksum mismatch for {name}: {filename}")
-            content = component.read_bytes()
-            offset = int(offset_text, 0)
-            if merged[offset : offset + len(content)] != content:
-                raise ValueError(
-                    f"merged image segment mismatch for {name}: {filename}"
-                )
-        entry["path"] = image
     return manifest
 
 
