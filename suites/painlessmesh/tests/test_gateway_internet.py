@@ -560,3 +560,178 @@ def test_backup_gateway_carries_traffic_after_primary_leaves(gateway_mesh):
     finally:
         if backup_started:
             backup.start_regular_mesh(timeout=35)
+
+
+# ---------------------------------------------------------------------------
+# painlessMesh #450
+# ---------------------------------------------------------------------------
+
+# The bridge health checker's periodic interval at the library's defaults.
+# initAsBridge() takes no config to shorten it, so the row below has to live
+# inside it.
+HEALTH_CHECK_INTERVAL_S = 30.0
+
+
+def _wait_for_relay_ready(gateway_mesh, timeout: float = 120.0, strict: bool = True):
+    """Block until the sender can relay through the (possibly rebooted) bridge.
+
+    The module fixture converged the mesh once, at setup. A row that reboots
+    the bridge leaves the sender to rejoin the bridge's channel and rediscover
+    its Internet advertisement -- the same two phases the fixture allows 120 s
+    for -- so the rows after it must poll the live state, not the fixture's
+    cached picture of it. With ``strict`` the wait fails the row; without it
+    (a teardown after a skip) it only gives the mesh its chance to settle.
+    """
+    gateway_node = gateway_mesh["node_ids"][gateway_mesh["gateway_id"]]
+    sender = gateway_mesh["sender"]
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        try:
+            if gateway_node in set(sender.node_list(timeout=10)):
+                last = sender.gateway_status(timeout=10)
+                if last["hasInternet"]:
+                    return last
+        except TimeoutWaitingFor:
+            pass
+        time.sleep(2)
+    if strict:
+        pytest.fail(
+            "the sender did not regain a route to a bridge with Internet within "
+            f"{timeout:.0f}s of the bridge restarting: {last}"
+        )
+    return last
+
+
+@pytest.mark.capability("internet.self.first_send", "internet.self")
+def test_bridge_relays_its_own_request_right_after_association(gateway_mesh):
+    """painlessMesh #450, the timing half.
+
+    The #445 rows above wait up to 100 s for `hasLocalInternet` before the
+    bridge sends anything. The reporter's sketch sent 8 s after boot. Both the
+    library and this suite had a hole the same shape: `initAsBridge()` arms the
+    health checker one line after it re-issues `WiFi.begin()`, the first probe
+    runs on the next scheduler pass while the station is still associating and
+    fails, and the next probe is a full interval (30 s) away. Every send in
+    that window fell through to the mesh path and was refused with "No active
+    mesh connections".
+
+    The window is therefore anchored to `initAsBridge()`, not to association:
+    the send has to leave before the periodic probe that follows the failed
+    one, or the unfixed library passes on its own once that probe has run.
+    `start_gateway()` returns on the event the agent emits right after
+    `initAsBridge()`, so its return is the anchor, and a send that cannot leave
+    inside the interval is a skipped row, never a passed one. The assertion
+    that fails on the unfixed library is `message_id > 0`.
+    """
+    _require_upstream(gateway_mesh)
+    gateway = gateway_mesh["gateway"]
+    ssid, password, endpoint = _gateway_settings()
+
+    try:
+        state = gateway.start_gateway(ssid, password)
+        initialized_at = time.monotonic()
+        association_deadline = initialized_at + 45
+        while int(state["wifiStatus"]) != 3 and time.monotonic() < association_deadline:
+            time.sleep(1)
+            state = gateway.gateway_status(timeout=10)
+        if int(state["wifiStatus"]) != 3 or state["localIP"] == "0.0.0.0":
+            pytest.skip(f"blocked: the bridge did not re-associate upstream: {state}")
+
+        # A margin under the interval covers serial latency and the send
+        # itself. Association slower than that is a rig condition, not a
+        # library verdict: the window has closed, and a send now would tell
+        # nothing about the code under test.
+        if time.monotonic() - initialized_at > HEALTH_CHECK_INTERVAL_S - 5.0:
+            pytest.skip(
+                "blocked: association took longer than the first health-check "
+                "interval, so the window this row measures had already closed"
+            )
+
+        tag = f"first-send-{time.time_ns()}"
+        message_id = gateway.send_to_internet(tag, f"{endpoint}/status/200?tag={tag}")
+        sent_after = time.monotonic() - initialized_at
+        assert sent_after < HEALTH_CHECK_INTERVAL_S, (
+            f"the send left {sent_after:.1f}s after initAsBridge(), past the first "
+            "health-check interval, so this row no longer exercises the window"
+        )
+        assert message_id > 0, (
+            "sendToInternet() refused the bridge's own request right after "
+            "association -- painlessMesh #450: the first health probe ran during "
+            "station association, failed, and nothing re-probed before the send"
+        )
+
+        result = gateway.wait_internet_result(tag, timeout=90)
+        assert result["success"] is True, result
+        assert result["httpStatus"] == 200, result
+
+        with urlopen(f"{endpoint}/requests/{tag}", timeout=5) as response:
+            observed = json.load(response)
+        assert observed["tag"] == tag
+    finally:
+        # The bridge rebooted. Hand the rows that follow a converged mesh; a
+        # skip above must stay a skip, so this wait does not fail the row.
+        _wait_for_relay_ready(gateway_mesh, strict=False)
+
+
+# profile -> delivered. Mirrors runner/gateway_probe_server.py, which mirrors
+# painlessMesh's test/mock-http-server/server.py; the two 208 profiles are the
+# two readings of the reporter's HTTP 208.
+CALLMEBOT_PROFILES = {
+    "queued": True,
+    "ratelimit-203": False,
+    "ratelimit-201": False,
+    "queued-208": True,
+    "error-208": False,
+}
+
+
+@pytest.mark.capability("internet.service_semantics")
+@pytest.mark.parametrize("profile", sorted(CALLMEBOT_PROFILES))
+def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
+    """painlessMesh #450, the verdict half.
+
+    The reporter's bridge reached CallMeBot, got HTTP 208, and reported
+    "Ambiguous response ... not actual delivery". CallMeBot does not encode
+    delivery in the status: probed while triaging, it answered a rate-limit
+    refusal with 203 and with 201 -- the same HTML error page under both -- and
+    201 is on the library's success list. The gateway also discards the body,
+    so the origin node is told a number and nothing else.
+
+    Every row above asks the probe for a status and checks that the gateway
+    repeated it. This one asks the probe what it *did* and checks that the
+    gateway's verdict agrees, and that a refusal reaches the origin node with
+    the service's own reason attached.
+    """
+    _require_upstream(gateway_mesh)
+    # The row before this one rebooted the bridge; the fixture's cached state
+    # says nothing about whether the sender has rejoined it yet.
+    _wait_for_relay_ready(gateway_mesh)
+    sender = gateway_mesh["sender"]
+    endpoint = gateway_mesh["endpoint"]
+    tag = f"{profile}-{time.time_ns()}"
+    url = (
+        f"{endpoint}/callmebot/whatsapp.php"
+        f"?phone=%2B10000000000&apikey={profile}&text={tag}"
+    )
+
+    message_id = sender.send_to_internet(tag, url)
+    assert message_id > 0
+    # 203 is retried with backoff before the library reports; allow for it.
+    result = sender.wait_internet_result(tag, timeout=120)
+
+    with urlopen(f"{endpoint}/requests/{tag}", timeout=5) as response:
+        observed = json.load(response)
+    assert observed["tag"] == tag, observed
+    delivered = observed["delivered"]
+
+    assert result["success"] is delivered, (
+        f"the service {'delivered' if delivered else 'refused'} the message "
+        f"(HTTP {observed['status']}, body {observed['response']!r}) but the "
+        f"gateway reported {result}"
+    )
+    if not delivered:
+        assert "Too many requests" in str(result["error"]), (
+            "a refusal must carry the service's reason to the origin node, "
+            f"not only a status code: {result}"
+        )
