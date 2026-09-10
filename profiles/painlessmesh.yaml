@@ -79,3 +79,8 @@ env:
 
 report:
   title: "HIL painlessMesh {revision}"
+  # What this suite claims to prove, keyed by the names its tests carry in
+  # @pytest.mark.capability(...). This is the suite's statement, so it lives
+  # beside the suite; it used to be a dict inside alteriom_hil.report, and
+  # every consumer's report rendered it.
+  capabilities: suites/painlessmesh/capabilities.json
