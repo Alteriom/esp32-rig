@@ -6,6 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
@@ -590,14 +591,19 @@ def _wait_for_relay_ready(gateway_mesh, timeout: float = 120.0, strict: bool = T
         try:
             if gateway_node in set(sender.node_list(timeout=10)):
                 last = sender.gateway_status(timeout=10)
-                if last["hasInternet"]:
+                # Its gateway, specifically: a node the failover row demoted
+                # stays in the sender's list for the library's 60 s bridge
+                # timeout and can win on RSSI. Rows that measure something
+                # else must not depend on how that plays out; the stale case
+                # has its own row, test_a_rebooted_bridge_answers_...
+                if last["hasInternet"] and int(last["primaryGateway"]) == gateway_node:
                     return last
         except TimeoutWaitingFor:
             pass
         time.sleep(2)
     if strict:
         pytest.fail(
-            "the sender did not regain a route to a bridge with Internet within "
+            "the sender did not come to route through the live bridge within "
             f"{timeout:.0f}s of the bridge restarting: {last}"
         )
     return last
@@ -747,3 +753,100 @@ def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
             "a non-delivery must carry the service's words to the origin node, "
             f"not only a status code: expected {phrase!r} in {result}"
         )
+
+
+# The library trusts a bridge's last status for bridgeTimeoutMs, 60 s by default.
+BRIDGE_TIMEOUT_S = 60.0
+
+
+@pytest.mark.capability("gateway.stale_after_reboot", "internet.recovery")
+def test_a_rebooted_bridge_answers_instead_of_going_silent(gateway_mesh):
+    """A bridge that reboots as a regular node must not swallow requests.
+
+    Found by this suite while validating painlessMesh 2.0.3: the failover row
+    reboots its promoted backup as a regular node, a reboot announces nothing
+    (only a bridge stepping down in-process sends `leaving`), and the sender
+    kept routing to it for the library's 60 s bridge timeout. A regular node
+    had no gateway handler, dropped each request without a reply, and the
+    sender reported "Request timed out" 30 s later. Any crash, power loss or
+    reflash of a bridge does the same.
+
+    That rig state depended on which node won on RSSI. This row makes it
+    deterministic: the sender's only gateway reboots as a regular node, and
+    the sender sends while it still trusts the stale advertisement. On the
+    unfixed library the request times out after 30 s; fixed, the ex-bridge
+    answers, and the sender fails at once, naming it. Then the bridge comes
+    back and the sender uses it again.
+    """
+    _require_upstream(gateway_mesh)
+    _wait_for_relay_ready(gateway_mesh)
+    gateway = gateway_mesh["gateway"]
+    sender = gateway_mesh["sender"]
+    bridge_node = gateway_mesh["node_ids"][gateway_mesh["gateway_id"]]
+    ssid, password, endpoint = _gateway_settings()
+
+    # Anchor the window on a fresh advertisement, so the reboot and rejoin
+    # fit inside the 60 s the sender will still trust it.
+    sender.clear_pending()
+    marker = f"Bridge status received from {bridge_node}"
+    sender.wait_for(
+        lambda e: e.get("evt") == "mesh_log" and marker in str(e.get("line", "")),
+        "a bridge status from the bridge",
+        timeout=45,
+    )
+    heard_at = time.monotonic()
+
+    # A reboot into the regular role: nothing is announced.
+    gateway.start_regular_mesh(timeout=35)
+
+    window_closes = heard_at + BRIDGE_TIMEOUT_S - 10
+    state = None
+    while time.monotonic() < window_closes:
+        try:
+            if bridge_node in set(sender.node_list(timeout=10)):
+                state = sender.gateway_status(timeout=10)
+                break
+        except TimeoutWaitingFor:
+            pass
+        time.sleep(1)
+    if state is None or int(state["primaryGateway"]) != bridge_node:
+        pytest.skip(
+            "blocked: the ex-bridge did not rejoin while the sender still trusted "
+            f"its last status, so the stale path was not exercised: {state}"
+        )
+
+    tag = f"stale-{time.time_ns()}"
+    started = time.monotonic()
+    message_id = sender.send_to_internet(tag, f"{endpoint}/status/200?tag={tag}")
+    assert message_id > 0
+    result = sender.wait_internet_result(tag, timeout=60)
+    elapsed = time.monotonic() - started
+
+    assert result["success"] is False, result
+    assert "not an Internet gateway" in str(result["error"]), (
+        "a node that is no longer a gateway must say so; waiting out the "
+        f"request timeout is the bug: {result}"
+    )
+    assert elapsed < 15, (
+        f"the answer took {elapsed:.1f}s; a silent drop is what takes 30 s: {result}"
+    )
+    try:
+        urlopen(f"{endpoint}/requests/{tag}", timeout=5)
+        pytest.fail("the probe saw a request no gateway should have made")
+    except HTTPError as exc:
+        assert exc.code == 404
+
+    # The bridge returns, advertises, and the sender uses it again.
+    restarted = gateway.start_gateway(ssid, password)
+    association_deadline = time.monotonic() + 45
+    while int(restarted["wifiStatus"]) != 3 and time.monotonic() < association_deadline:
+        time.sleep(1)
+        restarted = gateway.gateway_status(timeout=10)
+    _wait_for_relay_ready(gateway_mesh)
+
+    tag = f"stale-recovered-{time.time_ns()}"
+    message_id = sender.send_to_internet(tag, f"{endpoint}/status/200?tag={tag}")
+    assert message_id > 0
+    result = sender.wait_internet_result(tag, timeout=90)
+    assert result["success"] is True, result
+    assert result["httpStatus"] == 200, result
