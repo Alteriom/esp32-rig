@@ -674,15 +674,20 @@ def test_bridge_relays_its_own_request_right_after_association(gateway_mesh):
         _wait_for_relay_ready(gateway_mesh, strict=False)
 
 
-# profile -> delivered. Mirrors runner/gateway_probe_server.py, which mirrors
-# painlessMesh's test/mock-http-server/server.py; the two 208 profiles are the
-# two readings of the reporter's HTTP 208.
+# profile -> (delivered, words the origin node must be told on a non-delivery).
+# Mirrors runner/gateway_probe_server.py, which mirrors painlessMesh's
+# test/mock-http-server/server.py. The 208 is painlessMesh #452's field
+# finding: CallMeBot answered it to a message that never arrived, so no body
+# makes it a delivery -- `queued-208` carries the delivered profile's own body
+# and must still come back as a failure. Each phrase is unique to the response
+# entity: "Already Reported" is also the HTTP reason phrase for 208, which a
+# gateway could echo without ever reading the body, so it is not used.
 CALLMEBOT_PROFILES = {
-    "queued": True,
-    "ratelimit-203": False,
-    "ratelimit-201": False,
-    "queued-208": True,
-    "error-208": False,
+    "queued": (True, ""),
+    "ratelimit-203": (False, "Too many requests"),
+    "ratelimit-201": (False, "Too many requests"),
+    "unverified-208": (False, "never arrived"),
+    "queued-208": (False, "Message queued"),
 }
 
 
@@ -695,8 +700,10 @@ def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
     "Ambiguous response ... not actual delivery". CallMeBot does not encode
     delivery in the status: probed while triaging, it answered a rate-limit
     refusal with 203 and with 201 -- the same HTML error page under both -- and
-    201 is on the library's success list. The gateway also discards the body,
-    so the origin node is told a number and nothing else.
+    201 was on the library's success list. The gateway also discarded the
+    body, so the origin node was told a number and nothing else. The first fix
+    then trusted every 2xx but 203, and the next report (#452) was the same
+    bridge printing the 208 as "sent" for a message that never arrived.
 
     Every row above asks the probe for a status and checks that the gateway
     repeated it. This one asks the probe what it *did* and checks that the
@@ -724,14 +731,19 @@ def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
         observed = json.load(response)
     assert observed["tag"] == tag, observed
     delivered = observed["delivered"]
+    expected_delivered, phrase = CALLMEBOT_PROFILES[profile]
+    assert delivered is expected_delivered, (
+        f"the probe's ledger disagrees with this suite's table for {profile}: "
+        f"{observed}"
+    )
 
     assert result["success"] is delivered, (
-        f"the service {'delivered' if delivered else 'refused'} the message "
-        f"(HTTP {observed['status']}, body {observed['response']!r}) but the "
-        f"gateway reported {result}"
+        f"the service {'delivered' if delivered else 'did not deliver'} the "
+        f"message (HTTP {observed['status']}, body {observed['response']!r}) "
+        f"but the gateway reported {result}"
     )
     if not delivered:
-        assert "Too many requests" in str(result["error"]), (
-            "a refusal must carry the service's reason to the origin node, "
-            f"not only a status code: {result}"
+        assert phrase in str(result["error"]), (
+            "a non-delivery must carry the service's words to the origin node, "
+            f"not only a status code: expected {phrase!r} in {result}"
         )
