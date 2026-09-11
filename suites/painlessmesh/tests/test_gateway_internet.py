@@ -786,15 +786,29 @@ def test_a_rebooted_bridge_answers_instead_of_going_silent(gateway_mesh):
     ssid, password, endpoint = _gateway_settings()
 
     # Anchor the window on a fresh advertisement, so the reboot and rejoin
-    # fit inside the 60 s the sender will still trust it.
-    sender.clear_pending()
-    marker = f"Bridge status received from {bridge_node}"
-    sender.wait_for(
-        lambda e: e.get("evt") == "mesh_log" and marker in str(e.get("line", "")),
-        "a bridge status from the bridge",
-        timeout=45,
-    )
-    heard_at = time.monotonic()
+    # fit inside the 60 s the sender will still trust it. The agent reports
+    # the age of the sender's record of its primary gateway; bridges advertise
+    # every 30 s, so a status younger than FRESH_MS arrives within one
+    # interval. (The first cut waited for the sender's "Bridge status
+    # received" mesh_log line, which the host capture keeps in the raw log
+    # and never delivers as an event, so it could not match on any run.)
+    FRESH_MS = 3000
+    anchor_deadline = time.monotonic() + 45
+    state = sender.gateway_status(timeout=10)
+    if "primaryGatewayAgeMs" not in state:
+        pytest.fail(f"the HIL agent does not report primaryGatewayAgeMs: {state}")
+    while not (
+        int(state["primaryGateway"]) == bridge_node
+        and 0 <= int(state["primaryGatewayAgeMs"]) <= FRESH_MS
+    ):
+        if time.monotonic() >= anchor_deadline:
+            pytest.fail(
+                "the sender did not hear a fresh status from the bridge within "
+                f"45 s, although bridges advertise every 30 s: {state}"
+            )
+        time.sleep(0.5)
+        state = sender.gateway_status(timeout=10)
+    heard_at = time.monotonic() - int(state["primaryGatewayAgeMs"]) / 1000.0
 
     # A reboot into the regular role: nothing is announced.
     gateway.start_regular_mesh(timeout=35)

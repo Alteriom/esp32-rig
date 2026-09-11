@@ -475,9 +475,23 @@ void emitGatewayStatus(const char *eventName, bool initialized = true) {
   doc["wifiStatus"] = (int)WiFi.status();
   doc["localIP"] = WiFi.localIP().toString();
   doc["channel"] = WiFi.channel();
-  doc["primaryGateway"] = mesh.getPrimaryGateway();
+  const uint32_t primaryGateway = mesh.getPrimaryGateway();
+  doc["primaryGateway"] = primaryGateway;
   JsonArray gateways = doc["gateways"].to<JsonArray>();
   for (auto gatewayId : mesh.getGateways()) gateways.add(gatewayId);
+  // How long ago this node last heard the primary gateway's status, or -1 when
+  // it has no record of it. The library trusts a status for bridgeTimeoutMs
+  // (60 s); a row that must act inside that window anchors on this. The
+  // `mesh_log` line saying the same is diagnostic only -- the host capture
+  // keeps it in the raw log and never delivers it as an event.
+  long primaryGatewayAgeMs = -1;
+  for (const auto &bridge : mesh.getBridges()) {
+    if (bridge.nodeId == primaryGateway) {
+      primaryGatewayAgeMs = static_cast<long>(millis() - bridge.lastSeen);
+      break;
+    }
+  }
+  doc["primaryGatewayAgeMs"] = primaryGatewayAgeMs;
   emitEvent(doc);
 }
 
