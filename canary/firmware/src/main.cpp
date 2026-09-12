@@ -235,32 +235,31 @@ void replyHttpGet(JsonDocument &cmd) {
   }
   client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + authority +
                "\r\nConnection: close\r\nUser-Agent: alteriom-canary\r\n\r\n");
-  String status;
-  while (client.connected() && millis() - started < budget) {
-    if (!client.available()) {
-      delay(5);
-      continue;
-    }
-    status = client.readStringUntil('\n');
-    break;
-  }
+  // Wait for the answer, not for the connection. The rig's probe replies
+  // HTTP/1.0 and closes at once, which leaves `connected()` false with the
+  // response still in the receive buffer -- so a loop gated on it read
+  // nothing and gave up in 28 ms, and the canary reported the rig's uplink
+  // unreachable from the ESP8266 while every other board got its 200.
+  // readStringUntil waits up to the timeout set above and reads what is
+  // buffered whether the peer is still there or not.
+  const String status = client.readStringUntil('\n');
+  // Whatever else arrived, counted so the answer says how much came back.
+  // No `connected()` here either, for the same reason.
   size_t bytes = 0;
-  while (client.connected() && millis() - started < budget) {
-    if (!client.available()) {
-      delay(5);
-      continue;
-    }
+  while (millis() - started < budget) {
+    if (!client.available()) break;
     client.read();
     bytes++;
   }
   client.stop();
-  status.trim();
+  String line = status;
+  line.trim();
   int code = 0;
-  const int space = status.indexOf(' ');
-  if (space > 0) code = status.substring(space + 1).toInt();
+  const int space = line.indexOf(' ');
+  if (space > 0) code = line.substring(space + 1).toInt();
   doc["status"] = code;
   doc["ok"] = code >= 200 && code < 400;
-  doc["statusLine"] = status;
+  doc["statusLine"] = line;
   doc["bytes"] = bytes;
   doc["ms"] = millis() - started;
   emit(doc);
