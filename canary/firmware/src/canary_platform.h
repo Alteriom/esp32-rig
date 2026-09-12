@@ -157,6 +157,37 @@ inline const char *canaryResetReason() {
 #endif
 }
 
+// Open a console with room for a whole line before the sketch reads it.
+//
+// A native USB-Serial/JTAG console starts with a 256-byte receive buffer and
+// the serial check deliberately sends a kilobyte. The canary's first run on
+// the rig lost that command on the S3, the C3 and the C5 -- each answered
+// `{"evt":"error","error":"bad json"}` to a truncated frame -- while the two
+// UART-bridge families echoed all 1033 bytes perfectly. The buffer, not the
+// cable, was the difference.
+//
+// A template because `Serial` is a different class per family (HardwareSerial,
+// USBCDC, HWCDC); every one of them has setRxBufferSize, and it must be called
+// before begin().
+template <typename Console>
+inline void canaryOpenConsole(Console &console, size_t rxBytes) {
+  console.setRxBufferSize(rxBytes);
+  console.begin(115200);
+}
+
+// WiFiClient::setTimeout is **seconds** on the ESP32 cores and
+// **milliseconds** on the ESP8266, where it is Stream's. Passing seconds to
+// the ESP8266 gave a TCP connect eight milliseconds to finish, and the
+// canary's first run reported the rig's uplink and its broker unreachable
+// from that board alone -- which reads as a rig fault and was a unit bug.
+inline void canarySetClientTimeout(WiFiClient &client, uint32_t budgetMs) {
+#if defined(ESP8266)
+  client.setTimeout(budgetMs);
+#else
+  client.setTimeout(budgetMs >= 1000 ? budgetMs / 1000 : 1);
+#endif
+}
+
 inline uint32_t canaryRandom() {
 #if defined(ESP8266)
   return RANDOM_REG32;

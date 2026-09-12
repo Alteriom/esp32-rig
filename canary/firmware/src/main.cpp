@@ -224,7 +224,7 @@ void replyHttpGet(JsonDocument &cmd) {
     authority = authority.substring(0, colon);
   }
   WiFiClient client;
-  client.setTimeout(budget / 1000 > 0 ? budget / 1000 : 1);
+  canarySetClientTimeout(client, budget);
   const uint32_t started = millis();
   if (!client.connect(authority.c_str(), port)) {
     doc["ok"] = false;
@@ -339,7 +339,7 @@ void replyMqttPublish(JsonDocument &cmd) {
   doc["clientId"] = clientId;
   const uint32_t started = millis();
   WiFiClient client;
-  client.setTimeout(budget / 1000 > 0 ? budget / 1000 : 1);
+  canarySetClientTimeout(client, budget);
   if (!client.connect(host.c_str(), port)) {
     doc["ok"] = false;
     doc["error"] = "connect failed";
@@ -409,8 +409,12 @@ void handle(const String &raw) {
   }
 }
 
-void pump(Stream &console) {
+// Returns whether anything was read, so the loop can keep draining while a
+// long command is still arriving rather than sleeping in the middle of it.
+bool pump(Stream &console) {
+  bool read = false;
   while (console.available()) {
+    read = true;
     const char c = static_cast<char>(console.read());
     if (c == '\r') continue;
     if (c == '\n') {
@@ -429,12 +433,16 @@ void pump(Stream &console) {
     }
     line += c;
   }
+  return read;
 }
 
 void setup() {
-  Serial.begin(115200);
+  // Room for a whole line and then some: the serial check sends a kilobyte,
+  // and a console whose buffer is smaller loses the end of it before this
+  // sketch is ever scheduled.
+  canaryOpenConsole(Serial, kLineMax + 512);
 #if CANARY_HAS_SECOND_CONSOLE
-  CANARY_SECOND_CONSOLE.begin(115200);
+  canaryOpenConsole(CANARY_SECOND_CONSOLE, kLineMax + 512);
 #endif
   delay(200);
   line.reserve(kLineMax + 1);
@@ -458,9 +466,12 @@ void setup() {
 }
 
 void loop() {
-  pump(Serial);
+  // Drain while anything keeps arriving. A kilobyte-long command arrives in
+  // packets, and sleeping in the middle of one is the other half of how a
+  // small buffer loses it.
+  bool busy = pump(Serial);
 #if CANARY_HAS_SECOND_CONSOLE
-  pump(CANARY_SECOND_CONSOLE);
+  busy = pump(CANARY_SECOND_CONSOLE) || busy;
 #endif
-  delay(2);
+  if (!busy) delay(2);
 }
