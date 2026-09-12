@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "What the farm canary claims to prove, keyed by the names its checks carry",
+    "in @pytest.mark.capability(...). The report renders one row per entry --",
+    "validated, failed, blocked, skipped, or NOT VALIDATED when no check in the",
+    "run provided evidence for it.",
+    "",
+    "Every entry here is about hardware the farm owns: an ESP, a cable, a hub,",
+    "the rig's access point, its broker, its uplink. None of it is about",
+    "painlessMesh or about any consumer's firmware, which is the point -- a red",
+    "canary must never be read as somebody's regression.",
+    "",
+    "Each check runs once per board, so a capability that failed names the",
+    "boards it failed on: red on every board is the farm, red on one is that",
+    "board."
+  ],
+  "esp.boot": "Every board starts, answers, and reports its silicon, heap, flash and reset reason",
+  "esp.serial": "Every board returns a kilobyte-long line byte for byte over its console",
+  "esp.flash": "Every board writes a key to NVS (LittleFS on the ESP8266), reads it back, and erases it",
+  "esp.reset": "The rig restarts every board over its reset lines, proven by a new boot id",
+  "esp.radio.scan": "Every board's receiver sees the rig access point, with a plausible RSSI",
+  "esp.radio.join": "Every board associates with the rig access point and is given a DHCP lease",
+  "farm.uplink": "The rig's gateway probe answers every board over the rig network",
+  "farm.queue": "The rig's MQTT broker accepts a message published by every board"
+}

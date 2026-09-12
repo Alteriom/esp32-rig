@@ -1,0 +1,92 @@
+# The farm canary: the farm validating itself.
+#
+# Every other profile answers "is this project's firmware good on this
+# hardware". This one answers "is this hardware good", and it is the farm's
+# own question -- so the firmware it flashes is the farm's own
+# (canary/firmware/), carrying nothing from painlessMesh and nothing from a
+# consumer. A red canary is never somebody's regression; it is an ESP, a
+# cable, a hub, the rig's AP, its broker or its uplink.
+#
+# docs/canary.md is the firmware's protocol and the suite's checks;
+# docs/artifact-first-plan.md step 3 is why it exists.
+
+schema: 1
+name: canary
+label: Farm canary
+
+source:
+  # The canary is this repository's, like painlessMesh's suite -- but unlike
+  # painlessMesh there is no library to fetch: the firmware source is here
+  # too, so a canary run builds what the deployed checkout holds.
+  location: farm
+  repo: https://github.com/Alteriom/alteriom-esp32-farm
+  default_ref: main
+
+build:
+  command:
+    - "{python}"
+    - canary/build_artifacts.py
+    - --out
+    - "{artifact_dir}"
+  target_option: --target
+  # The farm commit the canary was built from. `canary_sha` -- the digest of
+  # canary/firmware/ -- travels in the manifest beside it and is what a board
+  # reports over serial, but the revision of record is the commit: it is what
+  # a bundle is reused by, what the dashboard links, and what says which
+  # release a board's verdict belongs to. Two releases that did not touch the
+  # canary share a `canary_sha`, which is what lets a deploy skip the build.
+  revision_key: farm_sha
+
+flash:
+  # The farm's own project-agnostic flasher: the canary supplies a build
+  # script and gets flashing for free, which is the point of the contract.
+  command:
+    - "{python}"
+    - runner/flash_artifacts.py
+    - --artifacts
+    - "{artifact_dir}"
+    - --board-map
+    - "{board_map}"
+    - --revision-key
+    - farm_sha
+
+# No preflight. A preflight exists to skip a flash the boards do not need,
+# by asking the firmware already on them what it is. The canary always
+# flashes: it is checking the flash path itself, and a board left on a
+# consumer's firmware from the last run is exactly the case a health check
+# must not skip.
+
+# The canary is built on the simulation host during a farm release and handed
+# to the service through the same upload a consumer's CI uses -- so the deploy
+# exercises the supply path on every release, and the Pi build above is only
+# the fallback for a canary run made by hand before the next deploy. The farm
+# accepts a canary bundle from this repository and this workflow only.
+supply:
+  repo: https://github.com/Alteriom/alteriom-esp32-farm
+  workflow: .github/workflows/deploy-farm-host.yml
+  artifact: hil-canary
+
+suite:
+  path: suites/canary/tests
+  # One board is a complete answer about that board. Every other suite here
+  # needs peers; this one is per-board by nature, which is also what makes
+  # "check this one board" a thing the farm can offer.
+  min_boards: 1
+  # It flashes, resets and takes over the radio of every board it is given,
+  # so it cannot share the bank with a run under test.
+  exclusive: true
+  # Eight checks on six boards, with radio joins and a reset each: about six
+  # minutes measured against nothing else running. The limit is there so a
+  # wedged board cannot hold the farm, not to cut a failing check short of
+  # its evidence.
+  timeout_seconds: 900
+
+env:
+  # What the rig is, for the checks that need it: the AP the radio should
+  # see and join, the broker the queue check publishes to, and the uplink
+  # probe. Overridable per run, so one rig's names are not baked in.
+  ALTERIOM_HIL_CANARY_REVISION: "{revision}"
+
+report:
+  title: "Farm canary {revision}"
+  capabilities: suites/canary/capabilities.json
