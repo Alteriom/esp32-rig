@@ -61,6 +61,17 @@ preflight:
     - "{log_dir}"
   timeout_seconds: 180
 
+# The bundle this profile's runs flash is built by the farm's own HIL workflow,
+# on the simulation host, and handed to the service by the run that dispatched
+# it (docs/artifact-first-plan.md, step 2). The farm accepts a bundle only from
+# this repository and this workflow, and only when its manifest names the
+# commit the run asked for and the HIL agent the deployed suite speaks to. A
+# run that supplies nothing still falls back to `build.command` on the Pi.
+supply:
+  repo: https://github.com/Alteriom/alteriom-esp32-farm
+  workflow: .github/workflows/hil-painlessmesh.yml
+  artifact: hil-firmware-matrix
+
 suite:
   path: suites/painlessmesh/tests
   # A mesh needs peers: one board cannot form one, and the suite's own
