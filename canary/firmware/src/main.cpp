@@ -90,7 +90,7 @@ void replyInfo() {
 void replyEcho(JsonDocument &cmd) {
   // Returned byte for byte: anything the UART mangles shows as a difference
   // the host can print, not as a missing reply.
-  const char *text = cmd["text"].is<const char *>() ? cmd["text"] : "";
+  const char *text = cmd["text"] | "";
   JsonDocument doc;
   doc["evt"] = "echo";
   doc["text"] = text;
@@ -99,14 +99,14 @@ void replyEcho(JsonDocument &cmd) {
 }
 
 void replyStore(JsonDocument &cmd, const char *op) {
-  const char *key = cmd["key"].is<const char *>() ? cmd["key"] : "canary";
+  const char *key = cmd["key"] | "canary";
   JsonDocument doc;
   doc["evt"] = "store";
   doc["op"] = op;
   doc["key"] = key;
   doc["backing"] = store.backing();
   if (strcmp(op, "write") == 0) {
-    const String value = cmd["value"].is<const char *>() ? String(cmd["value"].as<const char *>()) : String("");
+    const String value = String(cmd["value"] | "");
     doc["ok"] = store.put(key, value);
     doc["bytes"] = value.length();
   } else if (strcmp(op, "read") == 0) {
@@ -125,7 +125,9 @@ void replyScan(JsonDocument &cmd) {
   // The rig's own AP is what the host asks about, so one SSID may be named
   // and the rest reported only as a count: a rig in a block of flats sees
   // forty networks and the line would not fit a frame.
-  const char *wanted = cmd["ssid"].is<const char *>() ? cmd["ssid"] : nullptr;
+  // nullptr here means "no SSID named", which is a different answer from
+  // the empty string, so this one keeps its check rather than using `|`.
+  const char *wanted = cmd["ssid"].is<const char *>() ? cmd["ssid"].as<const char *>() : nullptr;
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   const uint32_t started = millis();
@@ -156,8 +158,8 @@ void replyScan(JsonDocument &cmd) {
 }
 
 void replyJoin(JsonDocument &cmd) {
-  const char *ssid = cmd["ssid"].is<const char *>() ? cmd["ssid"] : "";
-  const char *password = cmd["password"].is<const char *>() ? cmd["password"] : "";
+  const char *ssid = cmd["ssid"] | "";
+  const char *password = cmd["password"] | "";
   const uint32_t budget = cmd["timeoutMs"] | 20000;
   // Station only, never an AP: the ESP8266 is specified as a leaf and a
   // board that brought up an AP would change what every other board on the
@@ -201,7 +203,7 @@ void replyLeave() {
 // fewer to misread as a board fault, and the rig's uplink probe answers a
 // status line and a short body.
 void replyHttpGet(JsonDocument &cmd) {
-  const String url = cmd["url"].is<const char *>() ? String(cmd["url"].as<const char *>()) : String("");
+  const String url = String(cmd["url"] | "");
   const uint32_t budget = cmd["timeoutMs"] | 8000;
   JsonDocument doc;
   doc["evt"] = "http_get";
@@ -323,10 +325,10 @@ void disconnect(WiFiClient &client) {
 }  // namespace mqtt
 
 void replyMqttPublish(JsonDocument &cmd) {
-  const String host = cmd["host"].is<const char *>() ? String(cmd["host"].as<const char *>()) : String("");
+  const String host = String(cmd["host"] | "");
   const uint16_t port = cmd["port"] | 1883;
-  const String topic = cmd["topic"].is<const char *>() ? String(cmd["topic"].as<const char *>()) : String("");
-  const String payload = cmd["payload"].is<const char *>() ? String(cmd["payload"].as<const char *>()) : String("");
+  const String topic = String(cmd["topic"] | "");
+  const String payload = String(cmd["payload"] | "");
   const String clientId = cmd["clientId"].is<const char *>()
                               ? String(cmd["clientId"].as<const char *>())
                               : String("canary-") + bootId;
@@ -373,7 +375,7 @@ void handle(const String &raw) {
     emitError("bad json");
     return;
   }
-  const char *name = cmd["cmd"].is<const char *>() ? cmd["cmd"] : "";
+  const char *name = cmd["cmd"] | "";
   if (strcmp(name, "info") == 0) {
     replyInfo();
   } else if (strcmp(name, "echo") == 0) {
