@@ -22,15 +22,20 @@ source:
   default_ref: main
 
 build:
-  command:
-    - "{python}"
-    - suites/painlessmesh/build_artifacts.py
-    - --ref
-    - "{ref}"
-    - --out
-    - "{artifact_dir}"
-  # Repeated once per requested MCU family.
-  target_option: --target
+  # No command: nothing compiles on the rig (step 5 of
+  # docs/artifact-first-plan.md). `hil-painlessmesh.yml` builds this matrix on
+  # the simulation host -- x86, six PlatformIO cores, and not holding the rig
+  # lock while it works -- and the run that dispatched it hands the bundle to
+  # the service. `suites/painlessmesh/build_artifacts.py` is still the script
+  # that builds it; the Pi is no longer one of the places that runs it.
+  #
+  # This one kept a fallback longest because it is the release gate, and the
+  # fallback is what kept the gate quiet: a run that supplied nothing built
+  # six families on the rig and passed, so this profile's supply path sat
+  # unexercised for its first 105 runs with only the build stage saying so.
+  # A run now flashes a bundle or is refused at submit, which is the failure
+  # being visible rather than absorbed.
+  #
   # The manifest key carrying the commit the build actually resolved to. A
   # branch is a moving name; every downstream stage is pinned to this.
   revision_key: painlessmesh_sha
@@ -65,8 +70,11 @@ preflight:
 # on the simulation host, and handed to the service by the run that dispatched
 # it (docs/artifact-first-plan.md, step 2). The farm accepts a bundle only from
 # this repository and this workflow, and only when its manifest names the
-# commit the run asked for and the HIL agent the deployed suite speaks to. A
-# run that supplies nothing still falls back to `build.command` on the Pi.
+# commit the run asked for and the HIL agent the deployed suite speaks to.
+# This is now the only way this profile gets firmware, apart from a bundle an
+# earlier run already left for the same commit: with no build command there is
+# nothing to fall back to, and a run with neither is refused when it is
+# submitted, naming this workflow.
 supply:
   repo: https://github.com/Alteriom/alteriom-esp32-farm
   workflow: .github/workflows/hil-painlessmesh.yml
