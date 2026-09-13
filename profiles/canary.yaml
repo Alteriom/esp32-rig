@@ -23,12 +23,20 @@ source:
   default_ref: main
 
 build:
-  command:
-    - "{python}"
-    - canary/build_artifacts.py
-    - --out
-    - "{artifact_dir}"
-  target_option: --target
+  # No command: the canary does not build on the rig (step 5 of
+  # docs/artifact-first-plan.md). It is built on the simulation host at every
+  # release -- x86, with the disk for six PlatformIO cores -- installed
+  # through the same upload a consumer's CI uses, and pinned, so the bundle a
+  # board is checked against is the one the running farm was released with.
+  # `canary/build_artifacts.py` is still the script that builds it; the Pi is
+  # just no longer one of the places that runs it.
+  #
+  # A run therefore flashes a bundle or is refused at submit: the pinned
+  # canary (what a health check names), or one an earlier run left for the
+  # same commit. The farm has never needed to build this one for itself --
+  # the deploy that installs a canary builds it first, and fails before
+  # touching the Pi if it cannot.
+  #
   # The farm commit the canary was built from. `canary_sha` -- the digest of
   # canary/firmware/ -- travels in the manifest beside it and is what a board
   # reports over serial, but the revision of record is the commit: it is what
