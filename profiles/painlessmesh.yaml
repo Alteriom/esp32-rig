@@ -44,7 +44,6 @@ flash:
   command:
     - "{python}"
     - suites/painlessmesh/flash_all.py
-    - --skip-build
     - --artifacts
     - "{artifact_dir}"
 

@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Build each MCU artifact once, then flash it onto every matching board.
+"""Flash a built bundle onto every matching board.
 
-Usage (CI does exactly this):
+The farm does not build firmware: the bundle comes from painlessMesh's
+pipeline, which builds it on a CI runner and hands it to the farm. This flashes
+what it was given, after verifying every checksum.
 
-    PAINLESSMESH_REF=<branch-or-sha> \
+Usage (the painlessmesh profile runs exactly this):
+
     ALTERIOM_HIL_BOARD_MAP=~/board-map.yaml \
-    python3 flash_all.py
+    python3 flash_all.py --artifacts <bundle directory>
 
 Boards are flashed sequentially (esptool contention on shared hubs makes
 parallel flashing flaky on cheap rigs). Exits non-zero on the first
-failure with the pio output, so CI cleanly distinguishes "flash failed"
+failure with the esptool output, so CI cleanly distinguishes "flash failed"
 from "test failed".
 """
 
@@ -23,13 +26,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
+from alteriom_hil.artifacts import load_artifacts  # noqa: E402
 from alteriom_hil.board import BoardMap  # noqa: E402
 from alteriom_hil.flash import flash_esptool  # noqa: E402
-
-try:  # script execution and package import use different module roots
-    from .build_artifacts import build_artifacts, load_artifacts  # type: ignore
-except ImportError:
-    from build_artifacts import build_artifacts, load_artifacts  # noqa: E402
 
 DEFAULT_ARTIFACT_DIR = Path(
     os.environ.get("ALTERIOM_HIL_ARTIFACT_DIR", "hil-firmware")
@@ -44,16 +43,6 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_ARTIFACT_DIR,
         help="artifact directory containing manifest.json",
     )
-    parser.add_argument(
-        "--skip-build",
-        action="store_true",
-        help="verify and flash existing immutable artifacts without rebuilding",
-    )
-    parser.add_argument(
-        "--ref",
-        default=os.environ.get("PAINLESSMESH_REF") or "main",
-        help="painlessMesh ref to build (ignored with --skip-build)",
-    )
     args = parser.parse_args(argv)
     map_path = os.environ.get("ALTERIOM_HIL_BOARD_MAP")
     if not map_path:
@@ -61,8 +50,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     board_map = BoardMap.load(map_path)
     targets = sorted({board.target for board in board_map})
-    if not args.skip_build:
-        build_artifacts(args.ref, args.artifacts, targets)
     manifest = load_artifacts(args.artifacts)
     resolved_ref = manifest["painlessmesh_sha"]
     print(
