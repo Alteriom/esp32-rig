@@ -25,10 +25,14 @@
 //   {"cmd":"http_get","url":"http://host:port/path","timeoutMs":8000}
 //   {"cmd":"mqtt_publish","host":"h","port":1883,"topic":"t","payload":"p"}
 //   {"cmd":"reset"}
+//   {"cmd":"gpio_mode","pin":18,"mode":"input|pullup|pulldown|output"}
+//   {"cmd":"gpio_write","pin":18,"level":1}          // makes it an output
+//   {"cmd":"gpio_read","pin":18}
+//   {"cmd":"gpio_release","pin":18}                   // an input, no pull
 //
 // board -> host events (one JSON object per line):
 //   boot, info, echo, store, wifi_scan, wifi_join, wifi_leave, http_get,
-//   mqtt_publish, resetting, error
+//   mqtt_publish, gpio, resetting, error
 //************************************************************
 #include "canary_platform.h"
 
@@ -83,6 +87,7 @@ void replyInfo() {
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["mac"] = WiFi.macAddress();
   doc["store"] = store.backing();
+  doc["pinTable"] = kPinTable + 5;  // past "pins:"
   canaryDescribeChip(doc["silicon"].to<JsonObject>());
   emit(doc);
 }
@@ -364,6 +369,62 @@ void replyMqttPublish(JsonDocument &cmd) {
   emit(doc);
 }
 
+// ---- pins, for the wiring check ----------------------------------------------
+// The board's end of each jumper to an instrument. Only a wireable pin
+// (canary_platform.h), and never driven when it is input-only. Every answer is
+// {"evt":"gpio","op":...,"pin":n,"ok":...}, with "level" for a read or write
+// and "error" when refused -- a refused command did nothing.
+
+void replyGpio(JsonDocument &cmd, const char *op) {
+  JsonDocument doc;
+  doc["evt"] = "gpio";
+  doc["op"] = op;
+  const int pin = cmd["pin"] | -1;
+  doc["pin"] = pin;
+  const char *error = nullptr;
+  if (!canaryWireable(pin)) {
+    error = "not a wireable pin on this family";
+  } else if (strcmp(op, "mode") == 0) {
+    const char *mode = cmd["mode"] | "";
+    if (strcmp(mode, "input") == 0) {
+      pinMode(pin, INPUT);
+    } else if (strcmp(mode, "pullup") == 0) {
+      pinMode(pin, INPUT_PULLUP);
+    } else if (strcmp(mode, "pulldown") == 0) {
+#if defined(ESP8266)
+      error = "the ESP8266 has no pull-down on these pins";
+#else
+      pinMode(pin, INPUT_PULLDOWN);
+#endif
+    } else if (strcmp(mode, "output") == 0) {
+      if (canaryInputOnly(pin)) {
+        error = "an input-only pin";
+      } else {
+        pinMode(pin, OUTPUT);
+      }
+    } else {
+      error = "mode must be input, pullup, pulldown or output";
+    }
+    if (!error) doc["mode"] = mode;
+  } else if (strcmp(op, "write") == 0) {
+    if (canaryInputOnly(pin)) {
+      error = "an input-only pin";
+    } else {
+      const int level = (cmd["level"] | 0) ? HIGH : LOW;
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, level);
+      doc["level"] = level == HIGH ? 1 : 0;
+    }
+  } else if (strcmp(op, "read") == 0) {
+    doc["level"] = digitalRead(pin) == HIGH ? 1 : 0;
+  } else {  // release
+    pinMode(pin, INPUT);
+  }
+  doc["ok"] = error == nullptr;
+  if (error) doc["error"] = error;
+  emit(doc);
+}
+
 // ---- the loop --------------------------------------------------------------
 
 void handle(const String &raw) {
@@ -395,6 +456,14 @@ void handle(const String &raw) {
     replyHttpGet(cmd);
   } else if (strcmp(name, "mqtt_publish") == 0) {
     replyMqttPublish(cmd);
+  } else if (strcmp(name, "gpio_mode") == 0) {
+    replyGpio(cmd, "mode");
+  } else if (strcmp(name, "gpio_write") == 0) {
+    replyGpio(cmd, "write");
+  } else if (strcmp(name, "gpio_read") == 0) {
+    replyGpio(cmd, "read");
+  } else if (strcmp(name, "gpio_release") == 0) {
+    replyGpio(cmd, "release");
   } else if (strcmp(name, "reset") == 0) {
     JsonDocument doc;
     doc["evt"] = "resetting";

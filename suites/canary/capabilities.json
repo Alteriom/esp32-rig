@@ -21,5 +21,6 @@
   "esp.radio.scan": "Every board's receiver sees the rig access point, with a plausible RSSI",
   "esp.radio.join": "Every board associates with the rig access point and is given a DHCP lease",
   "farm.uplink": "The rig's gateway probe answers every board over the rig network",
-  "farm.queue": "The rig's MQTT broker accepts a message published by every board"
+  "farm.queue": "The rig's MQTT broker accepts a message published by every board",
+  "io.wiring": "Every wire from an instrument to a board carries a level each way either end can drive it"
 }

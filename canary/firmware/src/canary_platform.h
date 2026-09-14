@@ -106,6 +106,51 @@ class CanaryStore {
 #endif
 };
 
+// ---- the pins an instrument may be wired to ---------------------------------
+//
+// For the wiring check, which drives and reads a board's end of each jumper.
+// The same tables as the farm's (alteriom_hil/pins.py -- a test keeps them in
+// agreement), and the canary refuses every other pin: a wrong pin number in a
+// check must never drive a board's flash bus, its console or a strapping pin.
+// A family with no table has no wireable pins until one is confirmed. -1 ends
+// a list, so an empty one is still a list.
+#if defined(ESP8266)
+// Which table this build chose, reported by info: a family that fell through
+// to the wrong branch says so instead of refusing every wire.
+static const char *const kPinTable = "pins:esp8266";
+static const int8_t kWireablePins[] = {4, 5, 12, 13, 14, -1};
+static const int8_t kInputOnlyPins[] = {-1};
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+static const char *const kPinTable = "pins:esp32-c3";
+static const int8_t kWireablePins[] = {0, 1, 3, 4, 5, 6, 7, 10, -1};
+static const int8_t kInputOnlyPins[] = {-1};
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+static const char *const kPinTable = "pins:esp32-c6";
+static const int8_t kWireablePins[] = {0, 1, 2, 3, 6, 7, 10, 11, 18, 19, 20, 21, 22, 23, -1};
+static const int8_t kInputOnlyPins[] = {-1};
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+static const char *const kPinTable = "pins:esp32-s3";
+static const int8_t kWireablePins[] = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 39, 40, 41, 42, -1};
+static const int8_t kInputOnlyPins[] = {-1};
+#elif defined(CONFIG_IDF_TARGET_ESP32)
+static const char *const kPinTable = "pins:esp32";
+static const int8_t kWireablePins[] = {4, 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33, 34, 35, 36, 39, -1};
+static const int8_t kInputOnlyPins[] = {34, 35, 36, 39, -1};
+#else
+static const char *const kPinTable = "pins:none";
+static const int8_t kWireablePins[] = {-1};
+static const int8_t kInputOnlyPins[] = {-1};
+#endif
+
+inline bool canaryPinIn(const int8_t *pins, int pin) {
+  for (size_t i = 0; pins[i] >= 0; i++) {
+    if (pins[i] == pin) return true;
+  }
+  return false;
+}
+inline bool canaryWireable(int pin) { return pin >= 0 && canaryPinIn(kWireablePins, pin); }
+inline bool canaryInputOnly(int pin) { return canaryPinIn(kInputOnlyPins, pin); }
+
 // ---- what the part says about itself ---------------------------------------
 // Fields a family does not have are omitted rather than reported as zero: an
 // ESP8266 has no die revision and no PSRAM, and "0" would read as a part that

@@ -113,6 +113,36 @@ class CanaryClient:
             payload=payload,
         )
 
+    # ---- the board's end of a wire (the wiring check) ----
+    # A refused pin raises rather than returning a level nobody read: the
+    # canary refuses every pin that is not wireable on its family.
+
+    def _gpio(self, cmd: str, op: str, timeout: float, **kwargs) -> dict:
+        from alteriom_hil.protocol import ProtocolError
+
+        reply = self.board.send_cmd_awaiting(
+            cmd,
+            lambda e: e["evt"] == "gpio" and e.get("op") == op and e.get("pin") == kwargs.get("pin"),
+            f"gpio {op} reply",
+            timeout,
+            **kwargs,
+        )
+        if not reply.get("ok"):
+            raise ProtocolError(f"{self.board_id}: gpio {op} on GPIO{kwargs.get('pin')} refused: {reply.get('error')}")
+        return reply
+
+    def gpio_mode(self, pin: int, mode: str, timeout: float = 10.0) -> dict:
+        return self._gpio("gpio_mode", "mode", timeout, pin=pin, mode=mode)
+
+    def gpio_write(self, pin: int, level: int, timeout: float = 10.0) -> dict:
+        return self._gpio("gpio_write", "write", timeout, pin=pin, level=1 if level else 0)
+
+    def gpio_read(self, pin: int, timeout: float = 10.0) -> int:
+        return int(self._gpio("gpio_read", "read", timeout, pin=pin)["level"])
+
+    def gpio_release(self, pin: int, timeout: float = 10.0) -> dict:
+        return self._gpio("gpio_release", "release", timeout, pin=pin)
+
     # ---- it restarts ----
 
     def restart(self, timeout: float = 45.0) -> dict:
