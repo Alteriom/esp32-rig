@@ -622,6 +622,26 @@ void handleInternetSend(JsonDocument &cmd) {
     emitError("internet_send requires tag, url, and priority 0..3");
     return;
   }
+#ifdef PAINLESSMESH_HAS_INTERNET_RESULT
+  // painlessMesh #464 and later: the whole result, so a row can read what
+  // the service said and how many requests the call took. Rows tell the two
+  // event shapes apart by the presence of "attempts".
+  uint32_t messageId = mesh.sendToInternet(
+      url, payload,
+      [tag](const painlessmesh::InternetResult &result) {
+        JsonDocument doc;
+        doc["evt"] = "internet_result";
+        doc["tag"] = tag;
+        doc["success"] = result.success;
+        doc["httpStatus"] = result.httpStatus;
+        doc["error"] = result.error;
+        doc["response"] = result.response;
+        doc["retryable"] = result.retryable;
+        doc["attempts"] = result.attempts;
+        emitEvent(doc);
+      },
+      priority);
+#else
   uint32_t messageId = mesh.sendToInternet(
       url, payload,
       [tag](bool success, uint16_t httpStatus, String error) {
@@ -634,6 +654,7 @@ void handleInternetSend(JsonDocument &cmd) {
         emitEvent(doc);
       },
       priority);
+#endif
   JsonDocument doc;
   doc["evt"] = "internet_queued";
   doc["tag"] = tag;

@@ -421,8 +421,9 @@ def test_transport_failure_is_reported_as_a_network_error(gateway_mesh, failure)
     `errorToString()` branch was unreachable, and `handleGatewayAck()` filed a
     retryable network failure as a permanent HTTP status.
 
-    A transport failure must arrive as status 0 — the value the origin node
-    already treats as retryable — carrying the real reason in the error string.
+    A transport failure must arrive as status 0 — no server answered — carrying
+    the real reason in the error string. Whether the library retried it is a
+    separate question, answered by `test_a_request_that_may_have_arrived_is_issued_once`.
     """
     _require_upstream(gateway_mesh)
     sender = gateway_mesh["sender"]
@@ -431,8 +432,9 @@ def test_transport_failure_is_reported_as_a_network_error(gateway_mesh, failure)
 
     message_id = sender.send_to_internet(tag, url)
     assert message_id > 0
-    # Generous: the library retries with exponential backoff before reporting,
-    # and the timeout case spends GATEWAY_HTTP_TIMEOUT_MS on every attempt.
+    # Generous: a refused connection is retried with exponential backoff
+    # before the library reports, and before painlessMesh #464 the timeout
+    # case was too, spending GATEWAY_HTTP_TIMEOUT_MS on every attempt.
     result = sender.wait_internet_result(tag, timeout=120)
 
     assert result["success"] is False, result
@@ -471,6 +473,132 @@ def test_relay_still_works_after_a_transport_failure(gateway_mesh):
     )
     assert recovered["success"] is True, recovered
     assert recovered["httpStatus"] == 200, recovered
+
+
+def _ledger(endpoint: str, tag: str) -> dict:
+    with urlopen(f"{endpoint}/requests/{tag}", timeout=5) as response:
+        observed = json.load(response)
+    assert observed["tag"] == tag, observed
+    return observed
+
+
+def _probe_features(endpoint: str) -> set[str]:
+    """The features the rig's gateway probe names on /health (none for a probe
+    from before they were named)."""
+    try:
+        with urlopen(f"{endpoint}/health", timeout=5) as response:
+            payload = json.load(response)
+    except (OSError, ValueError) as exc:
+        pytest.skip(f"blocked: the rig's gateway probe did not answer /health: {exc}")
+    features = payload.get("features") if isinstance(payload, dict) else None
+    return set(features) if isinstance(features, list) else set()
+
+
+def _require_probe_features(endpoint: str, *needed: str) -> None:
+    """Skip, as a rig without the feature, when the probe does not offer one.
+
+    The probe is installed with the farm release, so this only trips on a rig
+    whose probe was not refreshed -- and that must read as a rig condition,
+    not as a painlessMesh failure under this module's `real_bug` class.
+    """
+    missing = sorted(set(needed) - _probe_features(endpoint))
+    if missing:
+        pytest.skip(
+            f"blocked: the rig's gateway probe does not offer {', '.join(missing)}; "
+            "it predates the farm release this suite came from"
+        )
+
+
+def _has_result_api(result: dict) -> bool:
+    """True when the agent was built against a painlessMesh with the
+    InternetResult callback (#464), which reports `attempts` and `response`."""
+    return "attempts" in result
+
+
+@pytest.mark.capability("internet.single_delivery")
+def test_a_request_that_may_have_arrived_is_issued_once(gateway_mesh):
+    """painlessMesh #464.
+
+    A destination that answers after GATEWAY_HTTP_TIMEOUT_MS has the request:
+    HTTPClient gives up reading, not sending. The library counted that read
+    timeout as a network error and retried it three times, and on this rig
+    (gate run 34670860918) one send reached the probe four times. For a
+    message service that is four messages -- or one and three refusals, which
+    is what the CallMeBot reports in painlessMesh #450, #452 and #463 look
+    like from the user's side.
+
+    The ledger counts every request the probe saw under the tag, so this row
+    holds the library to one call, one request.
+    """
+    _require_upstream(gateway_mesh)
+    sender = gateway_mesh["sender"]
+    endpoint = gateway_mesh["endpoint"]
+    _require_probe_features(endpoint, "ledger.count", "ledger.request_ids")
+    tag = f"once-{time.time_ns()}"
+
+    message_id = sender.send_to_internet(tag, _unreachable_targets(endpoint, tag)["timeout"])
+    assert message_id > 0
+    result = sender.wait_internet_result(tag, timeout=120)
+    assert result["success"] is False, result
+    assert result["httpStatus"] == 0, result
+
+    observed = _ledger(endpoint, tag)
+    assert observed["count"] == 1, (
+        f"one sendToInternet() call reached the destination {observed['count']} "
+        "times: a request that timed out waiting for the reply was resent, and "
+        f"the server already had it (painlessMesh #464). Result: {result}"
+    )
+    if _has_result_api(result):
+        assert result["attempts"] == 1, result
+        assert result["retryable"] is False, result
+        assert "may have reached the server" in str(result["error"]), result
+        assert observed["request_ids"], (
+            f"the gateway sent no X-Request-Id: {observed}"
+        )
+
+
+# The Retry-After the probe asks for: longer than the library's first backoff
+# (1 s), so a retry that ignores the header arrives visibly early.
+RETRY_AFTER_S = 3
+
+
+@pytest.mark.capability("internet.retry_after", "internet.recovery")
+def test_retry_after_is_honoured_and_the_retry_is_the_same_request(gateway_mesh):
+    """painlessMesh #464.
+
+    429 is the one refusal a retry is for: the server says it did not take the
+    request, and when to come back. The probe refuses the first request with
+    Retry-After: 3 and accepts the next, recording how long after the first it
+    came. The retry must wait, and it must carry the same request id -- so a
+    service that honours Idempotency-Key, and this ledger, can tell a retry
+    from a second message.
+    """
+    _require_upstream(gateway_mesh)
+    sender = gateway_mesh["sender"]
+    endpoint = gateway_mesh["endpoint"]
+    _require_probe_features(endpoint, "retry_after", "ledger.count", "ledger.request_ids")
+    tag = f"retry-after-{time.time_ns()}"
+
+    message_id = sender.send_to_internet(tag, f"{endpoint}/retry-after/{RETRY_AFTER_S}?tag={tag}")
+    assert message_id > 0
+    result = sender.wait_internet_result(tag, timeout=120)
+    assert result["success"] is True, result
+    assert result["httpStatus"] == 200, result
+
+    observed = _ledger(endpoint, tag)
+    assert observed["count"] == 2, (
+        f"expected the refused request and one retry, saw {observed['count']}: {observed}"
+    )
+    assert observed["early"] is False, (
+        f"the retry came {observed['waited_s']}s after the 429, sooner than "
+        f"Retry-After: {RETRY_AFTER_S} asked (painlessMesh #464): {observed}"
+    )
+    assert len(observed["request_ids"]) == 1, (
+        "every attempt at one call must carry the same X-Request-Id, and one "
+        f"must be sent at all (painlessMesh #464): {observed}"
+    )
+    if _has_result_api(result):
+        assert result["attempts"] == 2, result
 
 
 @pytest.mark.capability("gateway.failover", "internet.recovery")
@@ -680,41 +808,45 @@ def test_bridge_relays_its_own_request_right_after_association(gateway_mesh):
         _wait_for_relay_ready(gateway_mesh, strict=False)
 
 
-# profile -> (delivered, words the origin node must be told on a non-delivery).
-# Mirrors runner/gateway_probe_server.py, which mirrors painlessMesh's
+# profile -> (delivered, words the application must be able to read in the
+# reply). Mirrors runner/gateway_probe_server.py, which mirrors painlessMesh's
 # test/mock-http-server/server.py. The 208 is painlessMesh #452's field
 # finding: CallMeBot answered it to a message that never arrived, so no body
-# makes it a delivery -- `queued-208` carries the delivered profile's own body
-# and must still come back as a failure. Each phrase is unique to the response
-# entity: "Already Reported" is also the HTTP reason phrase for 208, which a
-# gateway could echo without ever reading the body, so it is not used.
+# makes it a delivery -- `queued-208` carries the delivered profile's own body.
+# Each phrase is unique to the response entity: "Already Reported" is also the
+# HTTP reason phrase for 208, which a gateway could echo without ever reading
+# the body, so it is not used.
 CALLMEBOT_PROFILES = {
-    "queued": (True, ""),
+    "queued": (True, "Message queued"),
     "ratelimit-203": (False, "Too many requests"),
     "ratelimit-201": (False, "Too many requests"),
     "unverified-208": (False, "never arrived"),
     "queued-208": (False, "Message queued"),
 }
 
+# What HTTP, and so the library, calls a success.
+HTTP_SUCCESS = {200, 201, 202, 204}
 
-@pytest.mark.capability("internet.service_semantics")
+
+@pytest.mark.capability("internet.service_semantics", "internet.single_delivery")
 @pytest.mark.parametrize("profile", sorted(CALLMEBOT_PROFILES))
-def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
-    """painlessMesh #450, the verdict half.
+def test_service_reply_reaches_the_application_intact(gateway_mesh, profile):
+    """painlessMesh #450, #452, #464.
 
-    The reporter's bridge reached CallMeBot, got HTTP 208, and reported
-    "Ambiguous response ... not actual delivery". CallMeBot does not encode
-    delivery in the status: probed while triaging, it answered a rate-limit
-    refusal with 203 and with 201 -- the same HTML error page under both -- and
-    201 was on the library's success list. The gateway also discarded the
-    body, so the origin node was told a number and nothing else. The first fix
-    then trusted every 2xx but 203, and the next report (#452) was the same
-    bridge printing the 208 as "sent" for a message that never arrived.
+    CallMeBot does not encode delivery in its status: it answers a rate-limit
+    refusal with 203 and with 201 -- the same HTML page under both -- and 208
+    to messages that never arrive. 2.0.3 matched CallMeBot's wording inside the
+    gateway. Since #464 the library applies HTTP's meaning of the status and
+    hands the application the reply, and the application -- the
+    sendToInternet example's callmebot.h -- decides what CallMeBot meant; that
+    reading is tested against these same profiles on the desktop.
 
-    Every row above asks the probe for a status and checks that the gateway
-    repeated it. This one asks the probe what it *did* and checks that the
-    gateway's verdict agrees, and that a refusal reaches the origin node with
-    the service's own reason attached.
+    So on hardware this row holds the library to what only the physical relay
+    can show: the service's status and its own words reach the application
+    through the mesh, a reply is never resent, and the probe's ledger is the
+    ground truth the application's reading is compared with. An agent built
+    against a library older than #464 is held to that library's contract
+    instead: its verdict matched delivery and carried the words on failure.
     """
     _require_upstream(gateway_mesh)
     # The row before this one rebooted the bridge; the fixture's cached state
@@ -730,12 +862,10 @@ def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
 
     message_id = sender.send_to_internet(tag, url)
     assert message_id > 0
-    # 203 is retried with backoff before the library reports; allow for it.
+    # Before #464 a 203 was retried with backoff before the library reported.
     result = sender.wait_internet_result(tag, timeout=120)
 
-    with urlopen(f"{endpoint}/requests/{tag}", timeout=5) as response:
-        observed = json.load(response)
-    assert observed["tag"] == tag, observed
+    observed = _ledger(endpoint, tag)
     delivered = observed["delivered"]
     expected_delivered, phrase = CALLMEBOT_PROFILES[profile]
     assert delivered is expected_delivered, (
@@ -743,15 +873,38 @@ def test_gateway_verdict_matches_service_delivery(gateway_mesh, profile):
         f"{observed}"
     )
 
-    assert result["success"] is delivered, (
-        f"the service {'delivered' if delivered else 'did not deliver'} the "
-        f"message (HTTP {observed['status']}, body {observed['response']!r}) "
-        f"but the gateway reported {result}"
+    if not _has_result_api(result):
+        assert result["success"] is delivered, (
+            f"the service {'delivered' if delivered else 'did not deliver'} the "
+            f"message (HTTP {observed['status']}, body {observed['response']!r}) "
+            f"but the gateway reported {result}"
+        )
+        if not delivered:
+            assert phrase in str(result["error"]), (
+                "a non-delivery must carry the service's words to the origin node, "
+                f"not only a status code: expected {phrase!r} in {result}"
+            )
+        return
+
+    assert result["httpStatus"] == observed["status"], (
+        f"the application was told HTTP {result['httpStatus']}, the service "
+        f"answered {observed['status']}: {result}"
     )
-    if not delivered:
-        assert phrase in str(result["error"]), (
-            "a non-delivery must carry the service's words to the origin node, "
-            f"not only a status code: expected {phrase!r} in {result}"
+    assert result["success"] is (observed["status"] in HTTP_SUCCESS), (
+        f"success must mean what HTTP says for {observed['status']}: {result}"
+    )
+    assert phrase in str(result["response"]), (
+        "the application must receive the service's own words to decide what "
+        f"its reply meant: expected {phrase!r} in {result}"
+    )
+    assert result["attempts"] == 1, (
+        f"the service answered, so the request must not be resent (painlessMesh #464): {result}"
+    )
+    # The ledger's own count is the stronger evidence, where the probe keeps one.
+    if "ledger.count" in _probe_features(endpoint):
+        assert observed["count"] == 1, (
+            "the service answered, so the request must not be resent "
+            f"(painlessMesh #464): ledger {observed}, result {result}"
         )
 
 
