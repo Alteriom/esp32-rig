@@ -125,7 +125,7 @@ void newConnectionCallback(uint32_t nodeId);
 // loop that is not running is not reading commands, which is how the C5 came
 // to miss a mesh_configure it answers in 60 ms when idle. A reply the host is
 // waiting on still flushes; diagnostics leave with the next one.
-void consoleWriteLine(const String &frame, bool flushNow = true) {
+void consoleWriteLine(const char *frame, bool flushNow = true) {
 #if HIL_HAS_SECOND_CONSOLE
   if (Serial) {
     Serial.println(frame);
@@ -137,6 +137,10 @@ void consoleWriteLine(const String &frame, bool flushNow = true) {
   Serial.println(frame);
   if (flushNow) Serial.flush();
 #endif
+}
+
+void consoleWriteLine(const String &frame, bool flushNow = true) {
+  consoleWriteLine(frame.c_str(), flushNow);
 }
 
 void consoleFlush() {
@@ -152,8 +156,22 @@ void emitEvent(JsonDocument &doc, bool flushNow = true) {
   // Build one complete frame before writing it. This avoids damaged JSON
   // prefixes on inexpensive USB-UART bridges under concurrent mesh traffic.
   String frame;
-  frame.reserve(measureJson(doc) + 1);
-  serializeJson(doc, frame);
+  if (!doc.overflowed() && frame.reserve(measureJson(doc) + 1)) {
+    serializeJson(doc, frame);
+  }
+  if (doc.overflowed() || frame.length() <= 2) {
+    // Out of memory: the document or its frame could not be allocated. On
+    // the rig an ESP8266 printed "{}" in place of an internet_result and the
+    // row waited out its timeout for an event the board had already tried to
+    // send. Say so from the stack, naming the event where it is readable.
+    const char *evt = doc["evt"] | "unknown";
+    char line[128];
+    snprintf(line, sizeof(line),
+             "{\"evt\":\"event_dropped\",\"dropped\":\"%s\",\"reason\":\"out of memory\"}",
+             evt);
+    consoleWriteLine(line, flushNow);
+    return;
+  }
   consoleWriteLine(frame, flushNow);
 }
 
