@@ -1,0 +1,13 @@
+# An example product board: what a project describes so the farm can drive
+# its I/O by name. Every signal here is on a wireable pin, so an instrument can
+# press the button, read the LED and put a voltage on the battery sense line.
+schema: 1
+model: example-sensor-node
+label: Example sensor node (ESP32-C6)
+family: esp32-c6
+signals:
+  BUTTON: {pin: 18, direction: in, pull: up, active: low, note: "user button to ground"}
+  STATUS_LED: {pin: 19, direction: out}
+  VBAT_SENSE: {pin: 3, direction: analog, note: "battery through a 1:2 divider"}
+  I2C_SDA: {pin: 22, direction: bidir, pull: up}
+  I2C_SCL: {pin: 23, direction: out, pull: up}

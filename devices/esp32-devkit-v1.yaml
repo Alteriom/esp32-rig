@@ -1,0 +1,8 @@
+# A board model, described by its signals (alteriom_hil.devices, docs/devices.md).
+schema: 1
+model: esp32-devkit-v1
+label: ESP32 DevKit V1 (WROOM-32)
+family: esp32
+signals:
+  BOOT_BUTTON: {pin: 0, direction: in, pull: up, active: low, note: "the BOOT button; a strapping pin"}
+  BLUE_LED: {pin: 2, direction: out, note: "the on-board LED; a strapping pin"}

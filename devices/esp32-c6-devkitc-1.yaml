@@ -1,0 +1,8 @@
+# A board model, described by its signals (alteriom_hil.devices, docs/devices.md).
+schema: 1
+model: esp32-c6-devkitc-1
+label: Espressif ESP32-C6-DevKitC-1
+family: esp32-c6
+signals:
+  BOOT_BUTTON: {pin: 9, direction: in, pull: up, active: low, note: "the BOOT button; a strapping pin, so no instrument is wired to it"}
+  RGB_LED: {pin: 8, direction: out, note: "WS2812 data line; a strapping pin"}
