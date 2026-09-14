@@ -57,6 +57,7 @@ a client that injects secrets as environment.
 | `farm_whoami` | the name and role of the key it reads with |
 | `farm_status` | health and what is wrong with it, the queue, boards connected and missing, the ten latest runs |
 | `farm_devices` | every board — family, state, the run holding it, its last canary verdict and what failed — plus missing and unregistered devices and instruments |
+| `farm_capacity` | boards per family — connected, free, in use, and the tags the free ones carry — and how many runs may run at once, are running and wait: whether a run asking for one esp32-c3 would start now |
 | `farm_runs` | runs newest first, filtered by status, kind or a search |
 | `farm_run` | one run's stages and where it stopped, the failure detail, each capability's verdict, the failed tests, its bundle and its evidence |
 | `farm_run_log` | the last lines of a run's log |
