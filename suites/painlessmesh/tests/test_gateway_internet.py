@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import urlopen
 
 import pytest
@@ -826,13 +827,44 @@ CALLMEBOT_PROFILES = {
     # painlessMesh #463: HTTP 200, a request echoed back at length, and the
     # verdict only in the last bytes -- past the head a gateway keeps.
     "paused-after-echo": (False, "Account is Paused"),
+    # The delivered reply as the real CallMeBot sends it: HTTP/1.1 with
+    # Transfer-Encoding: chunked. Farm run 35002111795 handed the application
+    # "a6 Message to: ... 0" -- the chunk sizes leaked into the reply.
+    "queued-chunked": (True, "Message queued"),
 }
 
 # Profiles a probe serves only from the release that added them.
-CALLMEBOT_PROFILE_FEATURES = {"paused-after-echo": "callmebot.paused_after_echo"}
+CALLMEBOT_PROFILE_FEATURES = {
+    "paused-after-echo": "callmebot.paused_after_echo",
+    "queued-chunked": "callmebot.chunked",
+}
+# Profiles served chunked, whose reply must reach the application decoded.
+CALLMEBOT_CHUNKED_PROFILES = {"queued-chunked"}
 
 # What HTTP, and so the library, calls a success.
 HTTP_SUCCESS = {200, 201, 202, 204}
+
+# A chunk-size line left in a body: hex digits (and an optional extension)
+# where the text starts, then the space or line break that separated it from
+# the chunk's data; and the last chunk's "0" standing alone at the end.
+_LEAKED_CHUNK_SIZE = re.compile(r"\A[0-9A-Fa-f]{1,8}(?:;[^\r\n]*)?(?:\r?\n| )")
+_LEAKED_LAST_CHUNK = re.compile(r"(?:\A|\s)0\s*\Z")
+
+
+def _chunk_framing_leak(response: str) -> str | None:
+    """What of HTTP's chunked framing a reply still carries, or None.
+
+    The real observation (painlessMesh gateway, CallMeBot, farm run
+    35002111795): ``a6 Message to: *** Text to send: ... 0``.
+    """
+    text = str(response or "")
+    found = []
+    head = _LEAKED_CHUNK_SIZE.match(text)
+    if head:
+        found.append(f"starts with the chunk size {head.group(0).strip()!r}")
+    if _LEAKED_LAST_CHUNK.search(text):
+        found.append("ends with the last chunk's standalone 0")
+    return "; ".join(found) or None
 
 
 @pytest.mark.capability("internet.service_semantics", "internet.single_delivery")
@@ -907,6 +939,12 @@ def test_service_reply_reaches_the_application_intact(gateway_mesh, profile):
         "the application must receive the service's own words to decide what "
         f"its reply meant: expected {phrase!r} in {result}"
     )
+    if profile in CALLMEBOT_CHUNKED_PROFILES:
+        leak = _chunk_framing_leak(result["response"])
+        assert leak is None, (
+            "a chunked reply must reach the application decoded, without its "
+            f"transfer framing: the response {leak}: {result}"
+        )
     assert result["attempts"] == 1, (
         f"the service answered, so the request must not be resent (painlessMesh #464): {result}"
     )
@@ -949,6 +987,46 @@ def _fail_scrubbed(redactor, message: str):
     pytest.fail(redactor.scrub(message), pytrace=False)
 
 
+def _board_family(gateway_mesh, board_id):
+    board = next((item for item in gateway_mesh.get("board_map") or [] if getattr(item, "id", None) == board_id), None)
+    return getattr(board, "target", None)
+
+
+def _callmebot_message(gateway_mesh, tag: str, redactor) -> str:
+    """The WhatsApp the owner reads: which library, rig, boards and run, and
+    the tag that matches it to this run's evidence."""
+    revision = (os.environ.get("PAINLESSMESH_REF") or os.environ.get("HIL_FIRMWARE_SHA") or "")[:12]
+    ends = {}
+    for role in ("sender", "gateway"):
+        board_id = gateway_mesh.get(f"{role}_id")
+        ends[role] = (board_id, _board_family(gateway_mesh, board_id)) if board_id else None
+    return providers.callmebot_suite_message(
+        tag=tag, revision=revision, rig=providers.worker_name(), sender=ends["sender"],
+        gateway=ends["gateway"], job=providers.farm_job_id(), redactor=redactor,
+    )
+
+
+def _send_scrubbed(sender, tag: str, url: str, redactor) -> dict:
+    """Send one request and wait for its result, failing -- scrubbed -- when
+    none comes."""
+    failure = None
+    result = None
+    message_id = 0
+    try:
+        message_id = sender.send_to_internet(tag, url)
+        # A refusal before #464 was retried with backoff before it reported.
+        result = sender.wait_internet_result(tag, timeout=120) if message_id > 0 else None
+    except TimeoutWaitingFor as exc:
+        # The exception carries the board's last serial lines, which can hold
+        # the URL. Failed outside the handler, so the original is not chained.
+        failure = f"no result from the sender: {exc}"
+    if failure is not None:
+        _fail_scrubbed(redactor, failure)
+    if result is None:
+        _fail_scrubbed(redactor, f"sendToInternet() refused the request (message id {message_id})")
+    return result
+
+
 @pytest.mark.capability("internet.provider.callmebot")
 def test_real_callmebot_accepts_a_message_through_the_mesh(gateway_mesh):
     """The real CallMeBot API, reached from a regular node through the mesh.
@@ -989,23 +1067,9 @@ def test_real_callmebot_accepts_a_message_through_the_mesh(gateway_mesh):
     if not allowed:
         pytest.skip(f"today's CallMeBot budget ({allowance}) on this rig is used")
 
-    sender = gateway_mesh["sender"]
     tag = f"callmebot-{time.time_ns()}"
-    revision = (os.environ.get("PAINLESSMESH_REF") or os.environ.get("HIL_FIRMWARE_SHA") or "")[:12]
-    text = f"painlessMesh HIL {revision} {tag}"
-    failure = None
-    try:
-        message_id = sender.send_to_internet(tag, providers.message_url(link, text))
-        # A refusal before #464 was retried with backoff before it reported.
-        result = sender.wait_internet_result(tag, timeout=120) if message_id > 0 else None
-    except TimeoutWaitingFor as exc:
-        # The exception carries the board's last serial lines, which can hold
-        # the URL. Failed outside the handler, so the original is not chained.
-        failure = f"no result from the sender: {exc}"
-    if failure is not None:
-        _fail_scrubbed(redactor, failure)
-    if result is None:
-        _fail_scrubbed(redactor, f"sendToInternet() refused the request (message id {message_id})")
+    text = _callmebot_message(gateway_mesh, tag, redactor)
+    result = _send_scrubbed(gateway_mesh["sender"], tag, providers.message_url(link, text), redactor)
 
     if not _has_result_api(result):
         pytest.skip("the HIL agent predates painlessMesh #464's InternetResult; it reports no attempts or reply")
@@ -1036,6 +1100,72 @@ def test_real_callmebot_accepts_a_message_through_the_mesh(gateway_mesh):
         _fail_scrubbed(redactor, f"CallMeBot did not answer HTTP 200 ({verdict}): {summary}")
     if verdict != "queued":
         _fail_scrubbed(redactor, f"CallMeBot's reply is not an accepted message ({verdict}): {summary}")
+
+
+# Credentials that cannot reach any person: a number no one can hold (the
+# +1 000 range is not assigned) and a key far shorter than any CallMeBot
+# issues. Built into the URL here, never taken from the stored link.
+INVALID_CALLMEBOT_PHONE = "+10000000000"
+INVALID_CALLMEBOT_APIKEY = "0000"
+
+
+def _invalid_callmebot_url(text: str) -> str:
+    query = urlencode(
+        [("phone", INVALID_CALLMEBOT_PHONE), ("apikey", INVALID_CALLMEBOT_APIKEY), ("text", text)],
+        quote_via=quote, safe="",
+    )
+    return f"https://{providers.CALLMEBOT_HOST}{providers.CALLMEBOT_PATH}?{query}"
+
+
+@pytest.mark.capability("internet.provider.callmebot.refusal")
+def test_real_callmebot_refusal_reaches_the_application_intact(gateway_mesh):
+    """The real CallMeBot's refusal of an invalid key, through the mesh.
+
+    The success row proves an accepted message; this proves the other half of
+    what a user's sketch depends on: when the service says no, its answer --
+    status and words -- reaches the application once, and nothing reads it
+    as a delivery. The credentials are deliberately invalid, so no message
+    can reach anyone and the rig's daily budget is not spent. It runs only
+    where the owner opted into real CallMeBot traffic, under the same gates as
+    the success row.
+    """
+    redactor = providers.Redactor.from_env()
+    _real_callmebot_link(redactor)  # the owner's opt-in; the link itself is not used
+    _require_upstream(gateway_mesh)
+    _wait_for_relay_ready(gateway_mesh)
+
+    tag = f"callmebot-refusal-{time.time_ns()}"
+    text = f"painlessMesh HIL refusal check {tag}"
+    result = _send_scrubbed(gateway_mesh["sender"], tag, _invalid_callmebot_url(text), redactor)
+    if not _has_result_api(result):
+        pytest.skip("the HIL agent predates painlessMesh #464's InternetResult; it reports no attempts or reply")
+
+    status = int(result.get("httpStatus") or 0)
+    error = str(result.get("error") or "")
+    response = str(result.get("response") or "")
+    if providers.upstream_unreachable(status, error):
+        pytest.skip(
+            "blocked: the rig's gateway cannot reach "
+            f"{providers.CALLMEBOT_HOST}: {redactor.scrub(error)}"
+        )
+    verdict = providers.judge_callmebot_reply(status, response)
+    summary = (
+        f"HTTP {status}, attempts {result.get('attempts')}, success {result.get('success')}, "
+        f"verdict {verdict}, error {error!r}, reply {response[:600]!r}"
+    )
+    if status == 0:
+        _fail_scrubbed(redactor, f"CallMeBot's answer did not reach the application: {summary}")
+    if status != 429 and result.get("attempts") != 1:
+        _fail_scrubbed(redactor, f"the service answered, so the request must not be resent: {summary}")
+    if not response.strip():
+        _fail_scrubbed(redactor, f"the application received none of the service's own words: {summary}")
+    if result.get("success") is not (status in HTTP_SUCCESS):
+        _fail_scrubbed(redactor, f"success must mean what HTTP says for {status}: {summary}")
+    if verdict == "queued":
+        _fail_scrubbed(
+            redactor,
+            f"CallMeBot claims to have queued a message for an invalid key -- read as a delivery: {summary}",
+        )
 
 
 # The library trusts a bridge's last status for bridgeTimeoutMs, 60 s by default.
