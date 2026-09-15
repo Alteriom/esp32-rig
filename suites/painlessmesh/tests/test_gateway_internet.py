@@ -822,7 +822,13 @@ CALLMEBOT_PROFILES = {
     "ratelimit-201": (False, "Too many requests"),
     "unverified-208": (False, "never arrived"),
     "queued-208": (False, "Message queued"),
+    # painlessMesh #463: HTTP 200, a request echoed back at length, and the
+    # verdict only in the last bytes -- past the head a gateway keeps.
+    "paused-after-echo": (False, "Account is Paused"),
 }
+
+# Profiles a probe serves only from the release that added them.
+CALLMEBOT_PROFILE_FEATURES = {"paused-after-echo": "callmebot.paused_after_echo"}
 
 # What HTTP, and so the library, calls a success.
 HTTP_SUCCESS = {200, 201, 202, 204}
@@ -859,6 +865,9 @@ def test_service_reply_reaches_the_application_intact(gateway_mesh, profile):
         f"{endpoint}/callmebot/whatsapp.php"
         f"?phone=%2B10000000000&apikey={profile}&text={tag}"
     )
+
+    if profile in CALLMEBOT_PROFILE_FEATURES:
+        _require_probe_features(endpoint, CALLMEBOT_PROFILE_FEATURES[profile])
 
     message_id = sender.send_to_internet(tag, url)
     assert message_id > 0
