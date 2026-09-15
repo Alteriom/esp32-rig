@@ -1096,6 +1096,8 @@ def test_real_callmebot_accepts_a_message_through_the_mesh(gateway_mesh):
         pytest.skip("CallMeBot refused: rate limited (service state, not a library verdict)")
     if verdict == "account_paused":
         pytest.skip("CallMeBot refused: the account is paused (service state, not a library verdict)")
+    if verdict == "invalid_api_key":
+        pytest.skip("blocked: CallMeBot rejected the API key stored on this rig; set a new link on the rig's page")
     if status != 200:
         _fail_scrubbed(redactor, f"CallMeBot did not answer HTTP 200 ({verdict}): {summary}")
     if verdict != "queued":
