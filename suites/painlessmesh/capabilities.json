@@ -31,6 +31,7 @@
   "internet.self.first_send": "A bridge relays its own request within seconds of associating upstream, before its first periodic health probe has run",
   "gateway.stale_after_reboot": "A bridge that rebooted as a regular node answers relayed requests with an honest failure at once, instead of letting them time out while peers still trust it",
   "internet.service_semantics": "For a service whose HTTP status does not encode delivery, its status and its own words reach the application intact, so the application can judge delivery against the service's ledger",
+  "internet.provider.callmebot": "A regular node's WhatsApp request reaches the real CallMeBot API through the mesh and is accepted, once; sent only for release builds on rigs configured to",
   "internet.single_delivery": "One sendToInternet() call reaches the destination once: a request that may have arrived (read timeout, any reply) is never resent",
   "internet.retry_after": "A 429 retry waits for the server's Retry-After and carries the same request id as the refused attempt",
   "internet.transport_errors": "Refused, unresolvable and timed-out destinations are reported as network errors, never as HTTP statuses",

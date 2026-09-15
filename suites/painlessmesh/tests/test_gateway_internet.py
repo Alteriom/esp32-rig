@@ -12,6 +12,7 @@ from urllib.request import urlopen
 
 import pytest
 
+from alteriom_hil import providers
 from alteriom_hil.protocol import BoardClient, TimeoutWaitingFor
 
 pytestmark = [
@@ -915,6 +916,126 @@ def test_service_reply_reaches_the_application_intact(gateway_mesh, profile):
             "the service answered, so the request must not be resent "
             f"(painlessMesh #464): ledger {observed}, result {result}"
         )
+
+
+def _real_callmebot_link(redactor):
+    """The rig's own CallMeBot link and whether this run may spend a message
+    on it, or a skip saying why not. Nothing here touches hardware, so a rig
+    that is not configured skips before the mesh is waited on."""
+    url_file = os.environ.get(providers.ENV_URL_FILE)
+    if not url_file:
+        pytest.skip(
+            "the rig has no CallMeBot link configured "
+            "(alteriom-hil-admin providers set callmebot)"
+        )
+    try:
+        link = providers.load_callmebot_link(url_file)
+    except providers.ProviderError as exc:
+        pytest.skip(f"blocked: the rig's CallMeBot link is not usable: {redactor.scrub(str(exc))}")
+    send = os.environ.get(providers.ENV_SEND) or providers.DEFAULT_CALLMEBOT["send"]
+    if send == "never":
+        pytest.skip("rig parameter providers.callmebot.send is never")
+    if send == "release" and os.environ.get(providers.ENV_RUN_KIND) != "release":
+        pytest.skip("the rig sends real messages only for a release build")
+    if send not in providers.SEND_POLICIES:
+        pytest.skip(f"blocked: rig parameter providers.callmebot.send is not one of {providers.SEND_POLICIES}")
+    return link
+
+
+def _fail_scrubbed(redactor, message: str):
+    """Fail with a message the redactor has seen, and without a Python
+    traceback: pytest's assertion rewriting prints the operands, and the
+    result dict carries the service's reply, which echoes the number."""
+    pytest.fail(redactor.scrub(message), pytrace=False)
+
+
+@pytest.mark.capability("internet.provider.callmebot")
+def test_real_callmebot_accepts_a_message_through_the_mesh(gateway_mesh):
+    """The real CallMeBot API, reached from a regular node through the mesh.
+
+    Every other row here talks to the rig's own probe, which proves the
+    library carries a service's reply intact. Only the real service can say
+    it accepts what the library actually sends -- the https request through
+    the gateway, the encoding of the text, the headers. That is the path the
+    CallMeBot reports in painlessMesh #450, #452 and #463 took.
+
+    It uses the rig owner's own link, stored on the rig (docs/providers.md),
+    so it runs only where the owner said: never, on a release build (the
+    default), or always; and never more than the rig's daily budget. A
+    refusal that is CallMeBot's state -- rate limited, account paused -- is a
+    skip: it says nothing about the library. The reply is read with the rules
+    of painlessMesh's examples/sendToInternet/callmebot.h, which is what a
+    user's sketch reads it with.
+
+    Nothing this row prints may carry the link: every message goes through
+    the rig's redactor, and the farm scrubs the evidence again after the run.
+    """
+    redactor = providers.Redactor.from_env()
+    link = _real_callmebot_link(redactor)
+    _require_upstream(gateway_mesh)
+    # The rows before this one reboot the bridge.
+    _wait_for_relay_ready(gateway_mesh)
+
+    max_per_day = os.environ.get(providers.ENV_MAX_PER_DAY) or str(providers.DEFAULT_CALLMEBOT["max_per_day"])
+    try:
+        allowance = int(max_per_day)
+    except ValueError:
+        pytest.skip(f"blocked: rig parameter providers.callmebot.max_per_day is not an integer: {max_per_day!r}")
+    budget = providers.budget_file_for(os.environ)
+    try:
+        allowed = providers.consume_budget(budget, allowance)
+    except OSError as exc:
+        pytest.skip(f"blocked: cannot record today's CallMeBot budget in {budget}: {exc.strerror or exc}")
+    if not allowed:
+        pytest.skip(f"today's CallMeBot budget ({allowance}) on this rig is used")
+
+    sender = gateway_mesh["sender"]
+    tag = f"callmebot-{time.time_ns()}"
+    revision = (os.environ.get("PAINLESSMESH_REF") or os.environ.get("HIL_FIRMWARE_SHA") or "")[:12]
+    text = f"painlessMesh HIL {revision} {tag}"
+    failure = None
+    try:
+        message_id = sender.send_to_internet(tag, providers.message_url(link, text))
+        # A refusal before #464 was retried with backoff before it reported.
+        result = sender.wait_internet_result(tag, timeout=120) if message_id > 0 else None
+    except TimeoutWaitingFor as exc:
+        # The exception carries the board's last serial lines, which can hold
+        # the URL. Failed outside the handler, so the original is not chained.
+        failure = f"no result from the sender: {exc}"
+    if failure is not None:
+        _fail_scrubbed(redactor, failure)
+    if result is None:
+        _fail_scrubbed(redactor, f"sendToInternet() refused the request (message id {message_id})")
+
+    if not _has_result_api(result):
+        pytest.skip("the HIL agent predates painlessMesh #464's InternetResult; it reports no attempts or reply")
+
+    status = int(result.get("httpStatus") or 0)
+    error = str(result.get("error") or "")
+    response = str(result.get("response") or "")
+    if providers.upstream_unreachable(status, error):
+        pytest.skip(
+            "blocked: the rig's gateway cannot reach "
+            f"{providers.CALLMEBOT_HOST}: {redactor.scrub(error)}"
+        )
+
+    verdict = providers.judge_callmebot_reply(status, response)
+    summary = (
+        f"HTTP {status}, attempts {result.get('attempts')}, success {result.get('success')}, "
+        f"error {error!r}, reply {response!r}"
+    )
+    # A reply that is not a 429 is one the service gave: resending it is a
+    # second message (painlessMesh #464), whatever the reply said.
+    if status != 429 and result.get("attempts") != 1:
+        _fail_scrubbed(redactor, f"the service answered, so the request must not be resent: {summary}")
+    if verdict == "rate_limited":
+        pytest.skip("CallMeBot refused: rate limited (service state, not a library verdict)")
+    if verdict == "account_paused":
+        pytest.skip("CallMeBot refused: the account is paused (service state, not a library verdict)")
+    if status != 200:
+        _fail_scrubbed(redactor, f"CallMeBot did not answer HTTP 200 ({verdict}): {summary}")
+    if verdict != "queued":
+        _fail_scrubbed(redactor, f"CallMeBot's reply is not an accepted message ({verdict}): {summary}")
 
 
 # The library trusts a bridge's last status for bridgeTimeoutMs, 60 s by default.
