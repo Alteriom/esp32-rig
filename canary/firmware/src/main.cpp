@@ -1,5 +1,5 @@
 //************************************************************
-// The farm canary
+// Rig Health Check firmware (the farm's `canary` profile)
 //
 // Firmware the farm owns, whose only purpose is to say whether an ESP and
 // the rig around it are healthy. It contains nothing from painlessMesh or
@@ -42,6 +42,10 @@
 #ifndef CANARY_SHA
 #define CANARY_SHA "unknown"
 #endif
+// MAJOR.MINOR.PATCH, stamped by canary/build_artifacts.py.
+#ifndef CANARY_VERSION
+#define CANARY_VERSION "unknown"
+#endif
 
 // A whole line of JSON, and the longest echo the serial check sends. The
 // check exists to prove the path is clean under load, so the buffer is
@@ -79,6 +83,7 @@ void emitError(const char *error, const char *cmd = nullptr) {
 void replyInfo() {
   JsonDocument doc;
   doc["evt"] = "info";
+  doc["version"] = CANARY_VERSION;
   doc["family"] = CANARY_TARGET;
   doc["canarySha"] = CANARY_SHA;
   doc["bootId"] = bootId;
@@ -524,6 +529,7 @@ void setup() {
   WiFi.disconnect();
   JsonDocument doc;
   doc["evt"] = "boot";
+  doc["version"] = CANARY_VERSION;
   doc["family"] = CANARY_TARGET;
   doc["canarySha"] = CANARY_SHA;
   doc["bootId"] = bootId;

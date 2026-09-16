@@ -1,4 +1,4 @@
-"""The farm canary suite.
+"""The Rig Health Check suite (the farm's `canary` profile).
 
 One verdict per board per check, from firmware the farm owns. Nothing here
 knows anything about painlessMesh or about a consumer's product: a red
@@ -11,6 +11,7 @@ check failing on **one** board is that board.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -22,6 +23,26 @@ from canary_client import CanaryClient
 # as this run's write, and a queue check's message can be told from the last
 # one's in the broker's capture.
 RUN_TAG = os.environ.get("ALTERIOM_HIL_RUN_TAG") or os.urandom(4).hex()
+
+
+def flashed_version() -> str | None:
+    """The firmware version the bundle this run flashed says it is.
+
+    None off the rig, and for a bundle built before versions were stamped:
+    there is nothing to hold a board to then, and a health check must not
+    fail a good board over a bundle's age.
+    """
+    if os.environ.get("ALTERIOM_HIL_MODE") != "hardware":
+        return None
+    folder = os.environ.get("ALTERIOM_HIL_ARTIFACT_DIR")
+    if not folder:
+        return None
+    try:
+        manifest = json.loads((Path(folder) / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    version = manifest.get("version")
+    return version if isinstance(version, str) and version else None
 
 
 @pytest.fixture(scope="session")

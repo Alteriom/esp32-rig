@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build the farm canary: one merged flash image per ESP32 MCU family.
+"""Build the Rig Health Check firmware: one merged flash image per ESP32 MCU family.
 
-The canary is the farm's own firmware -- ESP and rig health, nothing from
-painlessMesh and nothing from a consumer -- so this build has no library to
-fetch. Two revisions travel in the manifest and they answer different
-questions:
+The Rig Health Check (the `canary` profile) is the farm's own firmware -- ESP
+and rig health, nothing from painlessMesh and nothing from a consumer -- so
+this build has no library to fetch. Three identities travel in the manifest
+and they answer different questions:
 
   * `farm_sha`, the farm commit this was built from, is the bundle's
     revision of record (the profile's `revision_key`). It is what the rest
@@ -16,12 +16,19 @@ questions:
     same `canary_sha`, which is what lets a deploy skip the build -- and
     what a board reports back over serial, so a report can say which canary
     answered rather than which release installed it.
+  * `version`, MAJOR.MINOR.PATCH, is the one a person reads. MAJOR.MINOR is
+    `canary/firmware/VERSION`, moved by hand; PATCH is the number of commits
+    that changed `canary/firmware/`, so it rises by itself with the firmware
+    and stands still across farm releases that did not touch it -- the same
+    scheme as the farm's own version, counted over the firmware alone. It is
+    compiled in, so a board reports it too.
 
 The output is the schema-2 manifest contract in `alteriom_hil.artifacts`,
 the same one every other producer emits, so the canary is flashed, verified,
 listed, pinned and pruned by exactly the machinery that already exists.
 
     python canary/build_artifacts.py --out hil-canary [--target esp32-c6]
+    python canary/build_artifacts.py --version
 """
 
 from __future__ import annotations
@@ -30,6 +37,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -112,6 +120,49 @@ def farm_sha() -> str:
     )
 
 
+def firmware_version() -> str:
+    """MAJOR.MINOR from VERSION, PATCH from the commits that changed the firmware.
+
+    Counted over `canary/firmware/` only, so the number moves when the
+    firmware does and not on every farm release. A modified or untracked file
+    under the firmware directory is marked `+modified`: that build is not the
+    version it would otherwise claim. A shallow checkout counts only the
+    commits it fetched, and git that cannot answer counts nothing, so both
+    fail the build rather than stamp a number that looks right and is not --
+    the same rule `farm_sha` keeps for the commit.
+    """
+    try:
+        base = "".join((FIRMWARE_DIR / "VERSION").read_text(encoding="utf-8").split())
+    except OSError as exc:
+        raise RuntimeError(f"canary/firmware/VERSION is missing: {exc}") from exc
+    if not re.fullmatch(r"\d+\.\d+", base):
+        raise RuntimeError(f"canary/firmware/VERSION must be MAJOR.MINOR, not {base!r}")
+
+    def git(*args: str) -> str:
+        found = subprocess.run(
+            ["git", "-C", str(FIRMWARE_DIR), *args],
+            capture_output=True, text=True, timeout=20,
+        )
+        if found.returncode != 0:
+            raise RuntimeError(
+                f"cannot number the Rig Health Check firmware: git {' '.join(args)} "
+                f"failed: {found.stderr.strip() or found.returncode}"
+            )
+        return found.stdout.strip()
+
+    try:
+        if git("rev-parse", "--is-shallow-repository") == "true":
+            raise RuntimeError(
+                "cannot number the Rig Health Check firmware from a shallow "
+                "checkout: fetch the full history (actions/checkout fetch-depth: 0)"
+            )
+        count = int(git("rev-list", "--count", "HEAD", "--", "."))
+        modified = bool(git("status", "--porcelain", "--", "."))
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise RuntimeError(f"cannot number the Rig Health Check firmware: {exc}") from exc
+    return f"{base}.{count}" + ("+modified" if modified else "")
+
+
 def normalize_targets(names: list[str] | None) -> list[str]:
     selected = sorted(set(names or TARGETS))
     unknown = set(selected) - set(TARGETS)
@@ -147,13 +198,14 @@ def build_artifacts(out_dir: Path, names: list[str] | None = None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     revision = canary_sha()
     commit = farm_sha()
-    build_env = dict(os.environ, CANARY_SHA=revision)
+    version = firmware_version()
+    build_env = dict(os.environ, CANARY_SHA=revision, CANARY_VERSION=version)
     entries: dict = {}
 
     for name in selected:
         target = TARGETS[name]
         core_dir = core_dir_for(name)
-        print(f"==> canary {name} ({target['board']}) in {core_dir}")
+        print(f"==> Rig Health Check {version} {name} ({target['board']}) in {core_dir}")
         subprocess.run(
             [pio, "run", "-d", str(FIRMWARE_DIR), "-e", name],
             check=True,
@@ -221,6 +273,8 @@ def build_artifacts(out_dir: Path, names: list[str] | None = None) -> Path:
                 # The revision of record, and the firmware's own identity.
                 "farm_sha": commit,
                 "canary_sha": revision,
+                # The number a person reads, and the one a board reports.
+                "version": version,
                 "targets": entries,
             },
             indent=2,
@@ -229,7 +283,7 @@ def build_artifacts(out_dir: Path, names: list[str] | None = None) -> Path:
         + "\n",
         encoding="utf-8",
     )
-    print(f"canary manifest: {manifest}")
+    print(f"Rig Health Check {version} manifest: {manifest}")
     return manifest
 
 
@@ -244,7 +298,14 @@ def main(argv: list[str] | None = None) -> int:
         "--revision", action="store_true",
         help="print the canary source digest and build nothing (a deploy's cache key)",
     )
+    parser.add_argument(
+        "--version", action="store_true", dest="print_version",
+        help="print the firmware version this checkout builds, and build nothing",
+    )
     args = parser.parse_args(argv)
+    if args.print_version:
+        print(firmware_version())
+        return 0
     if args.revision:
         print(canary_sha())
         return 0

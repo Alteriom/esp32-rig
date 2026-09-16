@@ -1,4 +1,4 @@
-# The farm canary: the farm validating itself.
+# The Rig Health Check (profile `canary`): the farm validating itself.
 #
 # Every other profile answers "is this project's firmware good on this
 # hardware". This one answers "is this hardware good", and it is the farm's
@@ -12,7 +12,7 @@
 
 schema: 1
 name: canary
-label: Farm canary
+label: Rig Health Check
 
 source:
   # The canary is this repository's, like painlessMesh's suite -- but unlike
@@ -96,5 +96,7 @@ env:
   ALTERIOM_HIL_CANARY_REVISION: "{revision}"
 
 report:
-  title: "Farm canary {revision}"
+  # {version} is the firmware's own MAJOR.MINOR.PATCH (canary/firmware/VERSION
+  # and the commits that changed it), stamped into the bundle by its build.
+  title: "Rig Health Check {version}"
   capabilities: suites/canary/capabilities.json

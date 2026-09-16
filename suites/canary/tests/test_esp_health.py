@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import RUN_TAG
+from conftest import RUN_TAG, flashed_version
 
 pytestmark = [
     # A canary failure is never a library's bug: there is no library in it.
@@ -24,6 +24,14 @@ def test_the_board_boots_and_says_what_it_is(board, canary):
     assert info.get("bootId"), f"{canary} answered info with no boot id"
     assert info.get("family"), f"{canary} did not say which family it was built for"
     assert info.get("canarySha"), f"{canary} did not say which canary it is running"
+    # The board runs the bundle this run flashed, by the number a person
+    # reads: a board still on an older build says so here, by version.
+    expected = flashed_version()
+    if expected:
+        assert info.get("version") == expected, (
+            f"{canary} runs Rig Health Check {info.get('version') or 'with no version'}, "
+            f"but this run flashed {expected}"
+        )
     silicon = info.get("silicon") or {}
     assert silicon.get("chip"), f"{canary} did not name its chip"
     # A part that answers but reports no heap and no flash is one whose
