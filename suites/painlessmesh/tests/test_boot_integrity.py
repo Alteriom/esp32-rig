@@ -37,15 +37,19 @@ import pytest
 
 from alteriom_hil.protocol import TimeoutWaitingFor
 
-# Printed by the ESP32 ROM / ESP-IDF panic handler, the ESP8266 boot ROM
-# and SDK, or the Arduino core, when a chip did not reboot on purpose. A
-# deliberate reset -- the bank's EN pulse, an OTA activation, the agent
-# restarting to apply a mesh configuration -- prints a POWERON or
-# software-reset reason and none of these. The ESP8266's boot ROM speaks
-# at 74880 baud, so most of its text is noise in a 115200 capture; its
-# `rst cause` line and the Arduino core's exception decoder output (which
-# is what printed "last failed alloc call" when a shared gateway ran out
-# of heap on the rig) come through readable.
+# Printed by the ESP32 ROM / ESP-IDF panic handler or the Arduino cores'
+# exception decoders when a chip did not reboot on purpose. A deliberate
+# reset -- the bank's EN pulse, an OTA activation, the agent restarting to
+# apply a mesh configuration -- prints none of these.
+#
+# Not the ESP8266 ROM's `rst cause:N` line: its numbering is the ROM's, not
+# the SDK's, and 2 is what an EN pulse prints as much as what follows an
+# exception. The first hardware run of this row failed a healthy ESP8266
+# on exactly that, one line before its first boot frame -- the bank's own
+# reset of a slow board. What the ESP8266 prints readably at 115200 when
+# it dies is the core's decoder output, "<<<stack<<<" and "last failed
+# alloc" being what the shared-gateway OOM left behind; the ROM's own
+# text at 74880 baud is noise here and is not relied on either way.
 CRASH_MARKERS = (
     "Guru Meditation Error",
     "panic'ed",
@@ -56,9 +60,6 @@ CRASH_MARKERS = (
     "<<<stack<<<",
     "last failed alloc",
     "Soft WDT reset",
-    "wdt reset",
-    "rst cause:2",   # ESP8266: exception
-    "rst cause:4",   # ESP8266: hardware watchdog
     "BROWNOUT_RESET",
     "Rebooting...",
 )
