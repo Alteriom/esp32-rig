@@ -74,6 +74,15 @@ preflight:
 # earlier run already left for the same commit: with no build command there is
 # nothing to fall back to, and a run with neither is refused when it is
 # submitted, naming this workflow.
+# The HIL agent: the firmware this suite's boards run so that the suite can
+# talk to them. A bundle declares the digest of the agent source it was built
+# from (`hil_agent_sha`), and the farm refuses one built from another -- it
+# would speak a protocol the deployed suite does not. The farm used to know
+# this directory by name; it is the profile's to say, so that another
+# project's agent is held to its own and a profile with none is held to none.
+agent:
+  source_path: suites/painlessmesh/firmware
+
 supply:
   repo: https://github.com/Alteriom/alteriom-esp32-farm
   workflow: .github/workflows/hil-painlessmesh.yml
