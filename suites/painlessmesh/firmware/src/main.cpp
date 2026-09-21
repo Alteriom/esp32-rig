@@ -289,6 +289,15 @@ void handleInfo() {
   doc["freeHeap"] = ESP.getFreeHeap();
   doc["meshPrefix"] = activeMeshPrefix;
   doc["otaGeneration"] = HIL_OTA_GENERATION;
+#ifdef PAINLESSMESH_HAS_TCP_LISTENING
+  // Whether the mesh listener exists and is in LISTEN. painlessMesh #466
+  // crashed a node inside init() on this pointer before it served a
+  // connection; #435 had a promoted bridge serving nothing for two minutes
+  // with its listener not listening. Reported so the rig can assert it
+  // rather than infer it from a peer eventually connecting. Absent on
+  // library revisions before the accessor existed.
+  doc["listening"] = mesh.tcpListening();
+#endif
   emitEvent(doc);
 }
 

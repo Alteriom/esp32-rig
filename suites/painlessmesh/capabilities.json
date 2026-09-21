@@ -48,6 +48,8 @@
   "ota.mesh": "Firmware is transferred and activated through the mesh OTA path",
   "power.recovery": "A genuine MCU power cut reboots and rejoins the node",
   "node.reset_recovery": "A node rebooted over EN rejoins the mesh and is routed to again; proves the mesh heals around a reboot, not that the rig survives re-enumeration",
+  "node.boot_integrity": "Every node boots once from the bank coming up to the mesh forming, with no panic, exception, watchdog or brown-out in its serial log; a node that crashes in init() is named, not reported as a mesh that never formed",
+  "node.listener_serving": "Every node in the formed mesh reports its TCP listener in LISTEN, on the node itself rather than inferred from a peer connecting",
   "soak.stability": "The mesh remains healthy during a sustained traffic soak",
   "mesh.heap_stability": "Free heap remains within the allowed bound during sustained traffic",
   "delivery.ack.sustained": "Acknowledged delivery remains lossless throughout the traffic soak"
