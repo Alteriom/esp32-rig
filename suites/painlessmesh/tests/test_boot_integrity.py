@@ -12,10 +12,14 @@ Two capabilities, deliberately separate:
   board that boot-loops is reported *by this test* with its crash marker
   and boot count, instead of blocking every test behind the ``mesh``
   fixture. It reads the serial capture the bank has kept since it came
-  up: the flash tool's own reset precedes the capture, so a healthy board
-  shows no ``boot`` frame at all (or exactly one, if the bank had to reset
-  a wedged board before measuring), and a crashing one shows a fresh boot
-  id per crash.
+  up, and counts the boots *into this run's mesh*: the ``mesh`` fixture
+  gives every board the run's prefix with ``mesh_configure``, which the
+  agent applies by restarting, so one boot frame carrying that prefix is
+  the healthy shape, a frame carrying an older prefix is the board's
+  previous life (the first hardware run of this row caught exactly that
+  on an ESP8266 and called it a reboot), and a second frame with this
+  run's prefix is a board that came up and went down again -- the #466
+  shape, a crash in ``init()`` after the configuration took.
 * ``node.listener_serving`` asks the node itself whether its TCP listener
   is in LISTEN, through the ``listening`` field the agent reports when the
   library under test has ``tcpListening()`` (painlessMesh >= 2.1.1). The
@@ -35,8 +39,13 @@ from alteriom_hil.protocol import TimeoutWaitingFor
 
 # Printed by the ESP32 ROM / ESP-IDF panic handler, the ESP8266 boot ROM
 # and SDK, or the Arduino core, when a chip did not reboot on purpose. A
-# deliberate reset -- the bank's EN pulse, an OTA activation -- prints a
-# POWERON or software-reset reason and none of these.
+# deliberate reset -- the bank's EN pulse, an OTA activation, the agent
+# restarting to apply a mesh configuration -- prints a POWERON or
+# software-reset reason and none of these. The ESP8266's boot ROM speaks
+# at 74880 baud, so most of its text is noise in a 115200 capture; its
+# `rst cause` line and the Arduino core's exception decoder output (which
+# is what printed "last failed alloc call" when a shared gateway ran out
+# of heap on the rig) come through readable.
 CRASH_MARKERS = (
     "Guru Meditation Error",
     "panic'ed",
@@ -44,8 +53,12 @@ CRASH_MARKERS = (
     "Backtrace:",
     "Fatal exception",
     "Exception (",
+    "<<<stack<<<",
+    "last failed alloc",
     "Soft WDT reset",
     "wdt reset",
+    "rst cause:2",   # ESP8266: exception
+    "rst cause:4",   # ESP8266: hardware watchdog
     "BROWNOUT_RESET",
     "Rebooting...",
 )
@@ -107,21 +120,35 @@ def test_every_node_boots_once_without_a_crash(bank):
                 f"{board_id}: {len(crashes)} crash marker(s) in its serial log, "
                 f"first: {crashes[0].strip()[:160]!r}"
             )
-        boot_ids = {frame.get("bootId") for frame in boots}
-        if info is not None:
-            boot_ids.add(info.get("bootId"))
-        if len(boot_ids) > 1:
-            findings.append(
-                f"{board_id}: {len(boots)} boot frame(s) with {len(boot_ids)} "
-                f"distinct boot ids since the bank came up -- it rebooted "
-                f"{len(boot_ids) - 1} time(s) when it should have booted once"
-            )
         if info is None:
             findings.append(
                 f"{board_id}: never answered `info` within {FIRST_INFO_TIMEOUT:.0f}s "
                 f"({len(boots)} boot frame(s) seen"
-                + (f", crashing" if crashes else "")
+                + (", crashing" if crashes else "")
                 + ")"
+            )
+            continue
+
+        # The boots into *this run's* mesh. The configure that gives a board
+        # the run's prefix restarts the agent, so the frame carrying that
+        # prefix is the one healthy boot; frames with another prefix are the
+        # board's previous life, caught only when the capture opened before
+        # the configure. Two frames with this prefix is a board that came up
+        # and went down again.
+        prefix = info.get("meshPrefix")
+        this_run = [frame for frame in boots if frame.get("meshPrefix") == prefix]
+        if len(this_run) > 1:
+            ids = sorted({str(frame.get("bootId")) for frame in this_run})
+            findings.append(
+                f"{board_id}: {len(this_run)} boot frames into this run's mesh "
+                f"({prefix}), boot ids {', '.join(ids)} -- it came up and went "
+                f"down again {len(this_run) - 1} time(s)"
+            )
+        elif this_run and this_run[-1].get("bootId") != info.get("bootId"):
+            findings.append(
+                f"{board_id}: booted into this run's mesh as boot id "
+                f"{this_run[-1].get('bootId')} but answers `info` as "
+                f"{info.get('bootId')} -- it rebooted without a boot frame"
             )
     assert not findings, "boards that did not come up cleanly:\n  " + "\n  ".join(findings)
 
