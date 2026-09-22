@@ -4,6 +4,10 @@ from pathlib import Path
 
 
 WEB = Path(__file__).resolve().parents[1] / "runner" / "web"
+# The two halves of the manager: each in its own distribution now
+# (docs/public-release-plan.md, step 12b), not beside the service.
+RIG_HALF = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "rig_manager.py"
+PORTAL_HALF = Path(__file__).resolve().parents[1] / "portal" / "alteriom_hil" / "portal_manager.py"
 
 
 def dashboard() -> str:
@@ -313,7 +317,7 @@ def test_the_run_form_offers_a_partial_run_and_reuse():
     assert "renderSuiteTests(data.suite_tests" in script and '"suite_tests": manager.suite_catalogue()' in service
     assert "rerun-failed" in script and "rerun-same" in script
     assert "TEST_PATTERN" in service and "KEYWORD_PATTERN" in service
-    pipeline = (WEB.parent / "rig_manager.py").read_text(encoding="utf-8")
+    pipeline = RIG_HALF.read_text(encoding="utf-8")
     assert "reusable_artifacts" in pipeline and "already_flashed" in pipeline
     rerun = script.split("async function rerun", 1)[1].split("\n}", 1)[0]
     assert "reuse: true" in rerun and "resolved_sha" in rerun
@@ -995,7 +999,7 @@ def test_a_rigs_own_subscriptions_are_managed_by_the_person_whose_rig_it_is():
 
     # The service decides the same way, and refuses what the page hides: a
     # page is not where access is enforced.
-    manager = (WEB.parent / "portal_manager.py").read_text(encoding="utf-8")
+    manager = PORTAL_HALF.read_text(encoding="utf-8")
     service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
     decide = manager.split("def may_manage_rig(self, name: str, identity)", 1)[1].split("\n    def ", 1)[0]
     assert 'getattr(identity, "is_admin", False)' in decide

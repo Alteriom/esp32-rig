@@ -31,6 +31,9 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -38,6 +41,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 CORE_DIR = ROOT / "core" / "alteriom_hil"
 RIG_DIR = ROOT / "rig" / "alteriom_hil"
+PORTAL_DIR = ROOT / "portal" / "alteriom_hil"
 HAL_DIRS = (CORE_DIR, RIG_DIR)
 RUNNER = ROOT / "runner"
 
@@ -47,6 +51,9 @@ RIG_ONLY = {
     "flash", "power", "serial_capture", "protocol",
     "plugins", "connectors", "pytest_plugin", "sim",
     "inventory", "instrument", "report", "mqtt",
+    # The rig's half of the manager: the pipeline, the boards' health, the
+    # rig's own files. It ships with the drivers because it drives them.
+    "rig_manager",
 }
 
 # What both halves hold. Identity and keys above all: the farm decides who a
@@ -70,11 +77,17 @@ CORE = {
     "jobstore",
     # What both halves of the manager say the same way: the errors, the shapes.
     "farm_shared",
+    # And what they say it over: the worker protocol's constants, the digest
+    # an agent is known by. A portal times a rig out by these and a rig
+    # heartbeats by them, so neither half can own them.
+    "wire",
 }
 
 # The portal's own. A rig never imports these; after the split they are not
-# in its repository to import.
+# in its repository to import. `portal_manager` is a distribution of its own
+# (portal/) and no longer under runner/ -- which is what portal_files() reads.
 PORTAL_MODULES = {"farm_service", "portal_manager"}
+PORTAL_FILES = (RUNNER / "farm_service.py", PORTAL_DIR / "portal_manager.py")
 
 
 def hal_name(path) -> str:
@@ -102,8 +115,9 @@ def hal_contents() -> set:
                   if child.is_dir() and (child / "__init__.py").exists()}
     return names
 
-# The rig's entry points, outside the HAL.
-RIG_SCRIPTS = {"farm_node", "health_check", "rig_manager"}
+# The rig's entry points, outside the HAL. `rig_manager` left this list when
+# it moved into the HAL itself (rig/alteriom_hil), where RIG_ONLY holds it.
+RIG_SCRIPTS = {"farm_node", "health_check"}
 
 
 def portal_files() -> list:
@@ -114,14 +128,13 @@ def portal_files() -> list:
     failure, not a skip: the rule this feeds reads the portal's imports, and
     a file that moved would otherwise leave it reading nothing and passing.
     """
-    named = [RUNNER / f"{name}.py" for name in sorted(PORTAL_MODULES)]
-    moved = [path for path in named if not path.exists()]
+    moved = [path for path in PORTAL_FILES if not path.exists()]
     assert not moved, (
-        f"portal modules not found under runner/: {[path.name for path in moved]}. "
-        "If they moved, say where in portal_files() -- the boundary is checked "
+        f"portal modules not where PORTAL_FILES says: {[path.name for path in moved]}. "
+        "If they moved, say where in PORTAL_FILES -- the boundary is checked "
         "by reading them."
     )
-    return named + sorted((ROOT / "portal").rglob("*.py"))
+    return sorted(set(PORTAL_FILES) | set((ROOT / "portal").rglob("*.py")))
 
 
 def imports_of(path: Path) -> set[str]:
@@ -193,7 +206,8 @@ def test_the_manifest_covers_every_hal_module():
 # What the portal reaches into the rig for TODAY, and why. The test holds the
 # list exactly, so the set can shrink and cannot grow.
 #
-#   rig_manager  farm_service.py is the base, the launcher, and the three
+#   rig_manager  now alteriom_hil.rig_manager: farm_service.py is the base,
+#                the launcher, and the three
 #                classes the mode picks between -- and the standalone one is
 #                composed from the rig's mixin and the portal's, so the file
 #                imports both. This goes when the base and the launcher are
@@ -318,8 +332,8 @@ NAMES_PAINLESSMESH = {
     "core/alteriom_hil/run_record.py": 1,
     "runner/ci_farm_client.py": 5,
     "runner/farm_service.py": 9,
-    "runner/portal_manager.py": 1,
-    "runner/rig_manager.py": 4,
+    "portal/alteriom_hil/portal_manager.py": 1,
+    "rig/alteriom_hil/rig_manager.py": 4,
     "runner/flash_artifacts.py": 1,
     "runner/hil_config.py": 1,
     # The two installers name suites/painlessmesh/ because the gateway probe
@@ -335,7 +349,7 @@ NAMES_PAINLESSMESH = {
 
 def lines_naming_painlessmesh() -> dict:
     found = {}
-    for top in (*HAL_DIRS, RUNNER):
+    for top in (*HAL_DIRS, PORTAL_DIR, RUNNER):
         for path in sorted(top.rglob("*")):
             if path.suffix not in GENERIC_SUFFIXES or "sim-host" in path.name:
                 continue
@@ -378,7 +392,69 @@ def test_the_manifest_and_the_directories_say_the_same_thing():
     # half's: they are in the core because a client needs no hardware.
     assert placed(CORE_DIR) - {"mcp_server", "farm_client"} == CORE
     assert placed(RIG_DIR) == RIG_ONLY
-    assert not (CORE_DIR / "__init__.py").exists() and not (RIG_DIR / "__init__.py").exists(), (
-        "`alteriom_hil` is a namespace package: neither distribution owns its __init__.py, "
-        "or installing both would have one shadow the other"
+    # The portal's half is a distribution of its own, and holds nothing else:
+    # what a rig installs is core and rig, and it is whole without this.
+    assert placed(PORTAL_DIR) == {"portal_manager"}
+    owned = [d for d in (CORE_DIR, RIG_DIR, PORTAL_DIR) if (d / "__init__.py").exists()]
+    assert not owned, (
+        f"`alteriom_hil` is a namespace package and {[d.parent.name for d in owned]} owns its "
+        "__init__.py: install two distributions that do and one shadows the other"
     )
+
+
+# What a rig does when the portal's half is not installed at all. Run in a
+# child interpreter with that one module made unimportable: on a machine that
+# develops both, it is installed, and a PYTHONPATH cannot hide a distribution
+# pip has put in site-packages.
+WITHOUT_THE_PORTAL = """
+import importlib.util, sys
+
+class Absent:
+    \"\"\"A rig's machine: alteriom-hil-portal was never installed.\"\"\"
+
+    def find_spec(self, name, path=None, target=None):
+        if name == "alteriom_hil.portal_manager":
+            raise ImportError("No module named 'alteriom_hil.portal_manager'")
+        return None
+
+sys.meta_path.insert(0, Absent())
+spec = importlib.util.spec_from_file_location("farm_service", {service!r})
+service = importlib.util.module_from_spec(spec)
+sys.modules["farm_service"] = service
+spec.loader.exec_module(service)
+
+assert service.PORTAL_HALF is None, service.PORTAL_HALF
+# A node is the rig's half on the base, with nothing missing.
+assert service.manager_for("node").__mro__[1] is service.RigMixin
+# And a standalone farm still composes -- with the base's answer to every
+# portal question, which is what a rig on its own says. Asked of an instance,
+# because that is where the base answers (__getattr__); one is made without
+# running __init__, which would want a rig's directories.
+standalone = service.manager_for("standalone")
+assert service.RigMixin in standalone.__mro__
+farm = object.__new__(standalone)
+try:
+    farm.publish_release
+except AttributeError as exc:
+    assert isinstance(exc, service.ElsewhereError), type(exc)
+else:
+    raise AssertionError("a farm with no portal half published a release")
+print("ok")
+"""
+
+
+def test_a_rig_composes_without_the_portals_half():
+    """The portal is a distribution of its own (portal/, alteriom-hil-portal)
+    so that a rig need not carry it: what somebody installs for their own
+    project is the core and the rig, and this is the test that says so.
+
+    Import it and the separation is a comment. Refuse it and the service
+    either loads or does not -- and what it must not do is fail to start,
+    which is what an unguarded import of the half would mean on every rig
+    that never had a portal.
+    """
+    source = WITHOUT_THE_PORTAL.format(service=str(RUNNER / "farm_service.py"))
+    done = subprocess.run([sys.executable, "-c", textwrap.dedent(source)],
+                          capture_output=True, text=True, cwd=str(ROOT))
+    assert done.returncode == 0, done.stderr or done.stdout
+    assert done.stdout.strip().endswith("ok")

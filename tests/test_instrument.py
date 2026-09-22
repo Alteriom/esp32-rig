@@ -227,7 +227,7 @@ def test_the_service_refuses_an_instrument_as_a_board_and_a_wired_board_going(tm
     manager.board_map = tmp_path / "active.yaml"
     manager.state = tmp_path
 
-    import rig_manager  # the rig's half reads its own names; on sys.path once the service is loaded
+    from alteriom_hil import rig_manager  # the rig's half reads its own names
 
     monkeypatch.setattr(farm_shared, "RIG_LOCK_PATH", tmp_path / "rig.lock")
     monkeypatch.setattr(

@@ -225,7 +225,7 @@ def test_the_listing_says_which_bundles_a_run_could_flash_today(tmp_path):
 def test_a_bundle_that_went_between_submit_and_the_rig_fails_the_stage():
     """The submit check can be overtaken -- a prune between the two -- and
     then the firmware stage is where it has to be said, with no fallback."""
-    source = (REPO / "runner" / "rig_manager.py").read_text(encoding="utf-8")
+    source = (REPO / "rig" / "alteriom_hil" / "rig_manager.py").read_text(encoding="utf-8")
     stage = source.split("if not (reused_from or supplied):", 1)[1].split("manifest = json.loads", 1)[0]
     assert "No firmware bundle for this run" in stage
     assert "no longer on disk" in stage, "which is the only way to reach it"
@@ -240,10 +240,13 @@ def test_nothing_on_the_farm_host_can_build(tmp_path):
     assert "platformio" not in (REPO / "runner" / "verify-rig.sh").read_text(encoding="utf-8")
     assert ".platformio-cores" not in (REPO / "runner" / "install-health-service.sh").read_text(encoding="utf-8")
 
-    for half in ("farm_service.py", "rig_manager.py", "portal_manager.py"):
-        service = (REPO / "runner" / half).read_text(encoding="utf-8")
+    # The launcher and the two halves, each where its distribution keeps it.
+    for half in (REPO / "runner" / "farm_service.py",
+                 REPO / "rig" / "alteriom_hil" / "rig_manager.py",
+                 REPO / "portal" / "alteriom_hil" / "portal_manager.py"):
+        service = half.read_text(encoding="utf-8")
         for gone in ("PLATFORMIO_CORES", "_build_env", "clear_platformio_cache", "/api/v1/storage/platformio", "build_command"):
-            assert gone not in service, (half, gone)
+            assert gone not in service, (half.name, gone)
 
     flash_all = (REPO / "suites" / "painlessmesh" / "flash_all.py").read_text(encoding="utf-8")
     assert "build_artifacts" not in flash_all and "--skip-build" not in flash_all

@@ -17,7 +17,7 @@ SPEC = importlib.util.spec_from_file_location("farm_service", SERVICE_PATH)
 farm_service = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader
 SPEC.loader.exec_module(farm_service)
-import rig_manager  # noqa: E402 -- on sys.path once the service is loaded; the rig's half reads its own names
+from alteriom_hil import rig_manager  # noqa: E402 -- the rig's half reads its own names
 
 
 def _install_profiles(repo: Path) -> Path:

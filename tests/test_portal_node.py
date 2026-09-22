@@ -48,7 +48,7 @@ def _load(name: str, path: Path):
 farm_service = _load("farm_service_portal", RUNNER / "farm_service.py")
 # The portal's half reads its own constants; a test that changes one for a
 # run changes it where it is read.
-import portal_manager as portal_half  # noqa: E402 -- on sys.path once the service is loaded
+from alteriom_hil import portal_manager as portal_half  # noqa: E402
 farm_node = _load("farm_node_portal", RUNNER / "farm_node.py")
 
 SHA = "c" * 40
@@ -4081,7 +4081,7 @@ def test_the_mode_picks_a_class_that_carries_only_its_own_half():
     by mode, and what each half reaches for in the other is behind a mode
     guard or a base default that does nothing (docs/public-release-plan.md,
     step 8c)."""
-    import rig_manager
+    from alteriom_hil import rig_manager
 
     assert farm_service.manager_for("node") is farm_service.RigManager
     assert farm_service.manager_for("portal") is farm_service.PortalManager
