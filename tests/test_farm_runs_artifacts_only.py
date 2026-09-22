@@ -268,8 +268,8 @@ def test_the_dashboard_starts_a_run_from_a_bundle_the_farm_holds():
     """A form that took a ref would send runs the service refuses, and the
     refusal would read as the farm being broken. It offers what the farm can
     run: the bundles it holds for the chosen profile."""
-    script = (REPO / "runner" / "web" / "app.js").read_text(encoding="utf-8")
-    page = (REPO / "runner" / "web" / "index.html").read_text(encoding="utf-8")
+    script = (REPO / "rig" / "web" / "app.js").read_text(encoding="utf-8")
+    page = (REPO / "rig" / "web" / "index.html").read_text(encoding="utf-8")
     form = page.split('id="suite-form"', 1)[1].split("</form>", 1)[0]
     assert 'id="bundle-select"' in form
     assert 'name="ref"' not in form and 'name="reuse"' not in form

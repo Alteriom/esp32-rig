@@ -151,11 +151,11 @@ def test_a_portal_sets_a_rigs_callmebot_policy_but_never_its_link(tmp_path):
             assert says in str(exc), (refused, str(exc))
         else:
             raise AssertionError(refused)
-    # Every remote setting is one the dashboard can change (runner/web/app.js):
+    # Every remote setting is one the dashboard can change (rig/web/app.js):
     # most as a row in the settings table, the notification ones from the
     # channel card that shows what they mean -- but each of them from the page,
     # never only from an ssh session.
-    script = (RUNNER / "web" / "app.js").read_text(encoding="utf-8")
+    script = (RUNNER.parent / "rig" / "web" / "app.js").read_text(encoding="utf-8")
     for key in hil_config.REMOTE_SETTINGS:
         assert f'"{key}"' in script, key
 

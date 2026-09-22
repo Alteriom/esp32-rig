@@ -4799,7 +4799,15 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             # and still lands, on the page it became.
             bare = path.rstrip("/") or "/"
             if bare in SITE_PAGES:
-                return self._site_page(SITE_PAGES[bare])
+                # The site is the portal's, and its pages are in the portal's
+                # half of the web root. A rig serves the rig's half alone, so
+                # the page is not there and what the caller wanted at `/` is
+                # the only thing a rig has: its own dashboard
+                # (docs/public-release-plan.md, step 12d).
+                page = SITE_PAGES[bare]
+                if not (web_root / page).is_file():
+                    return self._site_page("index.html")
+                return self._site_page(page)
             if bare == "/app":
                 return self._site_page("index.html")
             if bare in WORLD_MOVED:

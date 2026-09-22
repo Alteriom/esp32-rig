@@ -26,7 +26,7 @@ from alteriom_hil import providers
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "runner"
-APP = RUNNER / "web" / "app.js"
+APP = RUNNER.parent / "rig" / "web" / "app.js"
 FAKE_LINK = "https://api.callmebot.com/whatsapp.php?phone=+15550001234&apikey=987654"
 # The decrypt node-control.sh runs, argument for argument.
 OPENSSL_DECRYPT = ["pkeyutl", "-decrypt", "-pkeyopt", "rsa_padding_mode:oaep",
@@ -140,7 +140,7 @@ def _function(script: str, name: str) -> str:
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed; the page's WebCrypto is not run")
 def test_the_pages_webcrypto_seal_opens_with_the_rigs_openssl_command(rig_key, tmp_path):
-    """runner/web/app.js's own sealProviderLink, run on node's WebCrypto (the
+    """rig/web/app.js's own sealProviderLink, run on node's WebCrypto (the
     browser's API), decrypted by the command node-control.sh runs."""
     private, public = rig_key
     script = APP.read_text(encoding="utf-8")

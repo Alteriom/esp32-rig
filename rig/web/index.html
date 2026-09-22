@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alteriom ESP32 Farm</title>
+  <meta name="theme-color" content="#080d0c">
+  <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+  <link rel="manifest" href="/brand/app.webmanifest">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/pipeline.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="#overview"><img class="brand-mark" src="/brand/mark.svg" width="34" height="34" alt=""><span><small>ALTERIOM</small><strong>ESP32 Farm</strong></span></a>
+    <nav id="nav" aria-label="Dashboard">
+      <button class="nav-item active" data-panel="overview">Overview</button>
+      <button class="nav-item" data-panel="runs">Runs</button>
+      <button class="nav-item" data-panel="rigs">Rigs</button>
+      <button class="nav-item farm-wide" data-panel="artifacts">Firmware</button>
+      <button class="nav-item farm-wide" data-panel="statistics">Insights</button>
+      <button class="nav-item farm-wide" data-panel="configuration">Settings</button>
+      <!-- The header's .connection block carries the same name and the same
+           sign out, and is display:none below 850px. The nav is not, so on a
+           phone this is where you see who you are and stop being it. -->
+      <button class="nav-item" data-panel="account">Account</button>
+    </nav>
+    <div class="connection">
+      <a id="repo-link" class="repo-link" href="#" target="_blank" rel="noopener" hidden title="Farm repository on GitHub"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span id="repo-name">GitHub</span></a>
+      <a id="version" class="version" href="#" target="_blank" rel="noopener" title="Deployed revision">–</a>
+      <span id="you" class="badge you" hidden></span><button id="sign-out" class="secondary sign-out" hidden>Sign out</button><span id="live-dot" class="live-dot"></span><span id="last-updated">Connecting</span><span id="overall" class="badge">CONNECTING</span>
+    </div>
+  </header>
+  <main>
+    <section id="login" class="card login-card">
+      <p class="eyebrow">SIGN IN</p><h1>Your rigs, your runs</h1>
+      <p id="signin-note" class="signin-note" hidden></p>
+      <div id="signin-methods" class="signin-methods">
+        <a id="signin-github" class="button signin-github" href="/auth/github" hidden>Sign in with GitHub</a>
+        <form id="signin-email-form" hidden>
+          <label for="signin-email">Or by email: we send you a code to type here</label>
+          <div class="signin-row"><input id="signin-email" type="email" autocomplete="email" placeholder="you@example.org" required><button>Send code</button></div>
+        </form>
+        <!-- Shown once a code is on its way. The code is typed into this
+             page rather than followed from the mail, so it works when the
+             mail opens somewhere else -- and the farm only accepts it from
+             the browser that asked for it. -->
+        <form id="signin-code-form" hidden>
+          <label for="signin-code">The 6-digit code we mailed to <strong id="signin-code-to"></strong></label>
+          <div class="signin-row"><input id="signin-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="000000" required><button>Sign in</button></div>
+          <p class="muted">Good for 10 minutes, from this browser only. <button type="button" id="signin-code-again" class="linkish">Send another</button></p>
+        </form>
+        <p id="signin-none" class="muted" hidden>This portal offers no sign-in yet: an API key is the way in.</p>
+      </div>
+      <details id="signin-key">
+        <summary>Connect with an API key</summary>
+        <p class="muted">For a program, or an operator with a key. It remains in this browser tab only.</p>
+        <form id="token-form"><input id="token" type="password" autocomplete="current-password" placeholder="API token" required><button>Connect</button></form>
+      </details>
+    </section>
+    <div id="dashboard" hidden>
+      <section class="page active" data-page="overview">
+        <div class="page-heading"><div><p class="eyebrow">CONTROL PLANE</p><h1>Farm overview</h1></div><div class="row-actions"><button id="overview-new-run" class="secondary farm-wide">New run</button></div></div>
+        <section id="node-banner" class="card" hidden></section>
+        <section class="metrics">
+          <article><span>Rigs online</span><strong id="rigs-online">–</strong><small id="rigs-note" class="muted"></small></article>
+          <article><span>Boards available</span><strong id="connected">–</strong><small id="boards-note" class="muted"></small></article>
+          <article><span>Running</span><strong id="busy">–</strong><small id="running-note" class="muted"></small></article>
+          <article><span>Queued</span><strong id="queued">–</strong><small id="queue-note" class="muted"></small></article>
+        </section>
+        <section id="overview-stats" class="card stats-band farm-wide" hidden></section>
+        <section class="grid overview-grid">
+          <article id="overview-rigs" class="card"><p class="muted">Connecting…</p></article>
+          <article id="overview-attention" class="card"><p class="muted">Connecting…</p></article>
+        </section>
+        <section id="active-run" class="card hero-run"><p class="muted">Connecting…</p></section>
+        <section id="overview-recent" class="card"></section>
+      </section>
+      <section class="page" data-page="runs" hidden>
+        <div class="page-heading"><div><p class="eyebrow">EVIDENCE</p><h1>Pipeline runs</h1></div><p class="muted">Start a run, follow its stages, read what it left.</p></div>
+        <details id="run-card" class="card new-run farm-wide"><summary><span class="eyebrow">NEW EXECUTION</span><strong>Run a validation pipeline</strong><small class="muted">Flash a bundle a project's CI built, on the boards it needs</small></summary><form id="suite-form"><label>Validation profile<select name="profile" id="profile-select"><option value="">Loading profiles from the farm service…</option></select></label><label>Firmware bundle <small class="muted" id="bundle-hint"></small><select name="artifact" id="bundle-select"><option value="">Loading the bundles the farm holds…</option></select></label><p id="bundle-note" class="muted">The farm does not build firmware: a run flashes a bundle its project's CI built.</p><fieldset id="artifact-families"><legend>Artifact families</legend><span class="muted">Loading families from the farm service…</span></fieldset><details id="test-selection"><summary>Test selection <span id="test-selection-note" class="muted">whole suite</span></summary><fieldset id="test-files"><legend>Test files</legend><span class="muted">Loading the suite…</span></fieldset><label>Keyword expression <small class="muted">(pytest -k, e.g. <code>failover or soak</code>)</small><input name="keyword" autocomplete="off" placeholder="run everything matching…"></label></details><button id="suite-submit">Flash this bundle and test</button></form></details>
+        <section class="card">
+          <div class="filter-bar">
+            <input id="job-search" type="search" placeholder="Search id, project, branch, revision, summary, failed stage" autocomplete="off">
+            <select id="job-kind" aria-label="Pipeline kind"><option value="">All pipelines</option><option value="suite">Suite</option><option value="build">Farm build (retired)</option><option value="inventory">Discovery</option></select>
+            <div id="job-status-filters" class="chips" role="group" aria-label="Status"></div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>Created</th><th>Project</th><th>Branch</th><th>Revision</th><th>Targets</th><th>Status</th><th>Duration</th><th>Result</th><th></th></tr></thead><tbody id="jobs"></tbody></table></div>
+          <div class="pager"><span id="job-range" class="muted"></span><span class="pager-buttons"><button id="job-prev" class="secondary" disabled>Previous</button><button id="job-next" class="secondary" disabled>Next</button></span></div>
+        </section>
+      </section>
+      <!-- A run is a page, not a panel inside the list. It is the thing an
+           operator reads for twenty minutes, links to a colleague, and comes
+           back to after a reload: all three want a URL of its own, and none
+           of them wants the list of every other run scrolled above it. -->
+      <section class="page" data-page="run" hidden>
+        <div class="page-heading"><div><p class="eyebrow">EXECUTION</p><h1 id="job-title">Pipeline run</h1><p id="job-subtitle" class="muted"></p></div><div class="row-actions"><span id="job-actions"></span><button id="close-job" class="secondary">Back to runs</button></div></div>
+        <section class="card">
+          <div id="job-summary"></div><div id="timing"></div><div id="simulation"></div><div id="pipeline"></div><div id="report"></div>
+          <details id="log-details"><summary>Technical log <span class="muted">(live)</span></summary><pre id="job-log"></pre></details>
+        </section>
+      </section>
+      <!-- What the farm has done, from its own history: nothing on this page is
+           collected for it. Every job already records when it was asked for,
+           started and finished, what it was for, and each stage's outcome. -->
+      <section class="page farm-wide" data-page="statistics" hidden>
+        <div class="page-heading"><div><p class="eyebrow">HISTORY</p><h1>Farm statistics</h1></div><div class="row-actions"><div id="stats-window" class="chips" role="group" aria-label="Window"></div><button id="stats-refresh" class="secondary">Refresh</button></div></div>
+        <section id="stats-headline" class="metrics stats-metrics"></section>
+        <section class="card"><div class="title-row"><div><p class="eyebrow">ACTIVITY</p><h2>Runs per day</h2></div><span id="stats-legend" class="muted"></span></div><div id="stats-chart" class="stats-chart"><p class="muted">Loading…</p></div></section>
+        <section class="card"><div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>By project</h2></div><span class="muted">Pass rate leaves out cancelled runs</span></div><div id="stats-projects"></div></section>
+        <section class="grid stats-grid">
+          <article class="card"><div class="title-row"><div><p class="eyebrow">FAILURES</p><h2>Where runs fail</h2></div></div><div id="stats-stages"></div></article>
+          <article class="card"><div class="title-row"><div><p class="eyebrow">FIRMWARE</p><h2>Where firmware came from</h2></div></div><div id="stats-firmware"></div></article>
+        </section>
+        <p id="stats-note" class="muted"></p>
+      </section>
+      <section class="page" data-page="rigs" hidden>
+        <div class="page-heading"><div><p class="eyebrow">FLEET</p><h1>Rigs</h1></div><div class="row-actions"><span id="refresh-note" class="muted"></span><button id="check-all" class="secondary" hidden>Check every board</button><button id="refresh" class="secondary farm-wide">Rediscover</button><button id="add-rig" class="admin-only" hidden>Add rig</button></div></div>
+        <nav id="rigs-tabs" class="tabs" aria-label="Fleet"><a href="#rigs" data-tab="rigs" class="active">Rigs</a><a href="#boards" data-tab="boards">Boards</a><a href="#releases" class="farm-wide" data-tab="releases">Releases</a></nav>
+        <section id="add-rig-card" class="card admin-only" hidden>
+          <div class="title-row"><div><p class="eyebrow">ADD A RIG</p><h2>Join a new rig to this portal</h2></div><button id="close-add-rig" type="button" class="secondary">Close</button></div>
+          <form id="add-rig-form">
+            <p class="muted">The rig is made here, and its page gives the one command to run on it: on Raspberry Pi OS or Debian, as the user the rig runs as. It installs the rig and joins it to this portal; its boards are then registered from its page.</p>
+            <div class="settings-form">
+              <label>Name<input name="name" required pattern="[a-z0-9][a-z0-9._\-]{0,31}" maxlength="32" autocomplete="off" spellcheck="false" placeholder="rig-2"><small class="muted">Lowercase; its key, boards and runs are named for it.</small></label>
+              <label>Description<input name="description" maxlength="200" autocomplete="off" placeholder="What it is: the host, its boards"></label>
+              <label>Location<input name="location" maxlength="100" autocomplete="off" placeholder="Where it is"></label>
+            </div>
+            <div class="row-actions"><button type="submit">Add the rig</button></div>
+          </form>
+        </section>
+        <section id="rigs-list" class="card"><p class="muted">Loading…</p></section>
+        <section id="boards-list" class="card" hidden>
+          <div class="filter-bar">
+            <input id="board-search" type="search" placeholder="Search board, chip, MAC" autocomplete="off">
+            <select id="board-rig" aria-label="Rig"><option value="">Every rig</option></select>
+            <select id="board-family" aria-label="Family"><option value="">Every family</option></select>
+            <select id="board-state" aria-label="State"><option value="">Any state</option><option value="available">Available</option><option value="in_use">In use</option><option value="reserved">Reserved</option><option value="quarantined">Quarantined</option></select>
+          </div>
+          <div id="boards-table"></div>
+          <h3>By family</h3><div id="hardware-overview"></div>
+        </section>
+        <section id="releases" class="card farm-wide" hidden><p class="muted">Loading…</p></section>
+      </section>
+      <!-- A rig is a page: what it is, what it holds, and everything an operator
+           does to it -- the portal is how a rig is managed, not an ssh session. -->
+      <section class="page" data-page="rig" hidden>
+        <div class="page-heading"><div><p class="eyebrow">RIG</p><h1 id="rig-title">Rig</h1><p id="rig-subtitle" class="muted"></p><div id="rig-capabilities" class="setup-chips heading-chips"></div></div><div class="row-actions"><span id="rig-actions" class="actions"></span><button id="close-rig" class="secondary">All rigs</button></div></div>
+        <nav id="rig-tabs" class="tabs" aria-label="This rig"></nav>
+        <!-- Which tab each section belongs to. The tab is applied in CSS from
+             `data-rig-tab` on this page, so a renderer that runs after the tab
+             was chosen -- the runs arriving, a command finishing -- cannot put
+             its section back on a tab it does not belong to. -->
+        <section id="rig-summary" class="card" data-tab="overview"><p class="muted">Loading…</p></section>
+        <section id="rig-live" class="card hero-run" data-tab="overview runs" hidden></section>
+        <!-- What this rig is set up to do: most of a rig is decided on the
+             rig, and a page that shows a run and a board but not the access
+             point cannot answer "why did the uplink rows skip". -->
+        <section id="rig-setup" class="card" data-tab="overview setup"></section>
+        <section id="rig-boards" class="card" data-tab="boards"></section>
+        <section id="rig-grid" class="grid" data-tab="overview"><article id="rig-health" class="card"></article><article id="rig-activity" class="card"></article></section>
+        <!-- Everything ever asked of this rig, a page at a time: the card on
+             the overview shows the last few, this answers "what has been done
+             to this rig, and by whom". -->
+        <section id="rig-history" class="card owner-only" data-tab="activity"></section>
+        <section id="rig-settings" class="card" data-tab="setup"></section>
+        <!-- The network a run's boards actually use: the rig's own access
+             point and its broker, with what health says of each. -->
+        <section id="rig-network" class="card" data-tab="setup"></section>
+        <!-- Where this rig says something broke: a webhook, a Telegram bot,
+             its own CallMeBot link. Set from here, sealed to the rig's key
+             (docs/notifications.md). -->
+        <!-- Including the rig's stored CallMeBot link, shown redacted and set
+             sealed to the rig's key (docs/providers.md): it was a card of its
+             own that turned out to be this one's details. -->
+        <section id="rig-channels" class="card" data-tab="setup"></section>
+        <!-- Where this rig's events go, for whoever runs it. -->
+        <section id="rig-webhooks" class="card" data-tab="setup" hidden></section>
+        <section id="rig-logs" class="card" data-tab="setup" hidden></section>
+        <!-- What can be started on this rig, beside what it has run. Its own
+             section rather than part of the runs card: the card is replaced
+             only when the runs are fetched, and a button that says it is busy
+             has to be re-rendered when the rig is, not when a list arrives. -->
+        <section id="rig-run-controls" data-tab="runs"></section>
+        <section id="rig-runs" class="card" data-tab="runs"></section>
+      </section>
+      <section class="page" data-page="board" hidden>
+        <div class="page-heading"><div><p class="eyebrow">BOARD</p><h1 id="board-title">Board</h1><p id="board-subtitle" class="muted"></p></div><div class="row-actions"><span id="board-actions" class="actions"></span><button id="close-board" class="secondary">Back to its rig</button></div></div>
+        <section id="board-summary" class="card"><p class="muted">Loading…</p></section>
+        <section class="grid"><article id="board-chip" class="card"></article><article id="board-canary" class="card"></article></section>
+        <section id="board-history" class="card"></section>
+      </section>
+      <section class="page farm-wide" data-page="artifacts" hidden>
+        <div class="page-heading"><div><p class="eyebrow">FIRMWARE</p><h1>Firmware</h1></div><div class="row-actions"><span id="artifacts-note" class="muted">What the farm flashes: each project's builds by branch, and the disk they fill.</span><button id="artifacts-refresh" class="secondary">Refresh</button></div></div>
+        <section id="firmware-metrics" class="metrics"></section>
+        <nav id="firmware-tabs" class="tabs" aria-label="Firmware"><a href="#artifacts" data-tab="library" class="active">Library</a><a href="#artifacts/all" data-tab="all">All builds</a><a href="#artifacts/storage" data-tab="storage">Storage and clean-up</a></nav>
+        <div id="firmware-library"><section class="card"><p class="muted">Loading…</p></section></div>
+        <section id="firmware-all" class="card" hidden>
+          <div class="title-row"><div><p class="eyebrow">EVERY BUILD</p><h2>All firmware bundles</h2></div><span id="bundle-totals" class="muted"></span></div>
+          <div class="filter-bar">
+            <input id="bundle-search" type="search" placeholder="Search id, project, branch, revision, user" autocomplete="off">
+            <select id="bundle-profile" aria-label="Project"><option value="">All projects</option></select>
+            <button type="button" id="bundle-branch" class="chip active" hidden></button>
+          </div>
+          <div class="table-wrap"><table class="bundle-table compact"><thead><tr><th>Bundle</th><th>Branch · revision</th><th>Families</th><th class="num">Size</th><th>Used</th><th>By</th></tr></thead><tbody id="bundles"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody></table></div>
+          <div class="pager"><span id="bundle-range" class="muted"></span><span class="pager-buttons"><button id="bundle-prev" class="secondary" disabled>Previous</button><button id="bundle-next" class="secondary" disabled>Next</button></span></div>
+        </section>
+        <div id="firmware-storage" hidden>
+        <section id="storage" class="card"><p class="muted">Measuring the disk…</p></section>
+        <section id="retention" class="card"><p class="muted">Loading retention…</p></section>
+        <section class="card admin-only">
+          <div class="title-row"><div><p class="eyebrow">CLEAN UP</p><h2>Prune bundles</h2></div><span class="muted">Pinned bundles and those a queued or running job holds are never pruned.</span></div>
+          <form id="prune-form" class="prune-form">
+            <label>Unused for more than <input name="older_than_days" type="number" min="0" max="3650" value="30"> days</label>
+            <label>Always keep the newest <input name="keep_per_profile" type="number" min="0" max="1000" value="5"> per project</label>
+            <button type="submit" class="secondary">Preview</button>
+          </form>
+          <div id="prune-preview"></div>
+        </section>
+        </div>
+      </section>
+      <!-- A bundle is a page, like a run: something to link to a colleague and
+           come back to after a reload, not a card that appears under a table
+           of forty others. -->
+      <section class="page farm-wide" data-page="artifact" hidden>
+        <div class="page-heading"><div><p class="eyebrow">FIRMWARE BUNDLE</p><h1 id="bundle-title">Bundle</h1><p id="bundle-subtitle" class="muted"></p></div><div class="row-actions"><span id="bundle-actions" class="actions"></span><button id="close-bundle" class="secondary">Back to artifacts</button></div></div>
+        <section id="bundle-overview" class="card"></section>
+        <section id="bundle-images" class="card" hidden></section>
+        <section id="bundle-runs" class="card" hidden></section>
+        <section id="bundle-files" class="card" hidden></section>
+      </section>
+      <section class="page farm-wide" data-page="storage" hidden>
+        <div class="page-heading"><div><p class="eyebrow">DISK</p><h1 id="storage-title">Storage</h1><p id="storage-subtitle" class="muted"></p></div><div class="row-actions"><button id="close-storage" class="secondary">Back to artifacts</button></div></div>
+        <section id="storage-detail" class="card"><p class="muted">Loading…</p></section>
+      </section>
+      <section class="page farm-wide" data-page="configuration" hidden>
+        <div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>Settings</h1></div></div>
+        <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="general" class="active">General</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
+        <div id="settings-general">
+          <section class="card"><div class="title-row"><div><p class="eyebrow">THIS DEPLOYMENT</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div><div id="portal-config" hidden></div></section>
+          <section class="card"><div class="title-row"><div><p class="eyebrow">DECISIONS</p><h2 id="config-title">What the farm decides with</h2></div></div><p id="config-source" class="muted"></p><div id="config"><p class="muted">Loading…</p></div><p class="muted">A rig's own settings -- runs at once, retention, host health -- are on its page under Rigs, and changed there.</p></section>
+          <!-- What the farm tells whoever looks after it: the fleet's own
+               facts, which no single rig is in a position to report. A rig's
+               own channel is on its page (docs/notifications.md). -->
+          <section id="farm-notify" class="card"></section>
+          <!-- Where the fleet's events go: somebody else's software,
+               sent what the farm sees, signed (docs/webhooks.md). -->
+          <section id="farm-webhooks" class="card" hidden></section>
+          <section id="planned-card" class="card"><div class="title-row"><div><p class="eyebrow">NOT YET CONTROLLABLE</p><h2>Planned controls</h2></div><span class="muted">Read-only today</span></div><div id="planned-controls"></div></section>
+        </div>
+        <div id="settings-projects" hidden><section id="config-projects" class="card"><p class="muted">Loading…</p></section></div>
+        <div id="settings-access" class="admin-only" hidden>
+          <section id="keys" class="card admin-only" hidden></section>
+          <section class="card admin-only"><div class="title-row"><div><p class="eyebrow">AUDIT</p><h2>Recent changes</h2></div><span class="muted">Every request that could change something, by key</span></div><div id="audit"><p class="muted">Loading…</p></div></section>
+        </div>
+      </section>
+      <!-- Your account, not the farm's settings: who you are here, and every
+           browser still signed in as you. -->
+      <section class="page" data-page="account" hidden>
+        <div class="page-heading"><div><p class="eyebrow">YOUR ACCOUNT</p><h1>Account</h1></div></div>
+        <section class="card"><div class="title-row"><div><p class="eyebrow">IDENTITY</p><h2>You, here</h2></div><span class="muted">What the farm knows you as</span></div><div id="account-identity"><p class="muted">Loading…</p></div></section>
+        <section class="card"><div class="title-row"><div><p class="eyebrow">SESSIONS</p><h2>Where you are signed in</h2></div><span class="muted">Revoking one takes effect at once</span></div><div id="account-sessions"><p class="muted">Loading…</p></div></section>
+      </section>
+    </div>
+  </main>
+  <!-- The console: what the farm asked of a rig and what came back, in order.
+       A rig is a machine somewhere else, and a button with nothing on screen
+       behind it cannot be told from one that did nothing. -->
+  <aside id="console" class="console farm-wide" hidden>
+    <div class="console-bar">
+      <button id="console-toggle" class="secondary console-title" aria-expanded="false">
+        <span class="console-dot"></span>Console<small id="console-note" class="muted"></small>
+      </button>
+      <div class="console-tools" hidden>
+        <select id="console-rig" aria-label="Which rig"><option value="">All rigs</option></select>
+        <button id="console-follow" class="secondary" aria-pressed="true">Following</button>
+        <button id="console-copy" class="secondary">Copy</button>
+        <button id="console-clear" class="secondary">Clear</button>
+      </div>
+    </div>
+    <ol id="console-lines" class="console-lines" hidden aria-live="polite"></ol>
+  </aside>
+  <script src="/chips.js"></script>
+  <script src="/app.js"></script>
+  <script src="/portal-shell.js"></script>
+</body>
+</html>

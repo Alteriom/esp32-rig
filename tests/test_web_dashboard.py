@@ -3,7 +3,10 @@ import re
 from pathlib import Path
 
 
-WEB = Path(__file__).resolve().parents[1] / "runner" / "web"
+# The dashboard is the rig's bundle and the site is the portal's; a portal
+# serves both from one root (docs/public-release-plan.md, step 12d).
+WEB = Path(__file__).resolve().parents[1] / "rig" / "web"
+PORTAL_WEB = Path(__file__).resolve().parents[1] / "portal" / "web"
 # The two halves of the manager: each in its own distribution now
 # (docs/public-release-plan.md, step 12b), not beside the service.
 RIG_HALF = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "rig_manager.py"
@@ -17,7 +20,7 @@ def dashboard() -> str:
     """The dashboard's script, both files: the rig's pages (app.js) and the
     portal's shell around them (portal-shell.js). An assertion about what the
     dashboard does reads both; one about where a thing lives reads one."""
-    return "\n".join((WEB / name).read_text(encoding="utf-8") for name in ("app.js", "portal-shell.js"))
+    return "\n".join(((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8") for name in ("app.js", "portal-shell.js"))
 
 
 def css_rules(style):
@@ -241,7 +244,7 @@ def test_the_configuration_page_covers_every_parameter_the_host_can_set():
     import json
 
     schema = json.loads(
-        (WEB.parent / "hil-config.schema.json").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "runner" / "hil-config.schema.json").read_text(encoding="utf-8")
     )
     script = (WEB / "app.js").read_text(encoding="utf-8")
     service = SERVICE.read_text(encoding="utf-8")
@@ -689,7 +692,7 @@ def test_a_rigs_channels_list_only_what_is_set_up_and_who_is_told_what():
     # until it is on. Trying it is how an operator decides whether to turn it
     # back on, so the test is refused only while the rig is busy or running.
     assert 'class="secondary channel-test" data-id="${escapeHtml(entry.id)}"${busy || running ? " disabled" : ""}' in card
-    cli = (WEB.parent / "admin_cli.py").read_text(encoding="utf-8")
+    cli = (Path(__file__).resolve().parents[1] / "runner" / "admin_cli.py").read_text(encoding="utf-8")
     sends = cli.split("def command_notify_test(", 1)[1].split("\ndef ", 1)[0]
     assert "notify.enabled is false" in sends and "return 1" in sends, (
         "if the CLI stops sending down a channel that is off, the button should stop offering it"
@@ -1061,12 +1064,12 @@ def test_the_public_site_is_for_anyone_and_asks_for_nothing_that_needs_a_key():
     carries no key, the shared chip renderer, and no control that would need
     a sign-in. Who sees a rig is set on the rig's own page, by its owner,
     with a word of warning before it faces outward."""
-    script = (WEB / "site.js").read_text(encoding="utf-8")
+    script = (PORTAL_WEB / "site.js").read_text(encoding="utf-8")
     app = (WEB / "app.js").read_text(encoding="utf-8")
     pages = {"site-home.html": "home", "site-rigs.html": "rigs", "site-software.html": "software",
              "site-how.html": "how"}
     for name, page_id in pages.items():
-        page = (WEB / name).read_text(encoding="utf-8")
+        page = ((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8")
         assert f'<body class="site" data-page="{page_id}">' in page, name
         assert '<script src="/chips.js"></script>' in page and '<script src="/site.js"></script>' in page, name
         assert '<link rel="stylesheet" href="/app.css">' in page and '<link rel="stylesheet" href="/site.css">' in page, name
@@ -1081,12 +1084,12 @@ def test_the_public_site_is_for_anyone_and_asks_for_nothing_that_needs_a_key():
     assert 'LIVE = ["home", "rigs", "software"]' in script, "a page with nothing live on it does not poll"
     # Live numbers on the pages that show them, and only there.
     for name in ("site-home.html", "site-rigs.html"):
-        assert 'id="site-stats"' in (WEB / name).read_text(encoding="utf-8"), name
-    assert 'id="site-rigs"' in (WEB / "site-rigs.html").read_text(encoding="utf-8")
-    assert 'id="site-software"' in (WEB / "site-software.html").read_text(encoding="utf-8")
+        assert 'id="site-stats"' in ((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8"), name
+    assert 'id="site-rigs"' in (PORTAL_WEB / "site-rigs.html").read_text(encoding="utf-8")
+    assert 'id="site-software"' in (PORTAL_WEB / "site-software.html").read_text(encoding="utf-8")
     # The how-it-works page says what is public in the same words the
     # service enforces: a table, not a promise.
-    how = (WEB / "site-how.html").read_text(encoding="utf-8")
+    how = (PORTAL_WEB / "site-how.html").read_text(encoding="utf-8")
     for never in ("Its owner, or anybody", "Any board's identity", "a broker's address, an SSID", "Any run"):
         assert never in how, never
     # The rig's page: who sees it, and the buttons for whoever may change that.
@@ -1132,7 +1135,7 @@ def test_the_farm_has_a_mark_and_wears_it_on_both_pages():
     # Both wear it, from the same place: the site at the root and the
     # dashboard at /app load one brand from /brand.
     dashboard = (WEB / "index.html").read_text(encoding="utf-8")
-    home = (WEB / "site-home.html").read_text(encoding="utf-8")
+    home = (PORTAL_WEB / "site-home.html").read_text(encoding="utf-8")
     assert '<link rel="icon" href="/brand/favicon.svg"' in dashboard
     assert '<link rel="manifest" href="/brand/app.webmanifest">' in dashboard
     assert 'src="/brand/mark.svg"' in dashboard and ">A</span>" not in dashboard,         "the mark is a drawing now, not a letter in a box"
@@ -1163,8 +1166,8 @@ def test_the_home_page_says_what_the_farm_is_before_it_lists_anything():
     says what this is, in the farm's own voice, with a picture that is
     editorial artwork and admits it, not passed off as a photograph of a
     particular rig. The numbers come next, and the pitch after them."""
-    home = (WEB / "site-home.html").read_text(encoding="utf-8")
-    style = css_rules((WEB / "site.css").read_text(encoding="utf-8"))
+    home = (PORTAL_WEB / "site-home.html").read_text(encoding="utf-8")
+    style = css_rules((PORTAL_WEB / "site.css").read_text(encoding="utf-8"))
     assert "Real boards." in home and "<em>Real runs.</em>" in home
     assert 'class="hero-art"' in home and "<figcaption>" in home
     assert "a rig, illustrated" in home, "the artwork does not pretend to be a photograph of a real rig"
@@ -1253,7 +1256,7 @@ def test_the_shell_is_the_only_place_the_dashboard_asks_which_mode_this_is():
     portal's shell has a seam to follow (docs/public-release-plan.md, step 11).
     """
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    shell_js = (WEB / "portal-shell.js").read_text(encoding="utf-8")
+    shell_js = (PORTAL_WEB / "portal-shell.js").read_text(encoding="utf-8")
     asks = [line for line in (script + shell_js).splitlines() if "isPortal()" in line]
     assert len(asks) == 2 and all("function " in line for line in asks), asks
     # The rig's shell is the rig's; the portal's is its own file, and app.js

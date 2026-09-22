@@ -641,7 +641,7 @@ def test_the_dashboard_does_not_hardcode_a_profile_or_a_ref():
     to a branch that had since been released, so a second consumer could not be
     selected and the default pointed at superseded code. Both must come from
     the service."""
-    web = SERVICE_PATH.parents[1] / "runner" / "web"
+    web = SERVICE_PATH.parents[1] / "rig" / "web"
     page = (web / "index.html").read_text(encoding="utf-8")
     script = (web / "app.js").read_text(encoding="utf-8")
 
@@ -756,7 +756,7 @@ def test_the_dashboard_describes_a_run_by_its_project_not_by_painlessmesh():
     and every run opened with two painlessMesh simulator stages marked
     skipped. A run is described by its project, repository, branch, revision
     and targets, and simulation appears only when the run carried it."""
-    web = SERVICE_PATH.parents[1] / "runner" / "web"
+    web = SERVICE_PATH.parents[1] / "rig" / "web"
     page = (web / "index.html").read_text(encoding="utf-8")
     script = (web / "app.js").read_text(encoding="utf-8")
 

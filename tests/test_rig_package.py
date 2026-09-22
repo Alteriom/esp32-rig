@@ -355,13 +355,13 @@ NAMES_PAINLESSMESH = {
     "runner/join-rig.sh": 1,
     "runner/setup-gateway-network.sh": 2,
     "runner/verify-rig.sh": 2,
-    "runner/web/app.js": 3,
+    "rig/web/app.js": 3,
 }
 
 
 def lines_naming_painlessmesh() -> dict:
     found = {}
-    for top in (*HAL_DIRS, PORTAL_DIR, RUNNER):
+    for top in (*HAL_DIRS, PORTAL_DIR, ROOT / "portal" / "web", ROOT / "rig" / "web", RUNNER):
         for path in sorted(top.rglob("*")):
             if path.suffix not in GENERIC_SUFFIXES or "sim-host" in path.name:
                 continue

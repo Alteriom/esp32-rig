@@ -34,6 +34,23 @@ from alteriom_hil.api_keys import KeyStore, add_key, allowed, keys_document
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+
+
+def portal_web_root() -> Path:
+    """A portal's web root: the rig's dashboard with the portal's site over
+    it, which is how the image builds one (two COPYs into the same directory,
+    docs/public-release-plan.md, step 12d). Built once, in a temporary
+    directory, so neither tree is written to."""
+    import shutil
+    import tempfile
+
+    root = Path(tempfile.mkdtemp(prefix="portal-web-"))
+    for tree in (REPO / "rig" / "web", REPO / "portal" / "web"):
+        shutil.copytree(tree, root, dirs_exist_ok=True)
+    return root
+
+
+PORTAL_WEB_ROOT = portal_web_root()
 sys.path.insert(0, str(RUNNER))
 
 
@@ -109,7 +126,7 @@ class Farm:
         )
         self.server = ThreadingHTTPServer(
             ("127.0.0.1", 0),
-            farm_service.make_handler(self.portal, KeyStore(TOKEN, etc / "api-keys.yaml"), RUNNER / "web"),
+            farm_service.make_handler(self.portal, KeyStore(TOKEN, etc / "api-keys.yaml"), PORTAL_WEB_ROOT),
         )
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
@@ -1586,7 +1603,7 @@ def test_every_command_the_page_sends_is_one_the_portal_accepts(tmp_path):
     -- of the notifier, and of the rig script -- and none of them sent the
     command the page sends.
 
-    So each row here is a call site in runner/web/app.js, and each is put
+    So each row here is a call site in rig/web/app.js, and each is put
     through `request_command`. A refusal for its own reasons is fine: a
     ciphertext that is not one, a rig with no seal key. Being refused for the
     shape of its arguments is the bug this is here for.
@@ -1599,7 +1616,7 @@ def test_every_command_the_page_sends_is_one_the_portal_accepts(tmp_path):
     portal.worker_heartbeat("rig02", {"config": {"callmebot": {
         "url_file": "/etc/alteriom-hil/providers/callmebot-url", "link": "whatsapp to …76 (key ***)"}}})
 
-    script = (REPO / "runner" / "web" / "app.js").read_text(encoding="utf-8")
+    script = (REPO / "rig" / "web" / "app.js").read_text(encoding="utf-8")
     sent = [
         ("rediscover", {}, 'data-kind="rediscover"'),
         ("restart", {}, 'data-kind="restart"'),
@@ -3811,11 +3828,11 @@ def test_the_dashboard_offers_an_account_no_destination_the_farm_would_refuse():
     """
     from alteriom_hil.api_keys import account_route
 
-    page = (REPO / "runner" / "web" / "index.html").read_text(encoding="utf-8")
-    css = (REPO / "runner" / "web" / "app.css").read_text(encoding="utf-8")
+    page = (REPO / "rig" / "web" / "index.html").read_text(encoding="utf-8")
+    css = (REPO / "rig" / "web" / "app.css").read_text(encoding="utf-8")
     assert 'body[data-caller="account"]:not([data-role="admin"]) .farm-wide{display:none!important}' in css, \
         "the class the markup is marked with has to style something"
-    assert 'dataset.caller = "account"' in (REPO / "runner" / "web" / "app.js").read_text(encoding="utf-8"), \
+    assert 'dataset.caller = "account"' in (REPO / "rig" / "web" / "app.js").read_text(encoding="utf-8"), \
         "and something has to set the attribute it keys off"
     # And it must not hide them from an admin. An admin signs in as an
     # account like anybody else, and `allowed()` admits them before it ever
@@ -3852,7 +3869,7 @@ def test_the_dashboard_offers_an_account_no_destination_the_farm_would_refuse():
     # both are drawn from what `rig_detail` withholds from a borrower, so a
     # tab that loses `owner: true` starts drawing an empty page and offering
     # writes that answer 404.
-    js = (REPO / "runner" / "web" / "app.js").read_text(encoding="utf-8")
+    js = (REPO / "rig" / "web" / "app.js").read_text(encoding="utf-8")
     # The script gates ask the same question the stylesheet does, or an
     # admin keeps their nav and loses their deep links.
     assert 'dataset.role !== "admin"' in js, \
@@ -4006,7 +4023,7 @@ def test_the_dashboard_scripts_parse():
     if node is None:
         pytest.skip("no node to parse with")
     broken = {}
-    for path in sorted((REPO / "runner" / "web").glob("*.js")):
+    for path in sorted((REPO / "rig" / "web").glob("*.js")):
         done = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
         if done.returncode != 0:
             # The line naming the fault, not node's version banner at the end.

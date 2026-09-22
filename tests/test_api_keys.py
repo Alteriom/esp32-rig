@@ -42,7 +42,10 @@ RUNNER = REPO / "runner"
 # The service's own source: `alteriom_hil.service` in the core, which is
 # where the routes and the handler live (docs/public-release-plan.md, 12c).
 SERVICE = REPO / "core" / "alteriom_hil" / "service.py"
-WEB = RUNNER / "web"
+# The dashboard is the rig's bundle and the site is the portal's; a portal
+# serves both from one root (docs/public-release-plan.md, step 12d).
+WEB = REPO / "rig" / "web"
+PORTAL_WEB = REPO / "portal" / "web"
 FARM_TOKEN = "f" * 64
 JOB = "0123456789abcdef0123456789abcdef"
 
@@ -417,7 +420,8 @@ def test_the_admin_cli_creates_lists_and_revokes_keys(tmp_path, monkeypatch, cap
 def test_the_dashboard_offers_a_user_key_only_what_it_may_do():
     page = (WEB / "index.html").read_text(encoding="utf-8")
     # The dashboard is the rig's pages and the portal's shell, two files.
-    script = "\n".join((WEB / name).read_text(encoding="utf-8") for name in ("app.js", "portal-shell.js"))
+    script = "\n".join((WEB / name if (WEB / name).is_file() else PORTAL_WEB / name).read_text(encoding="utf-8")
+                      for name in ("app.js", "portal-shell.js"))
     style = (WEB / "app.css").read_text(encoding="utf-8")
     assert 'body[data-role="user"] .admin-only{display:none!important}' in style
     assert "renderYou(data.you);" in script and 'id="you"' in page
@@ -568,7 +572,7 @@ def test_every_key_made_through_a_store_or_a_cli_is_refused_an_accounts_handle(t
                                                 Path(sys.executable), mode="portal")
     portal.store.create_account("boss", email="boss@example.org", email_verified=True)
     bare = KeyStore("t" * 40, keys_file)
-    farm_service.make_handler(portal, bare, REPO / "runner" / "web")
+    farm_service.make_handler(portal, bare, WEB)
     assert bare.reserved() == {"boss"}
     with pytest.raises(ValueError, match="boss is an account's handle"):
         bare.create("boss", "user")

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Alteriom ESP32 Farm">
+  <!-- The seedling: a stem that is a PCB trace, ending in a lit pad, with two
+       boards for leaves, rising from the deck. "Farm", taken seriously. This
+       is the rendered mark, for anywhere with room: the header, the app icon,
+       the link card. favicon.svg is the same idea drawn for 16 pixels.
+       generate_brand_assets.py rasterises this file; nothing is drawn twice. -->
+  <title>Alteriom ESP32 Farm</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a2a25"/><stop offset="1" stop-color="#0a1311"/></linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ff3d3"/><stop offset="1" stop-color="#3fcf9f"/></linearGradient>
+    <linearGradient id="dim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34594f"/><stop offset="1" stop-color="#22403a"/></linearGradient>
+    <linearGradient id="deck" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b4a42"/><stop offset="1" stop-color="#16271f"/></linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#63e6be" stop-opacity=".55"/><stop offset="1" stop-color="#63e6be" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#tile)"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#2a4c43" stroke-opacity=".55"/>
+  <circle cx="35" cy="17" r="13" fill="url(#glow)"/>
+  <rect x="12" y="48" width="40" height="6" rx="3" fill="url(#deck)"/>
+  <rect x="12" y="48" width="40" height="1.5" rx=".75" fill="#3a6357" opacity=".7"/>
+  <g transform="rotate(-34 30 36)"><rect x="17" y="30" width="16" height="9" rx="3" fill="url(#dim)"/><circle cx="21" cy="34.5" r="1.1" fill="#5d8a7c"/><circle cx="25" cy="34.5" r="1.1" fill="#5d8a7c"/></g>
+  <g transform="rotate(34 34 28)"><rect x="31" y="22" width="16" height="9" rx="3" fill="url(#dim)"/><circle cx="39" cy="26.5" r="1.1" fill="#5d8a7c"/><circle cx="43" cy="26.5" r="1.1" fill="#5d8a7c"/></g>
+  <path d="M32 48V38l3-3V22" fill="none" stroke="#1f3b34" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 48V38l3-3V22" fill="none" stroke="url(#teal)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="35" cy="17" r="5.5" fill="url(#teal)"/>
+  <circle cx="35" cy="17" r="2.2" fill="#0b1412"/>
+  <circle cx="33.6" cy="15.4" r="1" fill="#ffffff" opacity=".8"/>
+</svg>
