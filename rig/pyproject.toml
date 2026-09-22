@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,6 +10,12 @@ build-backend = "setuptools.build_meta"
 name = "alteriom-hil"
 version = "0.1.0"
 description = "Hardware-abstraction layer for the Alteriom ESP32 HIL test rig"
+# Apache-2.0: the patent grant is what a hardware-adjacent tool wants, and it
+# is what the rig is published under (docs/public-release-plan.md). The text
+# sits beside each distribution so the wheel carries it -- a licence an
+# installer cannot read is not one it has been given.
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 dependencies = [
     "alteriom-hil-core",
