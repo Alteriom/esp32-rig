@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from meshclient import MeshBoardClient as BoardClient  # noqa: E402
+from simmesh import MeshFirmware  # noqa: E402
 
 MESH_FORM_TIMEOUT = float(os.environ.get("ALTERIOM_HIL_MESH_TIMEOUT", "120"))
 
@@ -33,6 +34,13 @@ def board_client_class():
     """This suite's boards run painlessMesh's HIL agent, and are driven
     through its verbs (alteriom_hil.pytest_plugin.board_client_class)."""
     return BoardClient
+
+
+@pytest.fixture(scope="session")
+def sim_firmware():
+    """In sim mode the boards run a simulation of that agent
+    (alteriom_hil.pytest_plugin.sim_firmware)."""
+    return MeshFirmware
 
 
 @pytest.fixture(scope="session")
