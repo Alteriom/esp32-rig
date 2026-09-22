@@ -328,9 +328,25 @@ def parse_profile(doc: object, source: str) -> Profile:
         tags = entry.get("tags") or []
         if not isinstance(tags, list) or not all(isinstance(tag, str) and tag for tag in tags):
             raise ProfileError(f"{source}: needs tags must be a list of strings")
+        # Wanted, not required. A family that is off the rig for a while -- a
+        # board on someone's bench, one that died and is being replaced --
+        # used to fail every run of the profile at discover with "Not enough
+        # boards", which says nothing about the firmware and leaves the
+        # families that *are* connected with no validation at all. An
+        # optional need asks the rig only for the boards of that family it
+        # has, so an absent one is done without rather than refused. It is
+        # not a claim about priority: a board that is connected and busy is
+        # waited for either way. What the run went without is named in the
+        # discover stage, the run's result and the report, so the pass is
+        # never mistaken for the whole gate.
+        optional = entry.get("optional", False)
+        if not isinstance(optional, bool):
+            raise ProfileError(f"{source}: needs optional must be true or false")
         need = {"target": str(entry["target"]), "count": count}
         if tags:
             need["tags"] = sorted(set(tags))
+        if optional:
+            need["optional"] = True
         needs.append(need)
 
     flash = doc.get("flash") or {}
@@ -378,6 +394,14 @@ def parse_profile(doc: object, source: str) -> Profile:
         raise ProfileError(
             f"{source}: a non-exclusive profile must declare needs; the board map "
             f"it runs against is built from them"
+        )
+    if needs and all(need.get("optional") for need in needs):
+        # Every need optional means a run could be given no boards at all and
+        # still call itself validation. A profile has to say what it is not
+        # willing to run without.
+        raise ProfileError(
+            f"{source}: needs cannot all be optional; a profile must require at "
+            f"least one board, or a run with nothing connected would pass"
         )
     concurrent = suite.get("concurrent", False)
     if not isinstance(concurrent, bool):

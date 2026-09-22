@@ -322,3 +322,59 @@ def test_an_agent_section_must_be_a_mapping_that_names_a_path():
         profiles.parse_profile(minimal(agent="suites/mine/firmware"), "t")
     with pytest.raises(profiles.ProfileError, match="source_path"):
         profiles.parse_profile(minimal(agent={}), "t")
+
+
+# ---- a family that is off the rig for a while ----
+
+
+def test_a_need_may_be_wanted_rather_than_required():
+    """`optional: true` is how a profile says "run without this if it is not
+    there". Required needs keep the key off entirely, so nothing downstream
+    has to distinguish False from absent."""
+    doc = minimal(needs=[
+        {"target": "esp32", "count": 2},
+        {"target": "esp32-s3", "count": 1, "optional": True},
+    ])
+    doc["suite"]["exclusive"] = False
+    parsed = profiles.parse_profile(doc, "test")
+    assert parsed.needs == (
+        {"target": "esp32", "count": 2},
+        {"target": "esp32-s3", "count": 1, "optional": True},
+    )
+
+
+def test_optional_must_be_true_or_false():
+    doc = minimal(needs=[
+        {"target": "esp32", "count": 1},
+        {"target": "esp32-s3", "count": 1, "optional": "when it is back"},
+    ])
+    doc["suite"]["exclusive"] = False
+    with pytest.raises(profiles.ProfileError, match="needs optional must be true or false"):
+        profiles.parse_profile(doc, "test")
+
+
+def test_needs_cannot_all_be_optional():
+    """Every need optional is a profile that would pass on an empty rig. A
+    profile has to say what it will not run without."""
+    doc = minimal(needs=[{"target": "esp32", "count": 1, "optional": True}])
+    doc["suite"]["exclusive"] = False
+    with pytest.raises(profiles.ProfileError, match="cannot all be optional"):
+        profiles.parse_profile(doc, "test")
+
+
+def test_the_alteriom_profile_wants_the_s3_and_requires_the_other_four():
+    """The S3 went off the rig on 2026-09-17 and the nightly failed every
+    night with "Not enough boards" -- saying nothing about the firmware, and
+    leaving the five connected families with no validation at all. It is
+    wanted now, not required. The other four stay required: a board that
+    vanishes without anyone deciding it should still turn the nightly red.
+    """
+    spec = profiles.load_profiles(REPO)["alteriom-firmware"]
+    by_target = {need["target"]: need for need in spec.needs}
+    assert by_target["esp32-s3"].get("optional") is True
+    assert not any(
+        need.get("optional") for target, need in by_target.items() if target != "esp32-s3"
+    ), "only the family the owner took off the rig is optional"
+    # Still asked for by every run, so the bundle carries its image and the
+    # day the board returns the next run flashes it with no change here.
+    assert set(by_target) == {"esp32", "esp32-c3", "esp32-s3", "esp32-c6", "esp32-c5"}

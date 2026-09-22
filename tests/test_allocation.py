@@ -273,3 +273,149 @@ def test_a_worker_with_no_boards_yet_is_still_a_rig_with_a_limit():
     result = plan([needs(1, ("esp32", 1))], PI, [], limits={"esp32-hil": 1, "sim-01": 2})
     assert result.start[0].worker == "esp32-hil"
     assert Grant.from_dict(result.start[0].as_dict()) == result.start[0]
+
+
+# ---- a family a profile can run without ----
+
+
+def wants(n, *pairs, optional=(), concurrent=True):
+    """A demand whose `optional` families are wanted rather than required."""
+    return Demand(
+        job_id=job(n), label=f"project {n}", concurrent=concurrent,
+        needs=tuple(
+            {"target": target, "count": count}
+            | ({"optional": True} if target in optional else {})
+            for target, count in pairs
+        ),
+    )
+
+
+NO_S3 = [board for board in BOARDS if board["target"] != "esp32-s3"]
+
+
+def test_an_optional_family_that_is_not_connected_does_not_stop_the_run():
+    """The nightly's whole problem: one family off the rig failed every run
+    of a profile whose other five families were plugged in and idle."""
+    demand = wants(1, ("esp32", 2), ("esp32-s3", 1), optional={"esp32-s3"})
+    result = plan([demand], NO_S3, [], limit=2)
+    assert started(result) == [job(1)]
+    assert result.start[0].boards == ("esp32-01", "esp32-02"), "what is there, and nothing else"
+    assert result.waiting == {}
+
+
+def test_an_optional_family_is_used_whenever_it_is_plugged_in():
+    """Optional is not "ignored": the board is taken the moment it is back,
+    with no change to the profile."""
+    demand = wants(1, ("esp32", 1), ("esp32-s3", 1), optional={"esp32-s3"})
+    assert plan([demand], BOARDS, [], limit=2).start[0].boards == ("esp32-01", "s3-01")
+
+
+def test_a_required_family_that_is_not_connected_still_fails_loudly():
+    """A board that vanishes without anyone deciding is news, and the run
+    that says so is how it gets noticed."""
+    demand = wants(1, ("esp32-s3", 1))
+    result = plan([demand], NO_S3, [], limit=2)
+    # Nothing could meet it even idle: it starts alone to rediscover the rig,
+    # and its discover stage is where it fails with what is short.
+    assert started(result) == [job(1)]
+    waiting = plan(
+        [demand], NO_S3,
+        [Grant(job_id=job(9), label="other", kind="suite", boards=("esp32-01",),
+               resources=frozenset(), shared=True)],
+        limit=2,
+    )
+    assert "esp32-s3" in waiting.waiting[job(1)]
+
+
+def test_an_optional_family_that_is_connected_is_waited_for_like_any_other():
+    """Optional is about absence, not about priority. A board that is on the
+    rig and busy will be free in minutes, and coverage is worth minutes."""
+    busy = [Grant(job_id=job(9), label="canary", kind="suite", boards=("c6-01",),
+                  resources=frozenset(), shared=True)]
+    demand = wants(1, ("esp32", 1), ("esp32-c6", 1), optional={"esp32-c6"})
+    result = plan([demand], BOARDS, busy, limit=4)
+    assert started(result) == []
+    assert result.waiting[job(1)] == "waiting for 1 x esp32-c6: in use by run 00000000 (canary)"
+    # The same demand on a rig with no C6 at all starts at once, without one.
+    no_c6 = [board for board in BOARDS if board["target"] != "esp32-c6"]
+    assert plan([demand], no_c6, [], limit=4).start[0].boards == ("esp32-01",)
+
+
+def test_an_absent_optional_family_does_not_hold_the_queue_for_the_runs_behind():
+    """A run queued first keeps what it waits for from the runs behind it. A
+    family this rig does not have is not something it is waiting for, or one
+    absent board would stall every profile that merely hoped for it."""
+    no_c6 = [board for board in BOARDS if board["target"] != "esp32-c6"]
+    first = wants(1, ("esp32", 2), ("esp32-c6", 1), optional={"esp32-c6"})
+    second = wants(2, ("esp32-c3", 1))
+    result = plan([first, second], no_c6, [], limit=4)
+    assert started(result) == [job(1), job(2)], "neither waits on a board nobody has"
+
+
+def test_a_board_held_out_of_the_pool_counts_as_absent_for_an_optional_need():
+    """A quarantined board may stay quarantined for days; waiting for it is
+    waiting for nothing. A reserved one is on somebody's bench."""
+    quarantined = [
+        {**board, "hold": {"state": "quarantined", "reason": "canary red"}}
+        if board["target"] == "esp32-s3" else board
+        for board in BOARDS
+    ]
+    demand = wants(1, ("esp32", 1), ("esp32-s3", 1), optional={"esp32-s3"})
+    assert plan([demand], quarantined, [], limit=4).start[0].boards == ("esp32-01",)
+
+
+def test_two_needs_on_one_family_share_the_boards_that_family_has():
+    """An optional need asks for what the rig has *left*, not for what it has:
+    the required need on the same family is served first, and the optional one
+    takes whatever is over."""
+    two_esp32 = [board for board in BOARDS if board["target"] == "esp32"]
+    demand = Demand(
+        job_id=job(1), label="project 1", concurrent=True,
+        needs=(
+            {"target": "esp32", "count": 2},
+            {"target": "esp32", "count": 1, "optional": True},
+        ),
+    )
+    result = plan([demand], two_esp32, [], limit=4)
+    assert started(result) == [job(1)], "it starts on the two it must have"
+    assert result.start[0].boards == ("esp32-01", "esp32-02")
+
+
+def test_coverage_says_what_an_allocation_did_not_meet():
+    """The statement a run has to make when it passes on fewer families than
+    its profile asks for."""
+    from alteriom_hil.allocation import coverage, coverage_text
+
+    profile_needs = [
+        {"target": "esp32", "count": 2},
+        {"target": "esp32-s3", "count": 1, "optional": True},
+        {"target": "esp32-c3", "count": 1, "tags": ["psram"]},
+    ]
+    allocated = [
+        {"id": "esp32-01", "target": "esp32"},
+        {"id": "esp32-02", "target": "esp32"},
+        {"id": "c3-01", "target": "esp32-c3", "tags": ["psram"]},
+    ]
+    assert coverage(profile_needs, allocated) == [
+        {"target": "esp32-s3", "wanted": 1, "got": 0, "optional": True}
+    ]
+    assert coverage_text(coverage(profile_needs, allocated)) == "esp32-s3 (0 of 1)"
+    # Nothing missing: nothing to declare.
+    assert coverage(profile_needs, allocated + [{"id": "s3-01", "target": "esp32-s3"}]) == []
+    # A required need is reported too: a run handed its boards by the
+    # dispatcher is never re-checked against the profile, so this is the only
+    # place a short allocation would be noticed.
+    assert coverage(profile_needs, allocated[:1]) == [
+        {"target": "esp32", "wanted": 2, "got": 1},
+        {"target": "esp32-s3", "wanted": 1, "got": 0, "optional": True},
+        {"target": "esp32-c3", "wanted": 1, "got": 0, "tags": ["psram"]},
+    ]
+    # A board that carries the tag is not counted for a need that wants it
+    # unless it has every tag asked for.
+    untagged = [{"id": "c3-02", "target": "esp32-c3"}]
+    assert coverage([profile_needs[2]], untagged) == [
+        {"target": "esp32-c3", "wanted": 1, "got": 0, "tags": ["psram"]}
+    ]
+    assert coverage_text([{"target": "esp32-c3", "wanted": 1, "got": 0, "tags": ["psram"]}]) == (
+        "esp32-c3 tagged psram (0 of 1)"
+    )

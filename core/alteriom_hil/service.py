@@ -2498,6 +2498,12 @@ class BaseManager:
                         "concurrent": spec.concurrent,
                         "resources": list(spec.resources),
                         "min_boards": spec.min_boards,
+                        # The families it asks the bank for, and which of
+                        # them it will run without (`optional`). An operator
+                        # reading the dashboard sees which board is away on
+                        # purpose; a dispatcher choosing between farms can
+                        # read it beside GET /api/v1/capacity.
+                        "needs": [dict(need) for need in spec.needs],
                         # Where its firmware comes from: the only producer
                         # whose bundles the farm flashes for it.
                         "supply_repo": _https_repo(spec.supply_repo) if spec.supply_repo else None,

@@ -655,3 +655,27 @@ def test_a_farm_that_refuses_a_bundle_says_why(tmp_path, monkeypatch):
     monkeypatch.setattr(ci_farm_client, "urlopen", refuse)
     with pytest.raises(RuntimeError, match="takes bundles from another workflow"):
         ci_farm_client.supply_bundle("http://127.0.0.1:8090", "token", _built_bundle(tmp_path), {})
+
+
+# ---- a run that covered less than its profile asks for ----
+
+
+def test_a_pass_that_skipped_a_family_says_so_under_the_verdict():
+    """The farm marks a family optional when its board is off the rig, and a
+    run without it passes. "passed" is the only line most people read, so the
+    families it did not exercise go directly under it."""
+    passed = {
+        "id": "j" * 32,
+        "status": "passed",
+        "result": {
+            "summary": "Validated 5 boards; did not cover esp32-s3 (0 of 1)",
+            "not_covered": [{"target": "esp32-s3", "wanted": 1, "got": 0, "optional": True}],
+        },
+    }
+    note = ci_farm_client.coverage_note(passed)
+    assert note is not None
+    assert "esp32-s3 (0 of 1 boards)" in note
+    assert "Families not covered" in note, "it points at the section in the report"
+    # A run that covered everything says nothing about coverage at all.
+    assert ci_farm_client.coverage_note({"status": "passed", "result": {"summary": "Validated 6 boards"}}) is None
+    assert ci_farm_client.coverage_note({"status": "passed"}) is None

@@ -28,6 +28,18 @@ The rules, in the order they are applied to each queued job:
    Boards are chosen from the connected ones by family and tags, in the order
    the inventory lists them.
 
+**A family a profile marks ``optional`` is wanted, not required.** What
+the rig does not have, the run goes without: it takes up to ``count`` of the
+boards of that family the rig *does* have and starts, so one board off the
+bench no longer fails every run of a profile whose other families are plugged
+in and idle. Optional is about absence and nothing else -- a board that is
+connected but in use is waited for exactly as a required one is, because it
+will be free in minutes and coverage is worth minutes.
+
+Going without costs coverage, and coverage that is not declared is a lie:
+`coverage` below says what a run's allocation did not meet, and the discover
+stage, the run's result and the report all carry it.
+
 **A board held out of the pool is never allocated by family or to a whole-bank
 run.** A board carries a ``hold`` when an operator reserved it for bench work
 or the canary quarantined it for failing its own checks. A run that *named* a
@@ -54,6 +66,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field, replace
+from typing import Iterable, Sequence
 
 # Rig-wide things a run can use that are not boards: the access point and its
 # HTTP probe, and the broker beside it. Two concurrent runs that both declare
@@ -147,6 +160,39 @@ def _matches(board: dict, need: dict) -> bool:
     )
 
 
+def _required(need: dict) -> bool:
+    """Whether a run must have this need met to start at all.
+
+    An optional need (``optional: true`` in the profile) is wanted rather
+    than required: boards of that family the rig does not have are boards the
+    run does without, instead of being refused. It is not a claim about
+    priority -- a board that is connected and busy is waited for either way
+    (see `_take`) -- only about absence, so it never makes a run infeasible
+    and never appears in a shortfall. What the run went without is coverage
+    it has to declare, which is `coverage` below.
+    """
+    return not need.get("optional")
+
+
+def _take(need: dict, boards: list[dict]) -> int:
+    """How many boards this need asks of *this* rig.
+
+    ``count`` for a required need, whatever it can be given. For an optional
+    one, no more than ``boards`` has: a family with no board there is nought
+    asked for and nothing to wait for, a family with one board and a need for
+    two is one. Boards held out -- reserved for bench work, quarantined --
+    are not the rig's to give and count as absent; a board another run is
+    using is the rig's, and is waited for.
+
+    ``boards`` is what is still unclaimed, not always the whole rig: two
+    needs on one family share it, and the second may only ask for what the
+    first left.
+    """
+    if _required(need):
+        return need["count"]
+    return min(need["count"], sum(1 for board in boards if _matches(board, need)))
+
+
 def _hold(board: dict) -> str | None:
     hold = board.get("hold") or {}
     return hold.get("state")
@@ -165,7 +211,9 @@ def _fits_idle(demand: Demand, boards: list[dict]) -> bool:
     pool = list(boards)
     for need in demand.needs:
         matching = [board for board in pool if _matches(board, need)]
-        if len(matching) < need["count"]:
+        # An optional need asks for no more than this rig still has, so it
+        # can never be the reason a demand does not fit.
+        if len(matching) < _take(need, pool):
             return False
         for board in matching[: need["count"]]:
             pool.remove(board)
@@ -207,7 +255,12 @@ class _Rig:
             self.blocked_whole = self.blocked_whole or demand
             return
         for need in demand.needs:
-            self.blocked_targets.setdefault(need["target"], demand)
+            # A family this rig does not have is not one this run is waiting
+            # for, so it does not hold the runs behind it out of that family
+            # either -- an absent board would otherwise stall the queue for
+            # every profile that merely hoped for it.
+            if _take(need, self.boards):
+                self.blocked_targets.setdefault(need["target"], demand)
         for board_id in demand.boards:
             self.blocked_boards.setdefault(board_id, demand)
         for resource in demand.resources:
@@ -364,6 +417,14 @@ def _choose(
         return sorted(taken)
     chosen: list[str] = []
     for need in demand.needs:
+        # What this rig can be asked for: `count`, or for an optional need
+        # no more than the boards of that family it actually has and an
+        # earlier need has not already taken.
+        wanted = _take(need, [b for b in boards if b.get("id") not in chosen])
+        if not wanted:
+            # Nothing of that family here to wait for. The run goes without
+            # it, and says so (`coverage`).
+            continue
         if need["target"] in targets_ahead:
             return need["target"]
         free = [
@@ -371,9 +432,10 @@ def _choose(
             if _matches(board, need) and board.get("id") not in held
             and board.get("id") not in reserved_ahead and board.get("id") not in chosen
         ]
-        if len(free) < need["count"]:
+        if len(free) < wanted:
+            # The boards exist and are busy: waited for, optional or not.
             return need["target"]
-        chosen.extend(free[: need["count"]])
+        chosen.extend(free[:wanted])
     return chosen
 
 
@@ -386,7 +448,7 @@ def _shortfall(demand: Demand, boards: list[dict]) -> str:
     short = []
     for need in demand.needs:
         free = sum(1 for board in boards if _matches(board, need))
-        if free >= need["count"]:
+        if free >= _take(need, boards):
             continue
         held_out = sorted(
             f"{board.get('id')} {_hold(board)}" for board in boards
@@ -397,6 +459,54 @@ def _shortfall(demand: Demand, boards: list[dict]) -> str:
             + (f" and not held out ({', '.join(held_out)})" if held_out else "")
         )
     return "; ".join(short) or f"the rig has {dict(connected)}"
+
+
+def coverage(needs: Sequence[dict], boards: Iterable[dict]) -> list[dict]:
+    """The needs these boards do not meet: what a run did not exercise.
+
+    A run whose profile marks a family optional starts without it, which is
+    the point -- but a pass that covered four families out of five has to say
+    which one it missed, or the next reader takes it for the whole gate. This
+    is that statement, computed from the allocation the run actually got, so
+    it holds for a family that was off the rig, one another run was using and
+    one whose board was quarantined without having to ask which.
+
+    ``needs`` is a profile's; ``boards`` the run's scoped board map. Each
+    entry is ``{"target", "wanted", "got"}`` (plus ``tags`` and ``optional``
+    where they apply) for a need short of its count -- a required one
+    included, since a run handed its boards by the dispatcher is never
+    re-checked against the profile.
+    """
+    pool = list(boards)
+    short = []
+    for need in needs:
+        tags = set(need.get("tags") or ())
+        matching = [
+            board for board in pool
+            if board.get("target") == need["target"] and tags <= set(board.get("tags") or ())
+        ]
+        got = min(len(matching), need["count"])
+        for board in matching[:got]:
+            pool.remove(board)
+        if got < need["count"]:
+            entry = {"target": need["target"], "wanted": need["count"], "got": got}
+            if tags:
+                entry["tags"] = sorted(tags)
+            if need.get("optional"):
+                entry["optional"] = True
+            short.append(entry)
+    return short
+
+
+def coverage_text(entries: Sequence[dict]) -> str:
+    """"esp32-s3 (0 of 1)" -- one phrase for a log line, a stage summary, a
+    result and a report, so the same gap reads the same way in all four."""
+    return ", ".join(
+        entry["target"]
+        + (f" tagged {', '.join(entry['tags'])}" if entry.get("tags") else "")
+        + f" ({entry['got']} of {entry['wanted']})"
+        for entry in entries
+    )
 
 
 def _explain(

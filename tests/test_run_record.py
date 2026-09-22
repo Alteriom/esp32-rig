@@ -441,3 +441,56 @@ def test_plugin_records_win_over_junit(tmp_path):
     )
     assert r.returncode == 0, r.stderr
     assert "Total test runs: 1 " in out.read_text(encoding="utf-8")
+
+
+# ---- a run that covered less than its profile asks for ----
+
+
+def test_the_report_names_the_families_a_run_did_not_exercise():
+    """A pass on four families out of five used to render exactly like a pass
+    on all five. The gap goes in the headline and in a section of its own, so
+    nobody reads this report as the whole gate."""
+    from alteriom_hil.report import parse_not_covered
+
+    not_covered = parse_not_covered(["esp32-s3=0/1"])
+    assert not_covered == [{"target": "esp32-s3", "got": 0, "wanted": 1}]
+    text = render_markdown(
+        [_rec()], "HIL alteriom-firmware abc123", not_covered=not_covered
+    )
+    assert "Coverage: PARTIAL" in text
+    assert "## Families not covered" in text
+    assert "`esp32-s3`" in text
+    assert "| `esp32-s3` | 1 | 0 |" in text
+
+
+def test_a_report_with_full_coverage_says_nothing_about_it():
+    text = render_markdown([_rec()], "HIL x")
+    assert "Families not covered" not in text
+    assert "Coverage: PARTIAL" not in text
+
+
+def test_not_covered_reaches_the_machine_readable_summary(tmp_path):
+    """Whatever reads a report without rendering it -- the dashboard, a
+    release gate -- has to be able to see that this run was not the whole
+    profile."""
+    junit = tmp_path / "results.xml"
+    junit.write_text(JUNIT, encoding="utf-8")
+    out, json_out = tmp_path / "report.md", tmp_path / "report.json"
+    r = subprocess.run(
+        [sys.executable, "-m", "alteriom_hil.report", str(tmp_path),
+         "--junit", str(junit), "--suite", "alteriom-firmware",
+         "--not-covered", "esp32-s3=0/1", "--out", str(out), "--json-out", str(json_out)],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "Families not covered" in out.read_text(encoding="utf-8")
+    assert json.loads(json_out.read_text(encoding="utf-8"))["not_covered"] == [
+        {"target": "esp32-s3", "got": 0, "wanted": 1}
+    ]
+
+
+def test_a_malformed_not_covered_value_is_refused():
+    from alteriom_hil.report import parse_not_covered
+
+    with pytest.raises(ValueError, match="FAMILY=GOT/WANTED"):
+        parse_not_covered(["esp32-s3"])

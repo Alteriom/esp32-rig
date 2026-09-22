@@ -50,6 +50,25 @@ def load_catalog(path: str | os.PathLike | None) -> dict[str, str]:
     }
 
 
+def parse_not_covered(values: Sequence[str] | None) -> list[dict]:
+    """``["esp32-s3=0/1"]`` -> the families a run did not exercise.
+
+    The farm knows this before the suite starts — it is what its
+    allocation did not meet (``alteriom_hil.allocation.coverage``) — and
+    the report is where a person reads it. Without it a run that covered four
+    families of five renders exactly like one that covered all five, and its
+    pass is read as the whole gate.
+    """
+    out = []
+    for value in values or []:
+        family, _, counts = str(value).partition("=")
+        got, _, wanted = counts.partition("/")
+        if not family or not wanted:
+            raise ValueError(f"--not-covered expects FAMILY=GOT/WANTED, got {value!r}")
+        out.append({"target": family, "got": int(got), "wanted": int(wanted)})
+    return out
+
+
 def _filter(records: Iterable[RunRecord], since: str | None) -> list[RunRecord]:
     out = list(records)
     if since:
@@ -282,6 +301,7 @@ def render_markdown(
     catalog: dict[str, str] | None = None,
     images: dict[str, dict] | None = None,
     matrix: list[dict] | None = None,
+    not_covered: Sequence[dict] | None = None,
 ) -> str:
     s = summarize(records, catalog)
     total = s["total_runs"]
@@ -299,7 +319,26 @@ def render_markdown(
     w(f"- **Bug-catch delta: {s['bug_catch_delta']}** real-bug failures on\n")
     w("  tests compile-only CI could not have caught.\n")
     w(f"- Total test runs: {total} — {passed} passed, {failed} failed,\n")
-    w(f"  {skipped} skipped ({pass_rate:.1f}% pass rate).\n\n")
+    w(f"  {skipped} skipped ({pass_rate:.1f}% pass rate).\n")
+    if not_covered:
+        families = ", ".join(
+            f"`{entry['target']}` ({entry['got']} of {entry['wanted']} boards)"
+            for entry in not_covered
+        )
+        w(f"- **Coverage: PARTIAL** — this run did not exercise {families}.\n")
+        w("  The gate above is the verdict on what ran, not on the whole profile.\n")
+    w("\n")
+
+    if not_covered:
+        w("## Families not covered\n\n")
+        w("The profile asks for these boards and this run did not get them: off\n")
+        w("the rig, held out, or in use by another run. Nothing in this report\n")
+        w("was validated on them, whatever its verdicts say.\n\n")
+        w("| Family | Boards wanted | Boards used |\n")
+        w("|---|---:|---:|\n")
+        for entry in not_covered:
+            w(f"| `{entry['target']}` | {entry['wanted']} | {entry['got']} |\n")
+        w("\n")
 
     modes = sorted({record.mode for record in records if record.mode})
     boards = sorted({record.boards for record in records})
@@ -435,6 +474,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--firmware-sha", help="firmware revision for records built from --junit")
     p.add_argument("--manifest", help="build manifest of the images the run flashed; adds the firmware-images table")
     p.add_argument("--gateway-matrix", help="mqtt/gateway-matrix.jsonl the run's uplink tests wrote; adds the gateway matrix")
+    p.add_argument(
+        "--not-covered",
+        action="append",
+        metavar="FAMILY=GOT/WANTED",
+        help="a family the run's allocation did not meet, e.g. esp32-s3=0/1; repeatable",
+    )
     return p
 
 
@@ -454,7 +499,8 @@ def main(argv: list[str] | None = None) -> int:
     catalog = load_catalog(args.capabilities)
     images = load_images(args.manifest)
     matrix = load_matrix(args.gateway_matrix)
-    md = render_markdown(records, args.title, catalog, images, matrix)
+    not_covered = parse_not_covered(args.not_covered)
+    md = render_markdown(records, args.title, catalog, images, matrix, not_covered)
     if args.out:
         from pathlib import Path
 
@@ -473,6 +519,11 @@ def main(argv: list[str] | None = None) -> int:
             summary["firmware_images"] = images
         if matrix:
             summary["gateway_matrix"] = matrix
+        if not_covered:
+            # In the machine-readable summary too: whatever reads a report
+            # without rendering it -- the dashboard, a release gate -- has to
+            # be able to see that this run was not the whole profile.
+            summary["not_covered"] = not_covered
         json_out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 

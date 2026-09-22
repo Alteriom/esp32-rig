@@ -451,6 +451,39 @@ def test_a_shared_profile_gets_only_the_boards_it_asked_for(tmp_path):
     assert len({b["id"] for b in boards}) == len(boards)
 
 
+def test_a_family_the_profile_marks_optional_may_be_missing_from_the_rig(tmp_path):
+    """The S3 is off the rig and the run covers the five families that are on
+    it, instead of failing at discover and covering none."""
+    import yaml
+    from alteriom_hil import allocation
+
+    manager = manager_at(repo_with_profiles(tmp_path))
+    manager.state = tmp_path / "state"
+    path = tmp_path / "board-map.active.yaml"
+    full = yaml.safe_load(_active_map(tmp_path / "full.yaml").read_text(encoding="utf-8"))
+    path.write_text(
+        yaml.safe_dump({"boards": [b for b in full["boards"] if b["target"] != "esp32-s3"]}),
+        encoding="utf-8",
+    )
+    manager.board_map = path
+
+    spec = manager.profiles["alteriom-firmware"]
+    log = FakeLog()
+    scoped = manager._scoped_board_map(spec, "job-s3-away", log)
+    boards = yaml.safe_load(scoped.read_text(encoding="utf-8"))["boards"]
+    assert "esp32-s3" not in {b["target"] for b in boards}
+    assert {b["target"] for b in boards} == {"esp32", "esp32-c3", "esp32-c6", "esp32-c5"}
+    assert len(boards) == sum(
+        need["count"] for need in spec.needs if need["target"] != "esp32-s3"
+    )
+    assert "Not covered: esp32-s3" in log.text, "the run log says what it went without"
+    # And the run can state it: this is what reaches the discover stage, the
+    # result and the report, so a pass is never read as the whole profile.
+    assert allocation.coverage(spec.needs, boards) == [
+        {"target": "esp32-s3", "wanted": 1, "got": 0, "optional": True}
+    ]
+
+
 def test_scoping_fails_loudly_when_the_rig_cannot_satisfy_the_profile(tmp_path):
     import yaml
 
@@ -591,6 +624,15 @@ def test_the_service_reports_enough_to_build_a_profile_picker(tmp_path):
         assert "builds_on_farm" not in entry
     assert details["painlessmesh"]["exclusive"] is True
     assert details["alteriom-firmware"]["exclusive"] is False
+    # Which families a shared profile asks for, and which of them it will run
+    # without. "3 board(s)" said how many and never which, so a family marked
+    # optional -- a board off the rig on purpose -- was visible only in the
+    # YAML on the host.
+    needs = {need["target"]: need for need in details["alteriom-firmware"]["needs"]}
+    assert needs["esp32"]["count"] == 2
+    assert needs["esp32-s3"]["optional"] is True
+    assert "optional" not in needs["esp32-c6"]
+    assert details["painlessmesh"]["needs"] == [], "a whole-bank profile asks for no family in particular"
 
 
 def test_the_dashboard_does_not_hardcode_a_profile_or_a_ref():

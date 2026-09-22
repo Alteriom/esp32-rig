@@ -678,11 +678,22 @@ class RigMixin:
                 if b.get("target") == need["target"] and set(need.get("tags") or ()) <= set(b.get("tags") or ())
             ]
             if len(matching) < need["count"]:
-                raise PipelineError(
-                    "discover",
-                    "Not enough boards for this profile",
-                    f"{spec.label} needs {need['count']} x {need['target']}; "
-                    f"{len(matching)} connected.",
+                if not need.get("optional"):
+                    raise PipelineError(
+                        "discover",
+                        "Not enough boards for this profile",
+                        f"{spec.label} needs {need['count']} x {need['target']}; "
+                        f"{len(matching)} connected.",
+                    )
+                # Wanted, not required: take what is there and go on. What
+                # the run went without is not lost here -- the pipeline reads
+                # it back off this map (allocation.coverage) and the run's
+                # result and report name it, so this is a smaller run and not
+                # a quieter one.
+                log.write(
+                    f"{utcnow()} Not covered: {need['target']} "
+                    f"({len(matching)} of {need['count']} wanted, optional); "
+                    f"the run goes without it\n"
                 )
             for board in matching[: need["count"]]:
                 chosen.append(board)
@@ -942,9 +953,19 @@ class RigMixin:
                 "Artifact selection does not cover this run's boards",
                 f"Missing artifact families: {sorted(missing_artifacts)}",
             )
+        # What this run's allocation does not meet: a family the profile asks
+        # for that was not on the rig, was held out, or was in use by another
+        # run. Read off the boards it actually got, so it is right both for a
+        # run scoped here and for one handed its boards by the dispatcher.
+        not_covered = allocation.coverage(spec.needs, scoped_boards)
+        shortfall = allocation.coverage_text(not_covered)
+        if not_covered:
+            log.write(f"{utcnow()} Not covered by this run: {shortfall}\n")
+            log.flush()
         self._stage(
             job_id, "discover", "passed",
-            f"{len(scoped_boards)} of {len(inventory['boards'])} boards allocated",
+            f"{len(scoped_boards)} of {len(inventory['boards'])} boards allocated"
+            + (f"; not covered: {shortfall}" if not_covered else ""),
         )
         rendered = {
             key: spec.render(value, revision=revision, ref=ref, artifact_dir=str(artifact_dir),
@@ -1109,6 +1130,14 @@ class RigMixin:
                 "--junit", str(results), "--suite", profile, "--mode", "hardware",
                 "--boards", str(len(scoped_boards)), "--firmware-sha", revision,
             ]
+            # The families this run did not exercise, so the report says so
+            # at the top instead of reading as the whole gate. A report that
+            # cannot be told is a report that quietly claims more than it ran.
+            for entry in not_covered:
+                report_cmd += [
+                    "--not-covered",
+                    f"{entry['target']}={entry['got']}/{entry['wanted']}",
+                ]
             if spec.capabilities:
                 # The consumer's own catalog, from its own checkout. Without one
                 # the report has no coverage table -- not someone else's.
@@ -1194,6 +1223,11 @@ class RigMixin:
             # canary history rather than re-run blindly.
             "board_ids": [board.get("id") for board in scoped_boards],
             "simulation": simulation,
+            # The profile's needs this run's boards did not meet. A pass with
+            # this set covered less than the profile asks for, and every
+            # reader of a result -- the dashboard, the consumer's CI, the
+            # notifier -- can name the families instead of guessing.
+            "not_covered": not_covered or None,
             "partial": partial,
             "selection": selection,
             "reused_artifacts_from": reused_from or supplied,
@@ -1202,8 +1236,14 @@ class RigMixin:
             # were the farm's rather than a board's.
             "health": health,
             "summary": (
-                f"Partial run on {_plural(len(scoped_boards), 'board')}: {described}"
-                if partial
-                else f"Validated {_plural(len(scoped_boards), 'board')}"
+                (
+                    f"Partial run on {_plural(len(scoped_boards), 'board')}: {described}"
+                    if partial
+                    else f"Validated {_plural(len(scoped_boards), 'board')}"
+                )
+                # Never a bare "Validated 5 boards" for a run asked to cover
+                # six families: the one line most readers see is the line
+                # that has to carry the gap.
+                + (f"; did not cover {shortfall}" if not_covered else "")
             ),
         }
