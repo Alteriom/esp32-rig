@@ -279,9 +279,8 @@ def test_it_runs_over_stdio_one_message_per_line(farm, tmp_path):
 def test_a_user_key_reads_the_real_service(tmp_path):
     """Against the farm's own handler, not a fake: the key a user is given is
     enough for every read the tools make."""
-    spec = importlib.util.spec_from_file_location("farm_service_mcp", REPO / "runner" / "farm_service.py")
-    farm_service = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(farm_service)
+    # The launcher, a console script now (docs/public-release-plan.md, 12e).
+    from alteriom_hil import launcher as farm_service
     token_file = tmp_path / "api-token"
     token_file.write_text("t" * 64)
     entries, user_key = add_key([], "assistant", "user")

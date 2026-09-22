@@ -211,10 +211,10 @@ def test_publishing_the_fleet_reads_the_instrument_registry(tmp_path, monkeypatc
 
 
 def _service():
-    spec = importlib.util.spec_from_file_location("farm_service_instruments", RUNNER / "farm_service.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # The launcher, a console script now (docs/public-release-plan.md, 12e).
+    from alteriom_hil import launcher
+
+    return launcher
 
 
 def test_the_service_refuses_an_instrument_as_a_board_and_a_wired_board_going(tmp_path, monkeypatch):

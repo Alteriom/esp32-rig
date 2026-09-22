@@ -47,7 +47,7 @@ PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 # the rig held. A placeholder a stage cannot render is a mistake in the
 # profile, and the only place to say so usefully is at load.
 #
-# These sets are the contract with farm_service's render calls; the pipeline
+# These sets are the contract with the service's render calls; the pipeline
 # tests assert the two agree, so widening one without the other fails there
 # rather than in production.
 STAGE_PLACEHOLDERS = {

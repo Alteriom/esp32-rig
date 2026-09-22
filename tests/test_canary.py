@@ -40,11 +40,10 @@ _SPEC = importlib.util.spec_from_file_location(
 build_artifacts = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(build_artifacts)
 
-_SERVICE = importlib.util.spec_from_file_location(
-    "farm_service_for_canary", REPO / "runner" / "farm_service.py"
-)
-farm_service = importlib.util.module_from_spec(_SERVICE)
-_SERVICE.loader.exec_module(farm_service)
+# The launcher: `alteriom_hil.launcher`, a console script now
+# (`alteriom-hil-service`), which composes the halves installed onto
+# the base (docs/public-release-plan.md, step 12e).
+from alteriom_hil import launcher as farm_service
 # The service itself, where `load_inventory_snapshot` is read: it is
 # `alteriom_hil.service` now and this file loads the launcher.
 from alteriom_hil import service as core_service  # noqa: E402

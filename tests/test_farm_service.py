@@ -12,12 +12,12 @@ import yaml
 from alteriom_hil.inventory import DetectedDevice, DeviceDetails
 
 
-SERVICE_PATH = Path(__file__).resolve().parents[1] / "runner" / "farm_service.py"
+# The launcher: `alteriom_hil.launcher`, a console script now
+# (`alteriom-hil-service`), which composes the halves installed onto the
+# base and publishes what the service does
+# (docs/public-release-plan.md, step 12e).
+from alteriom_hil import launcher as farm_service
 HIL_CONFIG_PATH = Path(__file__).resolve().parents[1] / "core" / "alteriom_hil" / "hil_config.py"
-SPEC = importlib.util.spec_from_file_location("farm_service", SERVICE_PATH)
-farm_service = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader
-SPEC.loader.exec_module(farm_service)
 from alteriom_hil import rig_manager  # noqa: E402 -- the rig's half reads its own names
 # The service itself, where those names are read: it is
 # `alteriom_hil.service` now and this file is the launcher that composes
@@ -36,7 +36,7 @@ def _install_profiles(repo: Path) -> Path:
     """
     import shutil
 
-    source = Path(farm_service.__file__).resolve().parents[1] / "profiles"
+    source = Path(__file__).resolve().parents[1] / "profiles"
     destination = Path(repo) / "profiles"
     destination.mkdir(parents=True, exist_ok=True)
     for document in source.glob("*.yaml"):
@@ -1043,7 +1043,7 @@ def test_one_board_is_not_plural():
     asks for exactly one -- so this string is on the dashboard and in the run
     report for a large share of runs.
     """
-    from farm_service import _plural
+    from alteriom_hil.launcher import _plural
 
     assert _plural(1, "board") == "1 board"
     assert _plural(0, "board") == "0 boards"

@@ -282,7 +282,7 @@ def test_an_attached_host_runs_a_node_agent_beside_the_service_on_its_own_state(
     assert "/etc/systemd/system/alteriom-hil-node.service" in install
     # Arguments, not Environment=: the runtime file would override the state
     # directory and the node would share the main service's job store.
-    assert "farm_service.py --mode node --state /var/lib/alteriom-hil/node --port 8091" in install
+    assert "alteriom-hil-service --mode node --state /var/lib/alteriom-hil/node --port 8091" in install
     assert "grep -qx 'ALTERIOM_HIL_FARM_ATTACHED=1'" in install
     assert "systemctl disable --now alteriom-hil-node.service" in install, "a host not attached runs no agent"
 
@@ -301,7 +301,9 @@ def test_installer_refreshes_the_node_agent_the_service_imports():
     assert "/usr/local/lib/alteriom-hil/farm_node.py" in removed, (
         "an older deploy's copy is left where the next reader believes it"
     )
-    assert "from alteriom_hil import farm_node" in (ROOT / "runner" / "farm_service.py").read_text(encoding="utf-8")
+    launcher = (ROOT / "rig" / "alteriom_hil" / "launcher.py").read_text(encoding="utf-8")
+    assert "from alteriom_hil import farm_node" in launcher, "the launcher is what starts it"
+    assert "alteriom-hil-service" in install, "and the unit runs the launcher by name"
 
 
 def test_installer_restarts_the_gateway_probe_it_refreshes():

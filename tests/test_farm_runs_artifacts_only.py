@@ -35,13 +35,12 @@ sys.path.insert(0, str(REPO / "core"))
 
 from alteriom_hil.profiles import STAGE_PLACEHOLDERS, ProfileError, load_profiles, parse_profile  # noqa: E402
 
-_SPEC = importlib.util.spec_from_file_location(
-    "farm_service_artifacts_only", REPO / "runner" / "farm_service.py"
-)
-farm_service = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(farm_service)
+# The launcher: `alteriom_hil.launcher`, a console script now
+# (`alteriom-hil-service`), which composes the halves installed onto
+# the base (docs/public-release-plan.md, step 12e).
+from alteriom_hil import launcher as farm_service  # noqa: E402
 # The service itself, where those names are read: it is
-# `alteriom_hil.service` now and runner/farm_service.py is the launcher
+# `alteriom_hil.service` now and `alteriom_hil.launcher` is the launcher
 # that composes the halves onto it, so a test changes it there.
 from alteriom_hil import service as core_service  # noqa: E402
 
@@ -245,7 +244,7 @@ def test_nothing_on_the_farm_host_can_build(tmp_path):
     assert ".platformio-cores" not in (REPO / "runner" / "install-health-service.sh").read_text(encoding="utf-8")
 
     # The launcher and the two halves, each where its distribution keeps it.
-    for half in (REPO / "runner" / "farm_service.py",
+    for half in (REPO / "rig" / "alteriom_hil" / "launcher.py",
                  REPO / "rig" / "alteriom_hil" / "rig_manager.py",
                  REPO / "portal" / "alteriom_hil" / "portal_manager.py"):
         service = half.read_text(encoding="utf-8")

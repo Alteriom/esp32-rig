@@ -254,10 +254,10 @@ def test_no_route_in_the_service_is_left_out_of_that_decision():
 
 
 def _service():
-    spec = importlib.util.spec_from_file_location("farm_service_keys", RUNNER / "farm_service.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # The launcher, a console script now (docs/public-release-plan.md, 12e).
+    from alteriom_hil import launcher
+
+    return launcher
 
 
 class FakeManager:
@@ -566,8 +566,7 @@ def test_every_key_made_through_a_store_or_a_cli_is_refused_an_accounts_handle(t
 
     # The handler gives the store the manager's accounts when nobody else has.
     import sys
-    sys.path.insert(0, str(REPO / "runner"))
-    import farm_service
+    from alteriom_hil import launcher as farm_service
     portal = farm_service.manager_for("portal")(REPO, tmp_path / "portal", tmp_path / "none.yaml", tmp_path / "none-map.yaml",
                                                 Path(sys.executable), mode="portal")
     portal.store.create_account("boss", email="boss@example.org", email_verified=True)

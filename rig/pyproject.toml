@@ -42,6 +42,9 @@ dev = [
 [project.scripts]
 # What a rig runs, by name out of its venv rather than by a path a deploy
 # copied into /usr/local/lib (docs/public-release-plan.md, step 12d).
+# The service composes the halves installed beside the base, which is why it
+# is here and not in the core: the core imports neither half.
+alteriom-hil-service = "alteriom_hil.launcher:main"
 alteriom-hil-health = "alteriom_hil.health_check:main"
 alteriom-hil-admin = "alteriom_hil.admin_cli:main"
 alteriom-hil-agent = "alteriom_hil.farm_node:main"

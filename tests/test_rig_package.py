@@ -55,10 +55,11 @@ RIG_ONLY = {
     # rig's own files. It ships with the drivers because it drives them.
     "rig_manager",
     # And the programs a rig runs: the agent that takes work from a portal,
-    # the health check, the admin CLI, the flasher. Each is a console script
-    # of the rig's distribution now rather than a file a deploy copied
-    # (docs/public-release-plan.md, step 12d).
-    "farm_node", "health_check", "admin_cli", "flash_artifacts",
+    # the health check, the admin CLI, the flasher, and the launcher that
+    # starts a farm (`alteriom-hil-service`). Each is a console script of the
+    # rig's distribution now rather than a file a deploy copied
+    # (docs/public-release-plan.md, steps 12d and 12e).
+    "farm_node", "health_check", "admin_cli", "flash_artifacts", "launcher",
 }
 
 # What both halves hold. Identity and keys above all: the farm decides who a
@@ -89,7 +90,7 @@ CORE = {
     # The service itself: the queue and its dispatcher, health and quarantine,
     # retention, statistics, storage, and the HTTP surface over them. It
     # imports neither half -- what composes a mode's class from the base and
-    # the halves installed is the launcher, runner/farm_service.py.
+    # the halves installed is the launcher, alteriom_hil.launcher.
     "service",
     # The host's own configuration: what a rig or a portal reads its settings
     # from, and the runtime environment those settings become. It names the
@@ -100,11 +101,11 @@ CORE = {
     "connectors",
 }
 
-# The portal's own. A rig never imports these; after the split they are not
-# in its repository to import. `portal_manager` is a distribution of its own
-# (portal/) and no longer under runner/ -- which is what portal_files() reads.
-PORTAL_MODULES = {"farm_service", "portal_manager"}
-PORTAL_FILES = (RUNNER / "farm_service.py", PORTAL_DIR / "portal_manager.py")
+# The portal's own. A rig imports this in one place and only if it is there:
+# the launcher asks for it, composes without it, and a farm with no portal
+# half refuses every portal method the way a node does (KNOWN_PORTAL_REACH).
+PORTAL_MODULES = {"portal_manager"}
+PORTAL_FILES = (PORTAL_DIR / "portal_manager.py",)
 
 
 def hal_name(path) -> str:
@@ -222,23 +223,18 @@ def test_the_manifest_covers_every_hal_module():
     )
 
 
-# What the portal reaches into the rig for TODAY, and why. The test holds the
-# list exactly, so the set can shrink and cannot grow.
+# What the portal reaches into the rig for, and why. The test holds the list
+# exactly, so the set can shrink and cannot grow.
 #
-#   rig_manager  now alteriom_hil.rig_manager: farm_service.py is the base,
-#                the launcher, and the three
-#                classes the mode picks between -- and the standalone one is
-#                composed from the rig's mixin and the portal's, so the file
-#                imports both. This goes when the base and the launcher are
-#                a file of their own and the standalone class is assembled
-#                where the rig is (docs/public-release-plan.md, step 12).
-#   farm_node    the same file is the launcher, and in node mode starts the
-#                agent in-process. Goes with the above.
+# It is empty. Eight names were here: six HAL modules, each of them the portal
+# wanting a *description* that lived beside a driver, and each in CORE now;
+# then `rig_manager` and `farm_node`, which were here because one file was the
+# base, the launcher and the three classes at once, so it imported both
+# halves. The base is `alteriom_hil.service` and the launcher is the rig's
+# (steps 12c and 12e), and the portal's half imports nothing of the rig's.
 #
-# Six HAL modules were here once. Each was the portal wanting a *description*
-# that lived beside a driver, and each is in CORE now; the last, probing,
-# left with the rig's methods into rig_manager.
-KNOWN_COUPLING = {"farm_node", "rig_manager"}
+# Keep it empty. An import added here is one the extraction has to undo.
+KNOWN_COUPLING: set[str] = set()
 
 
 def test_the_portal_reaches_into_the_rig_exactly_this_much_and_no_more():
@@ -269,18 +265,58 @@ def test_the_portal_reaches_into_the_rig_exactly_this_much_and_no_more():
     )
 
 
+# The one place the rig names the portal's half, and the only shape in which
+# it may: the launcher asks whether it is installed. A rig is complete without
+# it -- after the split it is not in the repository the launcher lives in --
+# so the import must be guarded and the absence must be a state the code
+# carries, not a crash (docs/public-release-plan.md, step 12e).
+KNOWN_PORTAL_REACH = {"launcher.py"}
+
+
+def guarded_imports(path: Path) -> set[str]:
+    """The modules this file imports inside a `try`, where an ImportError is
+    caught: an optional dependency rather than one it needs."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Try):
+            continue
+        catches = any(
+            isinstance(handler.type, ast.Name) and handler.type.id == "ImportError"
+            for handler in node.handlers
+        )
+        if not catches:
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Import):
+                found.update(alias.name for alias in inner.names)
+            elif isinstance(inner, ast.ImportFrom) and inner.module:
+                found.add(inner.module)
+    return found
+
+
 def test_the_rig_does_not_reach_into_the_portal():
     """Rule 2. Everything the rig runs -- the drivers, its half of the
-    manager, the agent, the health check, the admin CLI -- with no portal in
-    the repository it lives in, because after the split there is none."""
-    offenders = {}
+    manager, the agent, the health check, the admin CLI, the launcher -- with
+    no portal in the repository it lives in, because after the split there is
+    none. The launcher may ask whether one is installed; that is all, and it
+    must be asked in a way that survives the answer being no."""
+    offenders, unguarded = {}, {}
     for path in sorted(RIG_DIR.rglob("*.py")) + [RUNNER / f"{name}.py" for name in sorted(RIG_SCRIPTS)]:
         trespass = {name for name in imports_of(path) if set(name.split(".")) & PORTAL_MODULES}
-        if trespass:
+        if not trespass:
+            continue
+        if path.name not in KNOWN_PORTAL_REACH:
             offenders[path.name] = sorted(trespass)
+        elif not (trespass & guarded_imports(path)):
+            unguarded[path.name] = sorted(trespass)
     assert not offenders, (
         f"the rig imports the portal: {offenders}. "
         "A rig runs these with no portal beside it."
+    )
+    assert not unguarded, (
+        f"the rig imports the portal outside a try/except ImportError: {unguarded}. "
+        "A rig without the portal's half must compose, not crash."
     )
 
 
@@ -314,6 +350,8 @@ def test_the_hal_does_not_import_the_portal():
         top = hal_name(path)
         if top not in RIG_ONLY and top not in CORE:
             continue
+        if path.name in KNOWN_PORTAL_REACH:
+            continue  # the launcher asks whether one is installed; rule 2 checks how
         trespass = {name for name in imports_of(path) if set(name.split(".")) & PORTAL_MODULES}
         if trespass:
             offenders[path.name] = sorted(trespass)
@@ -426,7 +464,7 @@ def test_the_manifest_and_the_directories_say_the_same_thing():
 # develops both, it is installed, and a PYTHONPATH cannot hide a distribution
 # pip has put in site-packages.
 WITHOUT_THE_PORTAL = """
-import importlib.util, sys
+import sys
 
 class Absent:
     \"\"\"A rig's machine: alteriom-hil-portal was never installed.\"\"\"
@@ -437,27 +475,32 @@ class Absent:
         return None
 
 sys.meta_path.insert(0, Absent())
-spec = importlib.util.spec_from_file_location("farm_service", {service!r})
-service = importlib.util.module_from_spec(spec)
-sys.modules["farm_service"] = service
-spec.loader.exec_module(service)
+from alteriom_hil import launcher
 
-assert service.PORTAL_HALF is None, service.PORTAL_HALF
+assert launcher.PortalMixin is None, launcher.PortalMixin
+assert launcher.PortalManager is None, "there is no portal to run as"
 # A node is the rig's half on the base, with nothing missing.
-assert service.manager_for("node").__mro__[1] is service.RigMixin
+assert launcher.manager_for("node").__mro__[1] is launcher.RigMixin
 # And a standalone farm still composes -- with the base's answer to every
 # portal question, which is what a rig on its own says. Asked of an instance,
 # because that is where the base answers (__getattr__); one is made without
 # running __init__, which would want a rig's directories.
-standalone = service.manager_for("standalone")
-assert service.RigMixin in standalone.__mro__
+standalone = launcher.manager_for("standalone")
+assert launcher.RigMixin in standalone.__mro__
 farm = object.__new__(standalone)
 try:
     farm.publish_release
 except AttributeError as exc:
-    assert isinstance(exc, service.ElsewhereError), type(exc)
+    assert isinstance(exc, launcher.ElsewhereError), type(exc)
 else:
     raise AssertionError("a farm with no portal half published a release")
+# And starting one as a portal says what is missing rather than failing later.
+try:
+    launcher.main(["--mode", "portal"])
+except SystemExit as exit_code:
+    assert "alteriom-hil-portal is not installed" in str(exit_code), exit_code
+else:
+    raise AssertionError("a farm with no portal half started as one")
 print("ok")
 """
 
@@ -472,8 +515,7 @@ def test_a_rig_composes_without_the_portals_half():
     which is what an unguarded import of the half would mean on every rig
     that never had a portal.
     """
-    source = WITHOUT_THE_PORTAL.format(service=str(RUNNER / "farm_service.py"))
-    done = subprocess.run([sys.executable, "-c", textwrap.dedent(source)],
+    done = subprocess.run([sys.executable, "-c", textwrap.dedent(WITHOUT_THE_PORTAL)],
                           capture_output=True, text=True, cwd=str(ROOT))
     assert done.returncode == 0, done.stderr or done.stdout
     assert done.stdout.strip().endswith("ok")

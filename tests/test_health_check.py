@@ -626,7 +626,7 @@ def test_the_service_and_the_cli_take_the_same_lock():
 
     from alteriom_hil import farm_shared
 
-    service = module("farm_service_for_lock", RUNNER / "farm_service.py")
+    from alteriom_hil import launcher as service
     cli = module("admin_cli_for_lock", MODULE_PATH.with_name("admin_cli.py"))
     # One lock, defined once (alteriom_hil.farm_shared) and taken from there by
     # the dispatcher, a run and the CLI alike.

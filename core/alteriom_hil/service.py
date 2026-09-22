@@ -8,7 +8,7 @@ It is core because a portal holds it with no board in reach and a rig holds
 it with no portal beside it. It imports neither half: the rig's is
 `alteriom_hil.rig_manager`, the portal's `alteriom_hil.portal_manager`, and
 what composes a mode's class from the base and the halves it has is the
-launcher (`runner/farm_service.py`), which is the one thing that knows both
+launcher (`alteriom_hil.launcher`), which is the one thing that knows both
 (docs/public-release-plan.md, step 12c).
 """
 
@@ -5831,3 +5831,120 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             sys.stderr.write("farm-api: " + said + "\n")
 
     return Handler
+
+
+# ---- running one -------------------------------------------------------------
+#
+# Which class a mode runs as, the arguments a farm takes, and the server. The
+# base knows the shape of a farm; it does not know which halves are installed
+# beside it, so whoever runs one passes them in. A rig's launcher passes its
+# own half and the portal's if it has it (`alteriom_hil.launcher`,
+# docs/public-release-plan.md, step 12e).
+
+
+def _methods_of(mixin) -> frozenset:
+    return frozenset(name for name, value in vars(mixin).items()
+                     if callable(value) and not name.startswith("__"))
+
+
+def compose(rig=None, portal=None) -> dict:
+    """The class each mode runs as, from the halves it was given.
+
+    A node is the rig's half on the base, a portal the portal's, and a
+    standalone farm both -- which is how every farm ran before there was a
+    portal, and what a rig on its own still is. A mode whose half is not
+    installed is not in the mapping: `manager_for` says so rather than
+    building a class that would refuse everything it was asked.
+    """
+    portal_only = _methods_of(portal) if portal is not None else frozenset()
+    rig_only = _methods_of(rig) if rig is not None else frozenset()
+    shared = {
+        "_portal_only": portal_only,
+        "_rig_only": rig_only,
+        # What the base says when it is asked for something it has not got.
+        "_portal_half": None if portal is None else portal.__module__,
+    }
+    classes = {}
+    if rig is not None and portal is not None:
+        classes["standalone"] = type("FarmManager", (rig, portal, BaseManager), {
+            "__doc__": "A standalone farm: the boards, the pipeline, and the portal's side too.",
+            **shared})
+    elif rig is not None:
+        classes["standalone"] = type("FarmManager", (rig, BaseManager), {
+            "__doc__": "A standalone farm with no portal half installed: the boards and the pipeline.",
+            **shared})
+    if rig is not None:
+        classes["node"] = type("RigManager", (rig, BaseManager), {
+            "__doc__": "A node: the boards and the pipeline, taking runs from a portal.",
+            **shared})
+    if portal is not None:
+        classes["portal"] = type("PortalManager", (portal, BaseManager), {
+            "__doc__": "A portal: rigs, accounts, the worker protocol, releases, and no hardware.",
+            **shared})
+    return classes
+
+
+def arguments(argv, web_root: Path | None) -> "argparse.Namespace":
+    """What a farm is started with. Every unit and the image pass `--web-root`;
+    `web_root` is what a hand-run from a checkout gets."""
+    parser = argparse.ArgumentParser(prog="alteriom-hil-service", description=__doc__)
+    parser.add_argument("--bind", default=os.environ.get("ALTERIOM_HIL_API_BIND", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("ALTERIOM_HIL_API_PORT", "8090")))
+    parser.add_argument("--repo", type=Path, default=Path(os.environ.get("ALTERIOM_HIL_REPO", Path.cwd())))
+    parser.add_argument("--state", type=Path, default=Path(os.environ.get("ALTERIOM_HIL_STATE", "/var/lib/alteriom-hil")))
+    parser.add_argument("--registry", type=Path, default=Path(os.environ.get("ALTERIOM_HIL_INVENTORY", "inventory.yaml")))
+    parser.add_argument("--board-map", type=Path, default=Path(os.environ.get("ALTERIOM_HIL_BOARD_MAP", "board-map.yaml")))
+    parser.add_argument("--token-file", type=Path, default=Path(os.environ.get("ALTERIOM_HIL_API_TOKEN_FILE", "/etc/alteriom-hil/api-token")))
+    parser.add_argument(
+        "--keys-file", type=Path, default=os.environ.get("ALTERIOM_HIL_API_KEYS_FILE"),
+        help="named API keys (default: api-keys.yaml beside the token file)",
+    )
+    parser.add_argument("--web-root", type=Path, default=web_root,
+                        help="the rig's dashboard bundle (rig/web in a checkout)")
+    # docs/portal-plan.md: standalone, portal (no hardware), or node (hardware
+    # that takes its runs from a portal).
+    parser.add_argument("--mode", choices=MODES, default=os.environ.get("ALTERIOM_HIL_FARM_MODE", "standalone"))
+    parser.add_argument("--portal-url", default=os.environ.get("ALTERIOM_HIL_PORTAL_URL"))
+    parser.add_argument("--node-key-file", type=Path, default=os.environ.get("ALTERIOM_HIL_NODE_KEY_FILE"))
+    parser.add_argument("--worker-name", default=os.environ.get("ALTERIOM_HIL_WORKER_NAME") or socket.gethostname().lower())
+    return parser.parse_args(argv)
+
+
+def serve(argv=None, *, classes: dict, agent=None, web_root: Path | None = None) -> int:
+    """Start a farm: build the mode's manager, take the boards' inventory,
+    start the node's agent if this is a node, and answer.
+
+    `classes` is what `compose` made of the halves installed -- the launcher's,
+    so that the class a test builds and the class a service runs are the same
+    object. `agent` is what a node starts once its manager exists: the rig's,
+    since the base has none of its own. It is called with (manager, args).
+    """
+    args = arguments(argv, web_root)
+    if args.mode not in classes:
+        missing = "alteriom-hil" if args.mode == "node" else "alteriom-hil-portal"
+        raise SystemExit(f"this farm cannot run as {args.mode}: {missing} is not installed")
+    token = args.token_file.read_text(encoding="utf-8").strip()
+    try:
+        keys = KeyStore(token, args.keys_file or keys_path_for(args.token_file))
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    if args.mode == "node" and not (args.portal_url and args.node_key_file):
+        raise SystemExit("a node needs --portal-url and --node-key-file (ALTERIOM_HIL_PORTAL_URL, ALTERIOM_HIL_NODE_KEY_FILE)")
+    manager = classes[args.mode](args.repo, args.state, args.registry, args.board_map,
+                                 Path(sys.executable), mode=args.mode)
+    if args.mode != "portal":
+        try:
+            manager.submit("inventory", {})
+        except RigBusyError:
+            # A suite carried over from before the restart is first in line; its
+            # own discover stage reads the rig, and the boards it has not seen.
+            pass
+    if args.mode == "node":
+        if agent is None:
+            raise SystemExit("a node needs the rig's agent; alteriom-hil is not installed")
+        agent(manager, args)
+    threading.Thread(target=manager.retention_loop, name="retention", daemon=True).start()
+    server = ThreadingHTTPServer((args.bind, args.port), make_handler(manager, keys, args.web_root))
+    print(f"Alteriom farm API ({args.mode}) listening on {args.bind}:{args.port}", flush=True)
+    server.serve_forever()
+    return 0

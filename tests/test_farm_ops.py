@@ -159,7 +159,7 @@ class Recorder:
 
 
 def test_the_farm_pausing_itself_is_sent_once_and_an_operator_pausing_it_is_not(tmp_path):
-    farm_service = _module("farm_service_ops", RUNNER / "farm_service.py")
+    from alteriom_hil import launcher as farm_service
     manager = farm_service.FarmManager.__new__(farm_service.FarmManager)
     import queue
 
@@ -176,7 +176,7 @@ def test_the_farm_pausing_itself_is_sent_once_and_an_operator_pausing_it_is_not(
 
 
 def test_boards_red_on_their_own_are_sent_and_farm_wide_red_is_left_to_the_pause(tmp_path):
-    farm_service = _module("farm_service_ops_red", RUNNER / "farm_service.py")
+    from alteriom_hil import launcher as farm_service
     manager = farm_service.FarmManager.__new__(farm_service.FarmManager)
     manager.state = tmp_path
     manager.notifiers = [Recorder()]
@@ -325,7 +325,7 @@ def test_old_backups_go_and_a_stale_or_uncopied_one_is_reported(tmp_path):
 
 
 def test_retention_removes_what_is_bulky_and_old_and_keeps_what_a_run_found(tmp_path):
-    farm_service = _module("farm_service_retention", RUNNER / "farm_service.py")
+    from alteriom_hil import launcher as farm_service
     manager = farm_service.FarmManager.__new__(farm_service.FarmManager)
     manager.state = tmp_path
     (tmp_path / "logs").mkdir()

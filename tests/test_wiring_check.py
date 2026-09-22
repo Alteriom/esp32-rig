@@ -144,10 +144,10 @@ def test_the_wiring_check_passes_on_whole_wires_and_names_a_broken_one():
 
 
 def _service():
-    spec = importlib.util.spec_from_file_location("farm_service_wiring", REPO / "runner" / "farm_service.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # The launcher, a console script now (docs/public-release-plan.md, 12e).
+    from alteriom_hil import launcher
+
+    return launcher
 
 
 def test_a_run_given_some_boards_gets_only_their_wires(tmp_path):

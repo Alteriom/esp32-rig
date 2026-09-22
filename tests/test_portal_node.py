@@ -62,7 +62,10 @@ def _load(name: str, path: Path):
     return module
 
 
-farm_service = _load("farm_service_portal", RUNNER / "farm_service.py")
+# The launcher: `alteriom_hil.launcher`, a console script now
+# (`alteriom-hil-service`), which composes the halves installed onto
+# the base (docs/public-release-plan.md, step 12e).
+from alteriom_hil import launcher as farm_service  # noqa: E402
 # The portal's half reads its own constants; a test that changes one for a
 # run changes it where it is read.
 from alteriom_hil import portal_manager as portal_half  # noqa: E402
@@ -994,7 +997,7 @@ def test_a_rig_is_added_with_a_token_that_works_once_for_a_node_key_of_its_own(f
     assert status == 201 and added["pending"] and added["join"]["status"] == "waiting" and added["join"]["created_by"] == "farm"
     assert added["description"] == "bench Pi 5" and added["location"] == "lab shelf 2"
     token = added["token"]
-    assert farm_service.ENROLLMENT_TOKEN_PATTERN.fullmatch(token)
+    assert portal_half.ENROLLMENT_TOKEN_PATTERN.fullmatch(token)
     listed = farm.call("GET", "/api/v1/rigs", farm.user_key)[1]
     assert [rig["name"] for rig in listed["rigs"] if rig.get("pending")] == ["rig-2"] and listed["release"] is None
     assert token not in json.dumps(listed) and "token_sha256" not in json.dumps(listed), "the token is shown once"
@@ -1157,12 +1160,12 @@ def test_a_release_carries_the_agent_digest_a_build_of_it_stamps(tmp_path):
     # Where the agent is, is a profile's to say; this release carries none,
     # so the checkout is told by the farm's own.
     checkout._profiles = farm_service.load_profiles(REPO)
-    assert farm_service.release_agent_sha(tmp_path / "agent.bundle", commit) == checkout.agent_source_sha()
+    assert portal_half.release_agent_sha(tmp_path / "agent.bundle", commit) == checkout.agent_source_sha()
     # A release with no agent source has no agent to hold bundles to.
     bare_root = tmp_path / "bare"
     bare_root.mkdir()
     _, bare_commit, _ = _release(bare_root)
-    assert farm_service.release_agent_sha(bare_root / "release.bundle", bare_commit) is None
+    assert portal_half.release_agent_sha(bare_root / "release.bundle", bare_commit) is None
 
 
 def test_a_portal_holds_bundles_to_its_releases_agent_not_its_own_image(farm, tmp_path):
@@ -4042,9 +4045,9 @@ def test_a_release_says_which_agent_each_of_its_profiles_speaks(farm, tmp_path):
         profiles={"painlessmesh": "suites/painlessmesh/firmware", "canary": None,
                   "elsewhere": "suites/nothing/here"},
     )
-    digest = farm_service.release_agent_sha(tmp_path / "agent.bundle", commit)
+    digest = portal_half.release_agent_sha(tmp_path / "agent.bundle", commit)
     assert digest
-    assert farm_service.release_agents(tmp_path / "agent.bundle", commit) == {"painlessmesh": digest}, (
+    assert portal_half.release_agents(tmp_path / "agent.bundle", commit) == {"painlessmesh": digest}, (
         "a profile with no agent, and one whose agent the release does not carry, are not in it"
     )
 
@@ -4091,7 +4094,7 @@ def test_the_agent_the_farm_holds_painlessmesh_to_is_the_one_its_build_stamps(mo
     monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", REPO / declared)
     assert manager.agent_source_sha("painlessmesh") == build_artifacts.agent_source_sha()
     assert manager.agent_source_sha() == build_artifacts.agent_source_sha()
-    assert declared == farm_service.LEGACY_AGENT_SOURCE_PATH, (
+    assert declared == portal_half.LEGACY_AGENT_SOURCE_PATH, (
         "releases from before profiles named their agents are read by this path"
     )
     assert manager.agent_source_sha("canary") is None

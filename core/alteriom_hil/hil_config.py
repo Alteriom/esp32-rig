@@ -633,7 +633,7 @@ def runtime_env(payload: dict) -> str:
 def runtime_env_keys() -> frozenset[str]:
     """Every name runtime_env() can write, whatever a host enables.
 
-    What a dispatch may not override in a run's environment (farm_service):
+    What a dispatch may not override in a run's environment (farm_shared):
     these are the rig's to say. Derived by rendering a configuration with
     every section on -- in each farm mode, since the modes write different
     names -- so a setting added to runtime_env() is covered without a second

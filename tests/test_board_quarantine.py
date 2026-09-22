@@ -20,11 +20,11 @@ import yaml
 
 from alteriom_hil.api_keys import required_role
 
-SERVICE_PATH = Path(__file__).resolve().parents[1] / "runner" / "farm_service.py"
-SPEC = importlib.util.spec_from_file_location("farm_service_quarantine", SERVICE_PATH)
-farm_service = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader
-SPEC.loader.exec_module(farm_service)
+# The launcher: `alteriom_hil.launcher`, a console script now
+# (`alteriom-hil-service`), which composes the halves installed onto the
+# base and publishes what the service does
+# (docs/public-release-plan.md, step 12e).
+from alteriom_hil import launcher as farm_service
 
 BOARDS = [
     {"id": "esp32-01", "target": "esp32", "port": "/dev/esp32-farm-01", "mac": "aa:bb:cc:dd:ee:01"},
