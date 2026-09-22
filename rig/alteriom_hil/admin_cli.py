@@ -152,7 +152,7 @@ def command_config_set(args: argparse.Namespace) -> int:
 
 
 def command_config_set_many(args: argparse.Namespace) -> int:
-    """Settings a portal asked a node for (runner/node-control.sh): read from a
+    """Settings a portal asked a node for (rig/node-control.sh): read from a
     file, only the remote settings, validated together, applied at once."""
     require_root()
     try:
@@ -863,7 +863,7 @@ def command_providers_check(args: argparse.Namespace) -> int:
 # What one test message may read of CallMeBot's reply, and how long it waits.
 TEST_REPLY_LIMIT = 64 * 1024
 TEST_TIMEOUT_SECONDS = 20.0
-# The first words of every line `providers test` ends with; runner/node-control.sh
+# The first words of every line `providers test` ends with; rig/node-control.sh
 # relays only a line that starts with one of them.
 TEST_RESULT_PREFIXES = ("test message queued", "CallMeBot refused:", "CallMeBot did not queue it:",
                         "could not reach ", "no reply from ", "error: ")

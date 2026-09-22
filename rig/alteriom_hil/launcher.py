@@ -93,7 +93,7 @@ def start_agent(manager, args) -> None:
                                     args.node_key_file.read_text(encoding="utf-8").strip())
     # A node that is its host's farm installs the portal's releases; one
     # attached beside a standalone service is updated with it, by its own
-    # deploy (runner/install-health-service.sh).
+    # deploy (rig/install-health-service.sh).
     attached = os.environ.get("ALTERIOM_HIL_FARM_ATTACHED") == "1"
     farm_node.NodeAgent(
         manager, client, args.worker_name,

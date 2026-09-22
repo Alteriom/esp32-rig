@@ -230,7 +230,7 @@ ROUTINE_WORKER_CALL = re.compile(
 # the checkout the portal serves from -- `--repo`, which is /app in the
 # image -- and not beside this module: the service is an installed package
 # now and the script is not part of it (docs/public-release-plan.md, 12c).
-JOIN_SCRIPT_PATH = ("runner", "join-rig.sh")
+JOIN_SCRIPT_PATH = ("rig", "join-rig.sh")
 
 
 def join_script(repo) -> Path:
@@ -1564,7 +1564,7 @@ class BaseManager:
 
     # ---- adding a rig ------------------------------------------------------------------------
     # An admin names the rig; the portal gives a token that works once, for an
-    # hour, inside a command to run on the new host (runner/join-rig.sh). The
+    # hour, inside a command to run on the new host (rig/join-rig.sh). The
     # host trades it for its node key and installs the current release.
 
     # A rig is one resource from the moment it is added until it is deleted:
@@ -1582,7 +1582,7 @@ class BaseManager:
     # the portal's to say. CI publishes each release here as a git bundle and
     # makes it current; every heartbeat names the current one; a node running
     # anything else stops taking work, installs it when idle and says hello on
-    # the new commit (alteriom_hil.farm_node, runner/node-update.sh). A node
+    # the new commit (alteriom_hil.farm_node, rig/node-update.sh). A node
     # needs no GitHub runner, no inbound port and no GitHub credentials.
 
     # ---- history a node brings -----------------------------------------------
@@ -5269,7 +5269,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             self._mutate("POST", self._post)
 
         def _join_script(self):
-            """The script a new rig runs (runner/join-rig.sh), from the portal
+            """The script a new rig runs (rig/join-rig.sh), from the portal
             it joins: no key -- it carries none, and the token it needs is in
             the command beside it."""
             script = join_script(manager.__dict__.get("repo") or FARM_REPO_ROOT)

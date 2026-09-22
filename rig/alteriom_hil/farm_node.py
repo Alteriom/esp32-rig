@@ -23,7 +23,7 @@ only outward:
   once idle downloads that release (a git bundle), checks it against the
   digest the portal gave, and leaves a request for alteriom-hil-update.path,
   which installs it with the same update script a deploy always ran
-  (runner/node-update.sh). The node restarts on the new commit and says so.
+  (rig/node-update.sh). The node restarts on the new commit and says so.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 OPTIONAL_FIELDS = frozenset({"commit", "update", "config"})
 UNKNOWN_FIELDS = re.compile(r"unknown (?:hello|heartbeat) fields: \[([^\]]*)\]")
 # What needs the host's sudo goes through the node's control unit
-# (alteriom-hil-control.path, runner/node-control.sh); the rest the agent does.
+# (alteriom-hil-control.path, rig/node-control.sh); the rest the agent does.
 CONTROL_COMMANDS = frozenset({"restart", "logs", "configure", "provider_set", "provider_remove",
                               "provider_test", "notify_set", "notify_tune",
                               "notify_remove", "notify_test"})

@@ -154,7 +154,7 @@ def _access_point(config: dict, health: dict | None, inventory: dict | None) -> 
         "details": details,
         "enables": "radio scan and join, the gateway and uplink rows, every Internet test",
         "where": "rig",
-        "command": "sudo ./runner/setup-gateway-network.sh && "
+        "command": "sudo ./rig/setup-gateway-network.sh && "
                    "sudo alteriom-hil-admin config set gateway.enabled true",
     }
 
@@ -176,7 +176,7 @@ def _broker(config: dict, health: dict | None, inventory: dict | None) -> dict:
         "details": [],
         "enables": "the queue row: a board publishing to the rig's own broker",
         "where": "rig",
-        "command": "sudo ./runner/setup-mqtt-broker.sh && "
+        "command": "sudo ./rig/setup-mqtt-broker.sh && "
                    "sudo alteriom-hil-admin config set mqtt.enabled true",
     }
 

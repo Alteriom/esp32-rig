@@ -1,4 +1,4 @@
-"""runner/node-control.sh: what a portal asks a node for that needs sudo.
+"""rig/node-control.sh: what a portal asks a node for that needs sudo.
 
 The script runs as the runner user through alteriom-hil-control.service; here
 sudo, systemctl, journalctl and the admin CLI are stubs that record what they
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTROL = ROOT / "runner" / "node-control.sh"
+CONTROL = ROOT / "rig" / "node-control.sh"
 ID = "c" * 32
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="runs node-control.sh with POSIX stubs")

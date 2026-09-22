@@ -1,0 +1,578 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Alteriom/alteriom-esp32-farm/rig/hil-config.schema.json",
+  "title": "Alteriom HIL service configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "mode",
+    "runner",
+    "paths",
+    "health"
+  ],
+  "properties": {
+    "schema": {
+      "const": 2
+    },
+    "mode": {
+      "const": "hardware"
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit"
+      ],
+      "properties": {
+        "unit": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^actions\\.runner\\.[A-Za-z0-9_.-]+\\.service$"
+            },
+            {
+              "type": "null",
+              "description": "a node (farm.mode: node) has no Actions runner"
+            }
+          ]
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "venv",
+        "board_map"
+      ],
+      "properties": {
+        "venv": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "board_map": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "inventory": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "state": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interval_minutes",
+        "minimum_boards",
+        "disk_warn_percent",
+        "disk_critical_percent"
+      ],
+      "properties": {
+        "interval_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        },
+        "minimum_boards": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "disk_warn_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "disk_critical_percent": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "ssid",
+        "password_file",
+        "endpoint"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ssid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password_file": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^http://"
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 13,
+          "default": 1
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_register": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "mqtt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "url"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^mqtt://[A-Za-z0-9.-]+:[0-9]{1,5}$"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "bind",
+        "port",
+        "token_file"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "bind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "token_file": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "public_host": {
+          "type": "string",
+          "pattern": "^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$"
+        }
+      }
+    },
+    "notify": {
+      "description": "Where this host says something broke: one channel, or a list of them.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "channel": {
+                    "const": "telegram"
+                  }
+                },
+                "required": [
+                  "channel"
+                ]
+              },
+              "then": {
+                "required": [
+                  "token_file",
+                  "chat_id"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "channel": {
+                    "const": "callmebot"
+                  }
+                },
+                "required": [
+                  "channel"
+                ]
+              },
+              "then": {},
+              "else": {
+                "if": {
+                  "properties": {
+                    "channel": {
+                      "const": "telegram"
+                    }
+                  },
+                  "required": [
+                    "channel"
+                  ]
+                },
+                "then": {},
+                "else": {
+                  "required": [
+                    "webhook_url_file"
+                  ]
+                }
+              }
+            }
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "webhook",
+                "telegram",
+                "callmebot"
+              ],
+              "default": "webhook"
+            },
+            "webhook_url_file": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "token_file": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "chat_id": {
+              "type": "string",
+              "pattern": "^-?[0-9]{1,20}$"
+            },
+            "format": {
+              "enum": [
+                "slack",
+                "discord",
+                "json"
+              ]
+            },
+            "events": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "queue_paused",
+                  "board_red",
+                  "host_unhealthy"
+                ]
+              }
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            }
+          }
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "enabled"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "channel": {
+                      "const": "telegram"
+                    }
+                  },
+                  "required": [
+                    "channel"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "token_file",
+                    "chat_id"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "channel": {
+                      "const": "callmebot"
+                    }
+                  },
+                  "required": [
+                    "channel"
+                  ]
+                },
+                "then": {},
+                "else": {
+                  "if": {
+                    "properties": {
+                      "channel": {
+                        "const": "telegram"
+                      }
+                    },
+                    "required": [
+                      "channel"
+                    ]
+                  },
+                  "then": {},
+                  "else": {
+                    "required": [
+                      "webhook_url_file"
+                    ]
+                  }
+                }
+              }
+            ],
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "webhook",
+                  "telegram",
+                  "callmebot"
+                ],
+                "default": "webhook"
+              },
+              "webhook_url_file": {
+                "type": "string",
+                "pattern": "^/"
+              },
+              "token_file": {
+                "type": "string",
+                "pattern": "^/"
+              },
+              "chat_id": {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,20}$"
+              },
+              "format": {
+                "enum": [
+                  "slack",
+                  "discord",
+                  "json"
+                ]
+              },
+              "events": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "queue_paused",
+                    "board_red",
+                    "host_unhealthy"
+                  ]
+                }
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16
+              }
+            }
+          }
+        }
+      ]
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concurrency"
+      ],
+      "properties": {
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        }
+      }
+    },
+    "farm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "standalone",
+            "attached",
+            "portal",
+            "node"
+          ]
+        },
+        "portal_url": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "worker_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$"
+        },
+        "node_key_file": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      }
+    },
+    "quarantine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "after_failures"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "after_failures": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "directory",
+        "keep"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "directory": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "keep": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:/[A-Za-z0-9._/-]*$"
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "run_evidence_days",
+        "log_days",
+        "keep_newest_runs",
+        "workspace_days"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "run_evidence_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "log_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "keep_newest_runs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "workspace_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Real third-party services the rig validates with its owner's own credential (docs/providers.md)",
+      "properties": {
+        "callmebot": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "url_file": {
+              "type": "string",
+              "pattern": "^/",
+              "default": "/etc/alteriom-hil/providers/callmebot-url"
+            },
+            "send": {
+              "enum": [
+                "never",
+                "release",
+                "always"
+              ],
+              "default": "release"
+            },
+            "max_per_day": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 5
+            }
+          }
+        }
+      }
+    }
+  }
+}

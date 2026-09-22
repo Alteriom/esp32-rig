@@ -244,7 +244,7 @@ def test_the_configuration_page_covers_every_parameter_the_host_can_set():
     import json
 
     schema = json.loads(
-        (Path(__file__).resolve().parents[1] / "runner" / "hil-config.schema.json").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[1] / "rig" / "hil-config.schema.json").read_text(encoding="utf-8")
     )
     script = (WEB / "app.js").read_text(encoding="utf-8")
     service = SERVICE.read_text(encoding="utf-8")

@@ -1,0 +1,55 @@
+# Generated active board map. Keep stable identities in inventory.yaml and run
+# `alteriom-hil-admin boards discover`; do not hand-edit this file in service mode.
+#
+# port:        use the udev symlinks from rig/udev/99-esp32-farm.rules so
+#              the map survives re-enumeration and board swaps.
+# power_hub /  uhubctl coordinates for per-port power control (optional —
+# power_port:  omit on rigs without a switchable hub; tests requiring power
+#              control skip automatically via the `power` fixture, which
+#              reports supports()==False for boards with no coordinates).
+# target:      selects the immutable firmware artifact for this MCU family.
+#
+# Verify this file against the physical rig with rig/verify-rig.sh.
+boards:
+  - id: esp32-01
+    mac: "02:00:00:00:00:01"
+    port: /dev/esp32-farm-01
+    chip: esp32
+    target: esp32
+    power_hub: "1-1"
+    power_port: 1
+    tags: [mesh]
+  - id: esp32-c3-01
+    mac: "02:00:00:00:00:02"
+    port: /dev/esp32-farm-02
+    chip: esp32c3
+    target: esp32-c3
+    power_hub: "1-1"
+    power_port: 2
+    tags: [mesh]
+  - id: esp32-s3-01
+    mac: "02:00:00:00:00:03"
+    port: /dev/esp32-farm-03
+    chip: esp32s3
+    target: esp32-s3
+    power_hub: "1-1"
+    power_port: 3
+    tags: [mesh]
+  - id: esp32-c6-01
+    mac: "02:00:00:00:00:04"        # 6-byte base MAC (esptool also prints the EUI-64)
+    port: /dev/esp32-farm-04
+    chip: esp32c6
+    target: esp32-c6
+    tags: [mesh]
+  - id: esp32-c5-01
+    mac: "02:00:00:00:00:05"
+    port: /dev/esp32-farm-05
+    chip: esp32c5
+    target: esp32-c5
+    tags: [mesh]
+  - id: esp8266-01
+    mac: "02:00:00:00:00:06"
+    port: /dev/esp32-farm-06
+    chip: esp8266
+    target: esp8266
+    tags: [mesh]

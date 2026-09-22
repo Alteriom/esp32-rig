@@ -9,11 +9,14 @@ import yaml
 
 
 RUNNER = Path(__file__).resolve().parents[1] / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = Path(__file__).resolve().parents[1] / "rig"
 # The admin CLI is a module of the rig's distribution now, with a console
 # script (docs/public-release-plan.md, step 12d); run here as a module so
 # the test does not need the entry point installed.
 CLI = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "admin_cli.py"
-EXAMPLE = RUNNER / "hil-config.example.yaml"
+EXAMPLE = RIG / "hil-config.example.yaml"
 
 
 def invoke(*args):
@@ -550,13 +553,13 @@ def test_providers_test_refuses_when_todays_budget_is_spent_or_no_link_is_stored
 
 
 def test_node_control_relays_every_line_providers_test_can_end_with():
-    """runner/node-control.sh keeps only a line starting with one of these."""
+    """rig/node-control.sh keeps only a line starting with one of these."""
     import re
 
     sys.path.insert(0, str(RUNNER))
     from alteriom_hil import admin_cli
 
-    script = (RUNNER / "node-control.sh").read_text()
+    script = (RIG / "node-control.sh").read_text()
     pattern = script.split("provider_test)", 1)[1].split("grep -E '", 1)[1].split("'", 1)[0]
     for prefix in admin_cli.TEST_RESULT_PREFIXES:
         assert re.match(pattern, prefix + "x"), prefix
@@ -624,8 +627,8 @@ def test_a_telegram_only_configuration_satisfies_the_published_schema(tmp_path):
     rejected by the schema other tooling validates with."""
     import jsonschema
 
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
-    payload = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
+    payload = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     payload["notify"] = {
         "enabled": True, "channel": "telegram",
         "token_file": "/etc/alteriom-hil/providers/telegram-token", "chat_id": "42",

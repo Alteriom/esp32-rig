@@ -1,0 +1,104 @@
+# Alteriom HIL service configuration. Schema: rig/hil-config.schema.json
+schema: 2
+mode: hardware
+runner:
+  unit: actions.runner.Alteriom-alteriom-esp32-farm.esp32-hil.service
+paths:
+  venv: /home/sparck/.local/share/alteriom-hil/venv
+  inventory: /var/lib/alteriom-hil/inventory.yaml
+  board_map: /var/lib/alteriom-hil/board-map.active.yaml
+  repo: /home/sparck/esp32-farm-src
+  state: /var/lib/alteriom-hil
+health:
+  interval_minutes: 5
+  minimum_boards: 2
+  disk_warn_percent: 85
+  disk_critical_percent: 95
+gateway:
+  enabled: false
+  ssid: Alteriom-HIL
+  password_file: /etc/alteriom-hil/gateway-wifi-password
+  endpoint: http://10.42.0.1:8088
+  # The channel the AP runs on, and so the channel a board promoted to bridge
+  # takes its mesh to. Keep it equal to the mesh's own (setup-gateway-network.sh).
+  channel: 1
+inventory:
+  # A board plugged in registers itself as <family>-<last four of its MAC>.
+  # Turn it off for a rig whose bank is deliberate.
+  auto_register: true
+mqtt:
+  # The broker a run's gateway board publishes to (rig/setup-mqtt-broker.sh).
+  # Exported to suites as ALTERIOM_HIL_MQTT_URL when enabled.
+  enabled: false
+  url: mqtt://10.42.0.1:1883
+service:
+  enabled: true
+  # Loopback is deliberate: use an SSH tunnel, or put a TLS reverse proxy in front.
+  bind: 127.0.0.1
+  port: 8090
+  token_file: /etc/alteriom-hil/api-token
+  # Optional: enables reverse-proxy and certificate readiness reporting.
+  public_host: hil.example.com
+notify:
+  # One outbound webhook for what nobody would otherwise see: the farm pausing
+  # its own queue, a canary red on a board, the host going unhealthy.
+  enabled: false
+  # A file holding the webhook URL, root:<service group> 0640 like the token --
+  # Slack and Discord webhook URLs are credentials.
+  webhook_url_file: /etc/alteriom-hil/notify-webhook
+  format: slack
+  events: [queue_paused, board_red, host_unhealthy]
+queue:
+  # How many runs may be in progress at once. At 1 every run has the rig to
+  # itself, as the farm always ran. Above 1, a run whose profile says
+  # `concurrent: true` starts beside others on boards nobody holds; every
+  # other run, discovery and a deploy still wait for an idle rig. Read when
+  # the farm service starts: restart alteriom-hil-farm after changing it.
+  concurrency: 1
+farm:
+  # standalone: the queue, the dashboard and the boards in this one service,
+  # as the farm began. attached: the same, plus a node agent beside it
+  # (alteriom-hil-node) that takes runs from a portal on the same boards --
+  # the step before moving CI to the portal. node: only the node; runs come
+  # from the portal (docs/portal-plan.md). The portal issues the node key,
+  # named for this worker.
+  mode: standalone
+  # portal_url: https://espfarm.alteriom.net
+  # worker_name: esp32-hil
+  # node_key_file: /etc/alteriom-hil/node-key
+quarantine:
+  # A board red on its own canary checks this many canary runs in a row is
+  # left out of every run until a clean health check, or an operator, releases
+  # it. Checks red on every board (the farm) and the wiring check (the
+  # jumpers) neither count nor clear. Off until a host turns it on: it takes a
+  # board out of the release gate's runs.
+  enabled: false
+  after_failures: 2
+backup:
+  # Nightly: the job database, the registries, the configuration and the
+  # pinned bundles. Never a secret. Only a target off this SD card protects
+  # against losing it.
+  enabled: true
+  directory: /var/lib/alteriom-hil/backups
+  keep: 14
+  # target: sparck@alteriom03:/srv/alteriom-hil-backups
+retention:
+  # Daily: removes old runs' serial and broker captures, old job logs and stale
+  # checkouts -- never a run's report or records, never the newest runs, never
+  # a queued or running job's. Off until a host turns it on.
+  enabled: false
+  run_evidence_days: 90
+  log_days: 90
+  keep_newest_runs: 100
+  workspace_days: 2
+# providers:
+#   # Real services the rig validates with its owner's own credential
+#   # (docs/providers.md). Absent, the rig has none and those rows skip.
+#   callmebot:
+#     # Written by `sudo alteriom-hil-admin providers set callmebot` from stdin,
+#     # root:<service group> 0640. Use a CallMeBot key dedicated to the rig.
+#     url_file: /etc/alteriom-hil/providers/callmebot-url
+#     # never | release (only a run dispatched as a release build) | always
+#     send: release
+#     # Real messages this rig may send per UTC day, 1-50.
+#     max_per_day: 5

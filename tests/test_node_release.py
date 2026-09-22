@@ -1,6 +1,6 @@
 """How a node gets a release onto its host, and how a deploy knows it did.
 
-runner/node-update.sh installs what the node agent staged, with the update
+rig/node-update.sh installs what the node agent staged, with the update
 script from the release itself; runner/ci_farm_release.py publishes a release
 and waits for every node to run it. docs/portal-plan.md.
 """
@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-NODE_UPDATE = ROOT / "runner" / "node-update.sh"
+NODE_UPDATE = ROOT / "rig" / "node-update.sh"
 SPEC = importlib.util.spec_from_file_location("ci_farm_release", ROOT / "runner" / "ci_farm_release.py")
 ci_farm_release = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader

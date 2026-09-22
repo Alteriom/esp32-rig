@@ -13,7 +13,7 @@ def test_the_preflight_excuses_the_boards_a_new_rig_has_not_registered(tmp_path)
     udev names and its board map are steps still ahead of it. Failing them
     failed the release install a new rig was in the middle of (rig02,
     2026-09-16). A host fault is still a fault."""
-    script = REPO / "runner" / "verify-rig.sh"
+    script = REPO / "rig" / "verify-rig.sh"
     registry = tmp_path / "inventory.yaml"
     env = {
         "PATH": os.environ["PATH"],
@@ -40,7 +40,7 @@ def test_an_empty_board_map_is_not_a_map_that_cannot_be_read(tmp_path):
     Reading that as a map that does not parse failed the release install of a
     rig in the middle of bring-up (rig02, 2026-09-16) -- hourly, and only
     visible in the rig's own journal."""
-    script = REPO / "runner" / "verify-rig.sh"
+    script = REPO / "rig" / "verify-rig.sh"
     registry = tmp_path / "inventory.yaml"
     board_map = tmp_path / "board-map.active.yaml"
     board_map.write_text("boards: []\n", encoding="utf-8")
@@ -72,7 +72,7 @@ def test_only_an_empty_boards_list_is_excused(tmp_path):
     registered. An empty file, `{}`, `boards: null` or a mapping with no
     `boards` key are a map somebody got wrong, and a rig that exits 0 on one
     of those installs a release onto a host nobody has configured."""
-    script = REPO / "runner" / "verify-rig.sh"
+    script = REPO / "rig" / "verify-rig.sh"
     registry = tmp_path / "inventory.yaml"
     board_map = tmp_path / "board-map.active.yaml"
     env = {
@@ -91,7 +91,7 @@ def test_a_registry_is_read_by_the_loader_not_by_a_regular_expression(tmp_path):
     """`boards: [{id: esp32-01, ...}]` is a registry an operator may well
     write. Read line by line it looked like no registry at all, and then a
     missing board map was excused on a rig that has hardware registered."""
-    script = REPO / "runner" / "verify-rig.sh"
+    script = REPO / "rig" / "verify-rig.sh"
     registry = tmp_path / "inventory.yaml"
     registry.write_text(
         "boards: [{id: esp32-01, port: /dev/esp32-farm-01, target: esp32, chip: esp32}]\n",

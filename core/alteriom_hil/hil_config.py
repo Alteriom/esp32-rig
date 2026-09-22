@@ -548,7 +548,7 @@ def runtime_env(payload: dict) -> str:
     if farm and farm.get("mode") in ("attached", "node"):
         # Read by the farm service at start: a node connects to its portal.
         # Attached, the main service stays standalone and the installer starts
-        # alteriom-hil-node beside it (runner/install-health-service.sh).
+        # alteriom-hil-node beside it (rig/install-health-service.sh).
         if farm["mode"] == "node":
             values["ALTERIOM_HIL_FARM_MODE"] = "node"
         else:
@@ -684,7 +684,7 @@ def dump_config(payload: dict) -> str:
 
 
 # The settings a portal may change on a node from its page (a `configure`
-# command, runner/node-control.sh): how many runs at once, what the node keeps,
+# command, rig/node-control.sh): how many runs at once, what the node keeps,
 # and when its host health check complains. Nothing that names a path, a
 # network or a secret, and nothing that decides where the node connects.
 REMOTE_SETTINGS = {
@@ -775,7 +775,7 @@ DEFAULT_NODE_KEY_FILE = "/etc/alteriom-hil/node-key"
 
 
 def join_portal(payload: dict, portal_url: str, worker_name: str, node_key_file: str = DEFAULT_NODE_KEY_FILE) -> dict:
-    """A host configuration made a node of a portal (runner/join-rig.sh): the
+    """A host configuration made a node of a portal (rig/join-rig.sh): the
     farm section says so, and the host has no runner of its own. Validated
     whole before anything is kept."""
     farm = payload.get("farm") if isinstance(payload.get("farm"), dict) else {}

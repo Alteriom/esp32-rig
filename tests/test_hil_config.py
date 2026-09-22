@@ -6,6 +6,9 @@ import yaml
 
 
 RUNNER = Path(__file__).resolve().parents[1] / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = Path(__file__).resolve().parents[1] / "rig"
 SPEC = importlib.util.spec_from_file_location(
     "hil_config", RUNNER.parent / "core" / "alteriom_hil" / "hil_config.py")
 hil_config = importlib.util.module_from_spec(SPEC)
@@ -46,8 +49,8 @@ def valid_config(tmp_path):
 
 
 def test_example_matches_schema_and_internal_validation():
-    example = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
+    example = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
     assert example["schema"] == schema["properties"]["schema"]["const"]
     assert hil_config.validate_config(example) == []
 
@@ -318,12 +321,12 @@ def test_a_callmebot_provider_is_validated(tmp_path):
 
 
 def test_the_schema_and_the_example_describe_the_providers_section():
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
     callmebot = schema["properties"]["providers"]["properties"]["callmebot"]["properties"]
     assert callmebot["send"]["enum"] == list(hil_config.PROVIDER_SEND_POLICIES)
     assert callmebot["url_file"]["default"] == hil_config.DEFAULT_CALLMEBOT["url_file"]
     assert callmebot["max_per_day"]["maximum"] == 50
-    assert "# providers:" in (RUNNER / "hil-config.example.yaml").read_text()
+    assert "# providers:" in (RIG / "hil-config.example.yaml").read_text()
 
 
 def test_every_name_the_runtime_environment_can_hold_is_known(tmp_path):
@@ -361,7 +364,7 @@ def test_the_gateway_channel_reaches_the_suites_and_is_a_real_channel(tmp_path):
 
     # The published schema is what other tooling validates a rig's file with,
     # so a setting the CLI writes must be in it.
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
     channel_schema = schema["properties"]["gateway"]["properties"]["channel"]
     assert channel_schema["minimum"] == 1 and channel_schema["maximum"] == 13
     assert channel_schema["default"] == hil_config.GATEWAY_DEFAULT_CHANNEL
@@ -412,7 +415,7 @@ def test_boards_register_themselves_unless_the_rig_says_not_to(tmp_path):
     written.write_text(yaml.safe_dump(aged), encoding="utf-8")
     assert hil_config.load_config(written)["inventory"]["auto_register"] is True
 
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
     assert schema["properties"]["inventory"]["properties"]["auto_register"]["default"] is True
 
 
@@ -441,7 +444,7 @@ def test_a_telegram_channel_is_a_token_file_and_a_chat(tmp_path):
     payload["notify"] = {"enabled": True, "channel": "carrier-pigeon"}
     assert any("notify.channel must be one of" in error for error in hil_config.validate_config(payload))
 
-    schema = json.loads((RUNNER / "hil-config.schema.json").read_text())
+    schema = json.loads((RIG / "hil-config.schema.json").read_text())
     # One channel, or a list of them: a rig that has always had one validates
     # exactly as it did, and one told to say things in two places says so.
     one, many = schema["properties"]["notify"]["oneOf"]

@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "health_check.py"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = Path(__file__).resolve().parents[1] / "rig"
 SPEC = importlib.util.spec_from_file_location("health_check", MODULE_PATH)
 health_check = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(health_check)
@@ -614,10 +617,6 @@ def test_the_service_and_the_cli_take_the_same_lock():
     the difference never showed; on the Ubuntu image rig02 runs it is a
     directory of its own, and the service could not write to it at all."""
 
-    # The launcher is still under runner/; the CLI and the health check are
-    # modules of the rig's distribution (docs/public-release-plan.md, 12d).
-    RUNNER = MODULE_PATH.parents[2] / "runner"
-
     def module(name, path):
         spec = importlib.util.spec_from_file_location(name, path)
         loaded = importlib.util.module_from_spec(spec)
@@ -633,7 +632,7 @@ def test_the_service_and_the_cli_take_the_same_lock():
     assert str(service.farm_shared.RIG_LOCK_PATH) == str(cli.RIG_LOCK) == "/run/lock/alteriom-hil.lock"
     assert cli.RIG_LOCK is farm_shared.RIG_LOCK_PATH
     # And the installer makes that one, on every boot.
-    installer = (RUNNER / "install-health-service.sh").read_text(encoding="utf-8")
+    installer = (RIG / "install-health-service.sh").read_text(encoding="utf-8")
     assert "f /run/lock/alteriom-hil.lock" in installer
     assert "ReadWritePaths=/var/lib/alteriom-hil /run/lock" in installer
 

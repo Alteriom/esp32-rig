@@ -1,6 +1,6 @@
 """Power-control HAL: availability detection and the pytest ``power`` fixture.
 
-The rig's promise (runner/board-map.example.yaml, docs/runbook.md) is that
+The rig's promise (rig/board-map.example.yaml, docs/runbook.md) is that
 power control is *optional*: rigs without a uhubctl-capable hub, or boards
 without power coordinates, must degrade to a no-op that tests can detect
 via ``power.available`` / ``power.supports(board)`` — never an exception

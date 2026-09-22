@@ -30,6 +30,9 @@ from alteriom_hil.notify import EVENTS, Notification, Notifier, check_url
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = REPO / "rig"
 # The rig's programs: modules of its distribution now, with console scripts
 # (docs/public-release-plan.md, step 12d).
 RIG_PACKAGE = REPO / "rig" / "alteriom_hil"
@@ -134,7 +137,7 @@ def test_the_runtime_environment_turns_notifications_on_and_off():
     assert notifier.format == "discord" and notifier.events == {"board_red", "host_unhealthy"}
     assert notifier.link("#run/abc") == "https://hil.example.com/app#run/abc"
 
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     config["notify"]["enabled"] = True
     env = dict(line.split("=", 1) for line in hil_config.runtime_env(config).splitlines())
     assert env["ALTERIOM_HIL_NOTIFY_WEBHOOK_FILE"] == "/etc/alteriom-hil/notify-webhook"
@@ -388,7 +391,7 @@ def test_retention_removes_what_is_bulky_and_old_and_keeps_what_a_run_found(tmp_
 
 
 def test_the_new_settings_are_validated_like_the_rest():
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     assert hil_config.validate_config(config) == []
     cases = [
         (("notify", "format"), "teams", "notify.format must be one of"),
@@ -410,7 +413,7 @@ def test_the_new_settings_are_validated_like_the_rest():
 
 
 def test_the_nightly_backup_is_installed_as_the_runner_user():
-    installer = (RUNNER / "install-health-service.sh").read_text(encoding="utf-8")
+    installer = (RIG / "install-health-service.sh").read_text(encoding="utf-8")
     unit = installer.split("alteriom-hil-backup.service >/dev/null <<EOF", 1)[1].split("EOF", 1)[0]
     assert "User=$RUN_USER" in unit and "alteriom-hil-admin backup create" in unit
     assert "OnCalendar=*-*-* 03:30:00" in installer and "systemctl enable --now alteriom-hil-backup.timer" in installer

@@ -46,6 +46,9 @@ from alteriom_hil.protocol import ProtocolError
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = REPO / "rig"
 FIRMWARE = REPO / "instruments" / "esp32-io" / "firmware" / "src" / "main.cpp"
 
 C6 = Board(id="esp32-c6-01", port="/dev/ttyACM0", chip="esp32c6", target="esp32-c6", mac="40:4c:ca:00:00:01")
@@ -251,7 +254,7 @@ def test_the_admin_cli_registers_wires_and_unwires_an_instrument(tmp_path, monke
 
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(yaml.safe_dump({"boards": [{"id": C6.id, "port": C6.port, "chip": C6.chip, "target": C6.target, "mac": C6.mac}]}))
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     config["paths"]["inventory"] = str(inventory)
     config["paths"]["board_map"] = str(tmp_path / "board-map.active.yaml")
     config["paths"]["state"] = str(tmp_path / "state")
@@ -293,7 +296,7 @@ def test_discovery_offers_an_unregistered_esp32_as_an_instrument_too(tmp_path, m
 
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(yaml.safe_dump({"boards": [{"id": C6.id, "port": C6.port, "chip": C6.chip, "target": C6.target, "mac": C6.mac}]}))
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     config["paths"]["inventory"] = str(inventory)
     config["paths"]["board_map"] = str(tmp_path / "board-map.active.yaml")
     config["paths"]["state"] = str(tmp_path / "state")
@@ -406,7 +409,7 @@ def test_an_instrument_a_rig_registered_as_a_board_is_corrected_not_refused(tmp_
         {"id": C6.id, "port": C6.port, "chip": C6.chip, "target": C6.target, "mac": C6.mac},
         {"id": "esp32-0099", "port": "/dev/ttyUSB3", "chip": "esp32", "target": "esp32", "mac": IO_MAC},
     ]}))
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     config["paths"]["inventory"] = str(inventory)
     config["paths"]["board_map"] = str(tmp_path / "board-map.active.yaml")
     config["paths"]["state"] = str(tmp_path / "state")

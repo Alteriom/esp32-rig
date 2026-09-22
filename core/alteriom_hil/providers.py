@@ -472,7 +472,7 @@ def callmebot_test_message(
 # portal ever holding it: the browser encrypts the link to this rig's public
 # key (RSA-OAEP, SHA-256), the portal relays the ciphertext, and only the rig,
 # holding the private key, decrypts it -- straight into `providers set`
-# (runner/node-control.sh). The portal relays the public key too, so the
+# (rig/node-control.sh). The portal relays the public key too, so the
 # fingerprint an owner compares on the rig (`providers seal-key`) is what
 # stops a portal that swapped in a key of its own.
 

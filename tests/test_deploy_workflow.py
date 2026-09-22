@@ -16,8 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-farm-host.yml"
 HIL = ROOT / ".github" / "workflows" / "hil-painlessmesh.yml"
 PORTAL_IMAGE = ROOT / ".github" / "workflows" / "portal-image.yml"
+# The rig's own scripts are under rig/ now; update-runner.sh is the one still
+# under runner/, because a node in the field runs that path
+# (docs/public-release-plan.md, step 12f).
 UPDATE = ROOT / "runner" / "update-runner.sh"
-INSTALL = ROOT / "runner" / "install-health-service.sh"
+INSTALL = ROOT / "rig" / "install-health-service.sh"
 LIB = ROOT / "runner" / "deploy-lib.sh"
 
 
@@ -144,8 +147,8 @@ def test_update_script_takes_the_rig_lock_and_verifies():
 
 
 def test_shell_scripts_parse():
-    for script in (UPDATE, INSTALL, LIB, ROOT / "runner" / "setup-runner.sh", ROOT / "runner" / "node-update.sh",
-                   ROOT / "runner" / "node-control.sh", ROOT / "runner" / "join-rig.sh"):
+    for script in (UPDATE, INSTALL, LIB, ROOT / "rig" / "setup-runner.sh", ROOT / "rig" / "node-update.sh",
+                   ROOT / "rig" / "node-control.sh", ROOT / "rig" / "join-rig.sh"):
         subprocess.run(["bash", "-n", str(script)], check=True)
         assert script.stat().st_mode & 0o111, f"{script.name} must be executable"
 
@@ -161,7 +164,7 @@ def test_installer_refreshes_every_snapshot_a_unit_executes():
     """
     install = INSTALL.read_text(encoding="utf-8")
     executed = set()
-    for script in (ROOT / "runner").glob("*.sh"):
+    for script in sorted({*(ROOT / "rig").glob("*.sh"), *(ROOT / "runner").glob("*.sh")}):
         for match in re.finditer(
             r"ExecStart=\S+ /usr/local/lib/alteriom-hil/([A-Za-z0-9_.-]+\.py)",
             script.read_text(encoding="utf-8"),
@@ -314,9 +317,9 @@ def test_installer_restarts_the_gateway_probe_it_refreshes():
 
 
 def test_a_rig_joins_with_one_command_that_keeps_its_secrets_off_command_lines():
-    join = (ROOT / "runner" / "join-rig.sh").read_text(encoding="utf-8")
+    join = (ROOT / "rig" / "join-rig.sh").read_text(encoding="utf-8")
     install = INSTALL.read_text(encoding="utf-8")
-    setup = (ROOT / "runner" / "setup-runner.sh").read_text(encoding="utf-8")
+    setup = (ROOT / "rig" / "setup-runner.sh").read_text(encoding="utf-8")
     # Piped into bash: nothing runs until the whole script has been read.
     assert join.rstrip().endswith('if [ "${JOIN_RIG_LIB:-0}" != 1 ]; then\n  main "$@"\nfi')
     assert 'die "run this as the user the rig runs as (it uses sudo), not as root"' in join

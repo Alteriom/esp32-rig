@@ -5,7 +5,7 @@ RSA-OAEP/SHA-256; the rig decrypts it with ``openssl pkeyutl`` and the private
 key only it holds. These hold the pieces to each other: the key the rig
 reports, the admin CLI that makes it and prints its fingerprint, and -- where
 node and openssl are installed -- the page's own sealing code against the
-exact openssl command runner/node-control.sh runs.
+exact openssl command rig/node-control.sh runs.
 """
 
 from __future__ import annotations
@@ -26,6 +26,9 @@ from alteriom_hil import providers
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = ROOT / "rig"
 APP = RUNNER.parent / "rig" / "web" / "app.js"
 FAKE_LINK = "https://api.callmebot.com/whatsapp.php?phone=+15550001234&apikey=987654"
 # The decrypt node-control.sh runs, argument for argument.
@@ -125,7 +128,7 @@ def test_seal_key_is_a_providers_subcommand():
 
     args = admin_cli.parser().parse_args(["providers", "seal-key", "--fingerprint"])
     assert args.func is admin_cli.command_providers_seal_key and args.fingerprint and not args.rotate
-    install = (RUNNER / "install-health-service.sh").read_text(encoding="utf-8")
+    install = (RIG / "install-health-service.sh").read_text(encoding="utf-8")
     assert "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072" in install
     assert "umask 077" in install and 'sudo chmod 0600 "$SEAL_KEY"' in install and 'sudo chmod 0644 "$SEAL_PUB"' in install
     assert 'if ! sudo test -f "$SEAL_KEY"' in install, "an existing key is never replaced by an install"

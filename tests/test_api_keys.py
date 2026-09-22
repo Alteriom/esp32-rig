@@ -39,6 +39,9 @@ from alteriom_hil.api_keys import (
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = REPO / "rig"
 # The service's own source: `alteriom_hil.service` in the core, which is
 # where the routes and the handler live (docs/public-release-plan.md, 12c).
 SERVICE = REPO / "core" / "alteriom_hil" / "service.py"
@@ -385,7 +388,7 @@ def test_the_admin_cli_creates_lists_and_revokes_keys(tmp_path, monkeypatch, cap
 
     token_file = tmp_path / "api-token"
     token_file.write_text(FARM_TOKEN)
-    config = yaml.safe_load((RUNNER / "hil-config.example.yaml").read_text())
+    config = yaml.safe_load((RIG / "hil-config.example.yaml").read_text())
     config["service"]["token_file"] = str(token_file)
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False))

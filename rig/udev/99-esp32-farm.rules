@@ -1,0 +1,27 @@
+# Stable device names for the ESP32 farm board bank.
+#
+# Boards get a symlink /dev/esp32-farm-<NN> based on their PHYSICAL USB PORT
+# (KERNELS== path), not their serial number — so any board plugged into rig
+# port 1 is always /dev/esp32-farm-01, and swapping a dead board does not
+# require editing the board map.
+#
+# Find your port paths after plugging boards in:
+#   udevadm info -a -n /dev/ttyUSB0 | grep KERNELS
+# then adjust the KERNELS values below to your hub topology and run:
+#   sudo cp 99-esp32-farm.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+#
+# This farm's first proven slot is the fourth downstream port of the hub group
+# at 1-1.1. Add future slots only after observing their complete KERNELS path.
+# Matching a shorter ancestor (for example 1-1.1) aliases every board on that
+# downstream hub to the same name.
+#
+# Native-USB boards (C3, C5, C6, S3 on their USB connector) enumerate as
+# ttyACM, UART-bridge boards (ESP32 DevKitC, ESP8266) as ttyUSB; the rule is
+# the same either way because it keys on the hub port, not the chip.
+#
+# Access is limited to the dialout group. setup-runner.sh adds the runner user
+# to that group; log out/in before running the preflight.
+
+SUBSYSTEM=="tty", KERNELS=="1-1.1.4", SYMLINK+="esp32-farm-01", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", KERNELS=="1-1.4.2", SYMLINK+="esp32-farm-02", GROUP="dialout", MODE="0660"
+SUBSYSTEM=="tty", KERNELS=="1-1.1.2", SYMLINK+="esp32-farm-03", GROUP="dialout", MODE="0660"

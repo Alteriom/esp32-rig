@@ -396,19 +396,26 @@ NAMES_PAINLESSMESH = {
     # The two installers name suites/painlessmesh/ because the gateway probe
     # lives there now, and a unit on the rig runs it. That the rig installs
     # a consumer's service is what step 4's `services:` in the profile ends.
-    "runner/install-health-service.sh": 2,
-    "runner/join-rig.sh": 1,
-    "runner/setup-gateway-network.sh": 2,
-    "runner/verify-rig.sh": 2,
+    "rig/install-health-service.sh": 2,
+    "rig/join-rig.sh": 1,
+    "rig/setup-gateway-network.sh": 2,
+    "rig/verify-rig.sh": 2,
     "rig/web/app.js": 3,
 }
 
 
 def lines_naming_painlessmesh() -> dict:
     found = {}
-    for top in (*HAL_DIRS, PORTAL_DIR, ROOT / "portal" / "web", ROOT / "rig" / "web", RUNNER):
+    # The whole of each distribution and what is left of runner/: the rig's
+    # scripts are under rig/ beside its package now (step 12f), so walking
+    # the package directories alone would stop counting them.
+    BUILT = {"build", "__pycache__", ".venv"}
+    for top in (ROOT / "core", ROOT / "rig", ROOT / "portal", RUNNER):
         for path in sorted(top.rglob("*")):
             if path.suffix not in GENERIC_SUFFIXES or "sim-host" in path.name:
+                continue
+            # What a local install left behind is not code anybody wrote.
+            if BUILT & set(path.parts) or any(part.endswith("egg-info") for part in path.parts):
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
             count = sum("painlessmesh" in line.lower() for line in text.splitlines())

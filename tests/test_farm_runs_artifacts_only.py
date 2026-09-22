@@ -238,10 +238,10 @@ def test_a_bundle_that_went_between_submit_and_the_rig_fails_the_stage():
 def test_nothing_on_the_farm_host_can_build(tmp_path):
     """No toolchain installed, required, granted write access or measured;
     the flash script flashes."""
-    setup = (REPO / "runner" / "setup-runner.sh").read_text(encoding="utf-8")
+    setup = (REPO / "rig" / "setup-runner.sh").read_text(encoding="utf-8")
     assert "install --upgrade esptool" in setup and "platformio" not in setup
-    assert "platformio" not in (REPO / "runner" / "verify-rig.sh").read_text(encoding="utf-8")
-    assert ".platformio-cores" not in (REPO / "runner" / "install-health-service.sh").read_text(encoding="utf-8")
+    assert "platformio" not in (REPO / "rig" / "verify-rig.sh").read_text(encoding="utf-8")
+    assert ".platformio-cores" not in (REPO / "rig" / "install-health-service.sh").read_text(encoding="utf-8")
 
     # The launcher and the two halves, each where its distribution keeps it.
     for half in (REPO / "rig" / "alteriom_hil" / "launcher.py",

@@ -1,0 +1,5 @@
+# Permit the dedicated HIL runner (dialout group) to switch USB hub ports
+# without broad sudo access. The second rule covers Linux 6.0+ sysfs power
+# controls used by uhubctl.
+SUBSYSTEM=="usb", DRIVER=="usb", GROUP="dialout", MODE="0664"
+SUBSYSTEM=="usb", DRIVER=="usb", RUN+="/bin/sh -c 'chown -f root:dialout $sys$devpath/*-port*/disable || true'", RUN+="/bin/sh -c 'chmod -f 660 $sys$devpath/*-port*/disable || true'"

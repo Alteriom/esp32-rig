@@ -1,0 +1,39 @@
+# Stable farm registry. `port` is only a last-known hint; discovery matches MAC
+# and writes the current ports to board-map.active.yaml.
+boards:
+  - id: esp32-01
+    mac: "02:00:00:00:00:01"
+    port: /dev/ttyUSB0
+    chip: esp32
+    target: esp32
+    tags: [mesh]
+  - id: esp32-c3-01
+    mac: "02:00:00:00:00:02"
+    port: /dev/ttyACM0
+    chip: esp32c3
+    target: esp32-c3
+    tags: [mesh]
+  - id: esp32-s3-01
+    mac: "02:00:00:00:00:03"
+    port: /dev/ttyACM1
+    chip: esp32s3
+    target: esp32-s3
+    tags: [mesh]
+  - id: esp32-c6-01
+    mac: "02:00:00:00:00:04"        # 6-byte base MAC, not the EUI-64
+    port: /dev/ttyACM2
+    chip: esp32c6
+    target: esp32-c6
+    tags: [mesh]
+  - id: esp32-c5-01
+    mac: "02:00:00:00:00:05"
+    port: /dev/ttyACM3
+    chip: esp32c5
+    target: esp32-c5
+    tags: [mesh]
+  - id: esp8266-01
+    mac: "02:00:00:00:00:06"
+    port: /dev/ttyUSB2
+    chip: esp8266
+    target: esp8266
+    tags: [mesh]

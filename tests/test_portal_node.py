@@ -34,6 +34,9 @@ from alteriom_hil.api_keys import KeyStore, add_key, allowed, keys_document
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The rig's own scripts, examples and schemas, which are beside its package
+# now (docs/public-release-plan.md, step 12f).
+RIG = REPO / "rig"
 
 
 def portal_web_root() -> Path:
@@ -1231,7 +1234,7 @@ def test_the_join_script_comes_from_the_portal_and_trades_its_token_for_the_rele
     request = urllib.request.Request(farm.url + "/api/v1/join.sh")
     with urllib.request.urlopen(request, timeout=10) as response:
         assert response.headers["Content-Type"].startswith("text/x-shellscript")
-        assert response.read() == (RUNNER / "join-rig.sh").read_bytes(), "no key needed to fetch it"
+        assert response.read() == (RIG / "join-rig.sh").read_bytes(), "no key needed to fetch it"
     _, commit, body = _release(tmp_path)
     farm.call("POST", f"/api/v1/releases?commit={commit}", TOKEN, body)
     token = farm.call("POST", "/api/v1/rigs", TOKEN, b'{"name": "rig-4"}')[1]["token"]
@@ -1239,7 +1242,7 @@ def test_the_join_script_comes_from_the_portal_and_trades_its_token_for_the_rele
     work.mkdir()
     script = f"""
 set -euo pipefail
-JOIN_RIG_LIB=1 . {RUNNER / "join-rig.sh"}
+JOIN_RIG_LIB=1 . {RIG / "join-rig.sh"}
 redeem "$PORTAL" "$TOKEN" "$WORK/enroll.json"
 json_field "$WORK/enroll.json" name
 json_field "$WORK/enroll.json" key > "$WORK/node-key"
@@ -4131,7 +4134,7 @@ def test_the_rig_view_is_one_shape_whether_a_rig_or_its_portal_serves_it(farm):
     so the farm cannot drift from the rig (docs/public-release-plan.md, step 10)."""
     import jsonschema
 
-    schema = json.loads((RUNNER / "rig-view.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads((RIG / "rig-view.schema.json").read_text(encoding="utf-8"))
     farm.start_agent(_canary_pipeline(farm.node))
 
     # The node, about itself: served by the node's own handler, which the
