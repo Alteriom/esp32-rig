@@ -629,3 +629,82 @@ def test_the_service_and_the_cli_take_the_same_lock():
     installer = (RUNNER / "install-health-service.sh").read_text(encoding="utf-8")
     assert "f /run/lock/alteriom-hil.lock" in installer
     assert "ReadWritePaths=/var/lib/alteriom-hil /run/lock" in installer
+
+
+def test_a_supply_that_dips_is_said_so_and_a_supply_that_is_down_is_unhealthy():
+    """The flag is a comparator against a threshold, so a supply sitting near
+    it reads set in one sample and clear in the next -- esp32-hil measured
+    4.63-4.79 V against 4.8 V. One glance decided by coin toss, and a rig
+    that is demonstrably running was called broken every other deploy."""
+    down = health_check.classify_throttling(
+        0, "throttled=0xf0005", (0, "throttled=0xf0005"), (0, "throttled=0xf0005"))
+    assert down["status"] == "unhealthy" and down["readings_faulted"] == 3
+
+    dips = health_check.classify_throttling(
+        0, "throttled=0xf0005", (0, "throttled=0xf0000"), (0, "throttled=0xf0000"))
+    assert dips["status"] == "degraded", "a rig that runs is not broken"
+    assert dips["readings_faulted"] == 1 and dips["readings"] == 3
+    assert "dips under load" in dips["message"] and "marginal" in dips["message"]
+    # The fault is still named, and the history still carried.
+    assert dips["current_flags"] == 5 and dips["historical_flags"] == 0xF
+
+    # A dip that shows up in a later reading rather than the first is the
+    # same condition, and reads the same way.
+    later = health_check.classify_throttling(
+        0, "throttled=0xf0000", (0, "throttled=0xf0005"), (0, "throttled=0xf0000"))
+    assert later["status"] == "degraded" and later["readings_faulted"] == 1
+
+    clear = health_check.classify_throttling(
+        0, "throttled=0x0", (0, "throttled=0x0"), (0, "throttled=0x0"))
+    assert clear["status"] == "ok"
+
+
+def test_the_supply_is_sampled_more_than_once(monkeypatch):
+    seen = []
+
+    def fake(*args, **kwargs):
+        seen.append(args)
+        return 0, "throttled=0x0"
+
+    monkeypatch.setattr(health_check, "command", fake)
+    monkeypatch.setattr(health_check, "THROTTLE_SAMPLE_GAP", 0)
+    readings = health_check.read_throttling()
+    assert len(readings) == health_check.THROTTLE_SAMPLES >= 2
+    assert all(args == ("vcgencmd", "get_throttled") for args in seen)
+
+    # A host with no vcgencmd at all is asked once, not three times.
+    seen.clear()
+    monkeypatch.setattr(health_check, "command", lambda *a, **k: (seen.append(a), (127, ""))[1])
+    assert health_check.read_throttling() == [(127, "")] and len(seen) == 1
+
+
+def test_a_power_supply_fault_does_not_say_the_release_failed_to_install(monkeypatch, tmp_path, capsys):
+    """A rig's supply is the host's standing condition. Reporting it as
+    "could not install the current release" is untrue, and it is the kind of
+    red that hides a real one."""
+    def payload(status, name):
+        return {
+            "status": status,
+            "timestamp": "2026-09-22T00:00:00Z",
+            "checks": [{"name": name, "status": status, "message": "x"}],
+        }
+
+    monkeypatch.setattr(health_check, "collect_health", lambda: payload("unhealthy", "pi_power"))
+    assert health_check.main(["--fail-unhealthy"]) == 1, "on its own it is still a fault"
+    assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 0
+
+    # Anything else unhealthy still fails the install, supply exception or not.
+    monkeypatch.setattr(health_check, "collect_health", lambda: payload("unhealthy", "farm_service"))
+    assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 1
+    # And --strict is unchanged: it fails on anything short of ok.
+    monkeypatch.setattr(health_check, "collect_health", lambda: payload("degraded", "pi_power"))
+    assert health_check.main(["--strict", "--except-supply"]) == 1
+    assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 0
+
+
+def test_the_deploy_takes_the_supply_exception_and_nothing_else_does():
+    update = (MODULE_PATH.parent / "update-runner.sh").read_text(encoding="utf-8")
+    assert "--fail-unhealthy --except-supply" in update
+    assert health_check.HOST_SUPPLY_CHECKS == frozenset({"pi_power"}), (
+        "widening this is widening what a deploy may not conclude from"
+    )
