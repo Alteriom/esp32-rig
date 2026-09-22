@@ -191,6 +191,7 @@ WRITES = {
     # What the nodes run is an admin's to say.
     ("POST", "/api/v1/releases"): "admin",
     ("POST", f"/api/v1/releases/{'c' * 40}/current"): "admin",
+    ("POST", f"/api/v1/releases/{'c' * 40}/files/alteriom_hil-1.0.1-py3-none-any.whl"): "admin",
 }
 
 
@@ -229,6 +230,8 @@ def test_a_worker_key_reaches_the_worker_routes_and_nothing_else():
         assert not allowed(user, method, path), path
     assert allowed(node, "GET", f"/api/v1/artifacts/{JOB}/bundle"), "the bundle it was given"
     assert allowed(node, "GET", f"/api/v1/releases/{'c' * 40}/bundle"), "the release it is told to run"
+    assert allowed(node, "GET", f"/api/v1/releases/{'c' * 40}/files/release.json"), "and its packages"
+    assert not allowed(node, "POST", f"/api/v1/releases/{'c' * 40}/files/release.json"), "which it does not publish"
     assert not allowed(node, "GET", "/api/v1/releases"), "the index is a person's"
     assert allowed(node, "GET", "/api/v1/releases/current"), "which release, for a rig still joining"
     assert required_role("GET", "/api/v1/rigs") == "user", "what rigs there are is a user's to read"

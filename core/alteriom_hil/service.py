@@ -4922,6 +4922,15 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 except (LookupError, OSError):
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "no such release"})
                 return self._send_file(body, "application/octet-stream", f"alteriom-esp32-farm-{match.group(1)[:12]}.bundle")
+            match = re.fullmatch(r"/api/v1/releases/([0-9a-f]{40})/files/([A-Za-z0-9][A-Za-z0-9._-]{0,120})", path)
+            if match:
+                # One of a release's packages, as published beside its bundle.
+                try:
+                    body = manager.release_file_path(match.group(1), match.group(2)).read_bytes()
+                except (LookupError, OSError):
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such release file"})
+                kind = "application/json" if match.group(2).endswith(".json") else "application/octet-stream"
+                return self._send_file(body, kind, match.group(2), attachment=not match.group(2).endswith(".json"))
             # Where the farm sends events, for the whole fleet or for one rig.
             # The secret is never among them: it is set once and proven by a
             # signature after that.
@@ -5725,6 +5734,23 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     )
                 except ElsewhereError as exc:
                     return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+                except ValueError as exc:
+                    return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return self._json(HTTPStatus.CREATED, result)
+            attach = re.fullmatch(r"/api/v1/releases/([0-9a-f]{40})/files/([A-Za-z0-9][A-Za-z0-9._-]{0,120})", path)
+            if attach:
+                # A release's packages, one file per call, beside the bundle
+                # already published; release.json last, since it is checked
+                # against the rest.
+                body = self._read_body(MAX_RELEASE_BYTES)
+                if body is None:
+                    return None
+                try:
+                    result = manager.attach_release_file(attach.group(1), attach.group(2), body, identity.name)
+                except ElsewhereError as exc:
+                    return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+                except LookupError as exc:
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
                 except ValueError as exc:
                     return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return self._json(HTTPStatus.CREATED, result)

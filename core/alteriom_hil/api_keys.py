@@ -603,8 +603,10 @@ NODE_ROUTES: tuple[tuple[str, re.Pattern], ...] = (
     )),
     ("POST", re.compile(r"/api/v1/jobs/[0-9a-f]{32}/(stages|log|evidence|result)")),
     ("GET", re.compile(r"/api/v1/artifacts/[0-9a-f]{32}/bundle")),
-    # The release of the farm the portal wants it to run.
+    # The release of the farm the portal wants it to run: its bundle, and
+    # the packages published beside it (docs/public-release-plan.md, 13).
     ("GET", re.compile(r"/api/v1/releases/[0-9a-f]{40}/bundle")),
+    ("GET", re.compile(r"/api/v1/releases/[0-9a-f]{40}/files/[A-Za-z0-9][A-Za-z0-9._-]{0,120}")),
     # Which one that is, for a rig joining before it has said hello.
     ("GET", re.compile(r"/api/v1/releases/current")),
 )
