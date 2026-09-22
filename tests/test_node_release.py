@@ -174,3 +174,82 @@ def test_nobody_online_to_install_it_fails_rather_than_waiting_out_the_timeout(m
     nobody = {"current": {"commit": COMMIT}, "workers": [_worker("a", "a" * 40, online=False)]}
     assert _waiter(monkeypatch, [nobody] * 1000, timeout=3600)() == 1
     assert "no hardware node has been online for ten minutes" in capsys.readouterr().out
+
+
+def _dist(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "alteriom_hil-1.0.1-py3-none-any.whl").write_bytes(b"PK rig")
+    (dist / "alteriom_hil_core-1.0.1-py3-none-any.whl").write_bytes(b"PK core")
+    (dist / "alteriom-hil-dashboard-1.0.1.tar.gz").write_bytes(b"\x1f\x8b web")
+    (dist / "SHA256SUMS").write_text("sums")
+    (dist / "release.json").write_text('{"schema": 1}')
+    return dist
+
+
+def _publisher(monkeypatch, tmp_path, answers):
+    """`call` answers from `answers` in turn: a dict is an answer, a string
+    is the error the portal gave. Returns (run, posted paths, sleeps)."""
+    posted, slept = [], []
+    queue = iter(answers)
+
+    def fake_call(base_url, token, path, body=None, **kwargs):
+        posted.append(path)
+        answer = next(queue)
+        if isinstance(answer, str):
+            raise RuntimeError(answer)
+        return answer
+
+    monkeypatch.setattr(ci_farm_release, "call", fake_call)
+    ticks = iter(range(0, 100000, 5))
+    args = ci_farm_release.argparse.Namespace(base_url="https://portal", commit=COMMIT, dist=_dist(tmp_path))
+    run = lambda: ci_farm_release.publish_files(args, "k", sleep=slept.append, clock=lambda: float(next(ticks)))
+    return run, posted, slept
+
+
+def _sealed(name):
+    return {"name": name, "bytes": 6, "sha256": "f" * 64, "packages": [{"name": "alteriom_hil-1.0.1-py3-none-any.whl"}]}
+
+
+def test_the_packages_are_published_after_the_bundle_and_the_manifest_last(monkeypatch, tmp_path, capsys):
+    ok = _sealed("x")
+    run, posted, slept = _publisher(monkeypatch, tmp_path, [ok, ok, ok, ok, ok])
+    assert run()["packages"]
+    assert [path.rsplit("/", 1)[1] for path in posted] == [
+        "SHA256SUMS", "alteriom-hil-dashboard-1.0.1.tar.gz", "alteriom_hil-1.0.1-py3-none-any.whl",
+        "alteriom_hil_core-1.0.1-py3-none-any.whl", "release.json",
+    ], "every file, release.json last: the portal checks it against the rest"
+    assert not slept
+    assert "Packages sealed: alteriom_hil-1.0.1-py3-none-any.whl" in capsys.readouterr().out
+
+
+def test_a_portal_without_the_route_yet_is_waited_for_not_failed(monkeypatch, tmp_path, capsys):
+    """The deploy and the portal-image rollout start on the same push, and
+    the deploy is faster: it reached a portal whose old image had no files
+    route and failed on the 404 (2026-09-22). A 404 here is a rollout in
+    progress, and is waited for."""
+    ok = _sealed("x")
+    not_yet = "the portal answered HTTP 404: {\"error\": \"not found\"}"
+    run, posted, slept = _publisher(monkeypatch, tmp_path, [not_yet, not_yet, ok, ok, ok, ok, ok])
+    assert run()["packages"]
+    assert len(posted) == 7, "the first file was tried three times, then the rest once"
+    assert slept == [5.0, 10.0], "backing off, as the rest of the client does"
+    assert "no release-files route yet" in capsys.readouterr().out
+
+
+def test_a_portal_that_never_gets_the_route_fails_the_deploy_with_the_reason(monkeypatch, tmp_path):
+    not_yet = "the portal answered HTTP 404: {\"error\": \"not found\"}"
+    run, posted, slept = _publisher(monkeypatch, tmp_path, [not_yet] * 400)
+    monkeypatch.setattr(ci_farm_release, "ROLLOUT_SECONDS", 30.0)
+    with pytest.raises(RuntimeError, match="still has no release-files route after 30s"):
+        run()
+    assert sum(slept) <= 30.0 + 60.0, "bounded by the rollout deadline"
+
+
+def test_any_other_refusal_of_a_file_fails_at_once(monkeypatch, tmp_path):
+    bad = "the portal answered HTTP 400: {\"error\": \"release.json is not the file\"}"
+    run, posted, slept = _publisher(monkeypatch, tmp_path, [bad])
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        run()
+    assert posted and not slept, "a real refusal is not a rollout"
+
