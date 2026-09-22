@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "runner" / "health_check.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "health_check.py"
 SPEC = importlib.util.spec_from_file_location("health_check", MODULE_PATH)
 health_check = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(health_check)
@@ -613,11 +613,10 @@ def test_the_service_and_the_cli_take_the_same_lock():
     `/run/lock`. On Raspberry Pi OS the first is a symlink to the second and
     the difference never showed; on the Ubuntu image rig02 runs it is a
     directory of its own, and the service could not write to it at all."""
-    import sys
 
-    RUNNER = MODULE_PATH.parent
-    # admin_cli imports its siblings by name, as it does on a rig.
-    sys.path.insert(0, str(RUNNER))
+    # The launcher is still under runner/; the CLI and the health check are
+    # modules of the rig's distribution (docs/public-release-plan.md, 12d).
+    RUNNER = MODULE_PATH.parents[2] / "runner"
 
     def module(name, path):
         spec = importlib.util.spec_from_file_location(name, path)
@@ -628,7 +627,7 @@ def test_the_service_and_the_cli_take_the_same_lock():
     from alteriom_hil import farm_shared
 
     service = module("farm_service_for_lock", RUNNER / "farm_service.py")
-    cli = module("admin_cli_for_lock", RUNNER / "admin_cli.py")
+    cli = module("admin_cli_for_lock", MODULE_PATH.with_name("admin_cli.py"))
     # One lock, defined once (alteriom_hil.farm_shared) and taken from there by
     # the dispatcher, a run and the CLI alike.
     assert str(service.farm_shared.RIG_LOCK_PATH) == str(cli.RIG_LOCK) == "/run/lock/alteriom-hil.lock"
@@ -843,7 +842,7 @@ def test_a_power_supply_fault_does_not_say_the_release_failed_to_install(monkeyp
 
 
 def test_the_deploy_takes_the_supply_exception_and_nothing_else_does():
-    update = (MODULE_PATH.parent / "update-runner.sh").read_text(encoding="utf-8")
+    update = (MODULE_PATH.parents[2] / "runner" / "update-runner.sh").read_text(encoding="utf-8")
     assert "--fail-unhealthy --except-supply" in update
     assert health_check.HOST_SUPPLY_CHECKS == frozenset({"pi_power"}), (
         "widening this is widening what a deploy may not conclude from"

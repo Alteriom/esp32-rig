@@ -61,7 +61,7 @@ MAX_RELEASE_BYTES = 64 * 1024 * 1024
 RELEASES_KEPT = 10
 
 
-# Where a node is with the portal's current release (runner/farm_node.py).
+# Where a node is with the portal's current release (alteriom_hil.farm_node).
 # While pending, staged or installing, the portal gives it no work: it is
 # finishing what it has, or about to restart.
 UPDATE_STATES = ("pending", "staged", "installing", "installed", "failed")

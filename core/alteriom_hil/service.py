@@ -213,7 +213,7 @@ OAUTH_COOKIE = "farm_oauth"
 #   portal     -- the queue, the API and the UI; no hardware; workers lease work
 #   node       -- the hardware; no queue of its own; leases work from a portal
 MODES = ("standalone", "portal", "node")
-# A farm that joins a portal brings its history (runner/farm_node.py
+# A farm that joins a portal brings its history (alteriom_hil.farm_node
 # export-history): one job's log, or one bundle, per request.
 MAX_HISTORY_LOG_BYTES = 64 * 1024 * 1024
 # A release of this repository as a node installs it: a git bundle of the
@@ -1582,12 +1582,12 @@ class BaseManager:
     # the portal's to say. CI publishes each release here as a git bundle and
     # makes it current; every heartbeat names the current one; a node running
     # anything else stops taking work, installs it when idle and says hello on
-    # the new commit (runner/farm_node.py, runner/node-update.sh). A node
+    # the new commit (alteriom_hil.farm_node, runner/node-update.sh). A node
     # needs no GitHub runner, no inbound port and no GitHub credentials.
 
     # ---- history a node brings -----------------------------------------------
     # A farm that ran standalone before it joined keeps its history on the
-    # portal: runner/farm_node.py export-history sends every finished job --
+    # portal: alteriom_hil.farm_node export-history sends every finished job --
     # its evidence, its log, its bundle or the bundle it reused, and last the
     # job itself with its board verdicts -- with the node's key. A node writes
     # only history that is its own and that the portal does not already hold,

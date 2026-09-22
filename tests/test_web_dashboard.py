@@ -692,7 +692,7 @@ def test_a_rigs_channels_list_only_what_is_set_up_and_who_is_told_what():
     # until it is on. Trying it is how an operator decides whether to turn it
     # back on, so the test is refused only while the rig is busy or running.
     assert 'class="secondary channel-test" data-id="${escapeHtml(entry.id)}"${busy || running ? " disabled" : ""}' in card
-    cli = (Path(__file__).resolve().parents[1] / "runner" / "admin_cli.py").read_text(encoding="utf-8")
+    cli = (Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "admin_cli.py").read_text(encoding="utf-8")
     sends = cli.split("def command_notify_test(", 1)[1].split("\ndef ", 1)[0]
     assert "notify.enabled is false" in sends and "return 1" in sends, (
         "if the CLI stops sending down a channel that is off, the button should stop offering it"

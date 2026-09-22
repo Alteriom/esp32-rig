@@ -247,7 +247,7 @@ def test_the_service_refuses_an_instrument_as_a_board_and_a_wired_board_going(tm
 
 def test_the_admin_cli_registers_wires_and_unwires_an_instrument(tmp_path, monkeypatch):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(yaml.safe_dump({"boards": [{"id": C6.id, "port": C6.port, "chip": C6.chip, "target": C6.target, "mac": C6.mac}]}))
@@ -289,7 +289,7 @@ def test_the_admin_cli_registers_wires_and_unwires_an_instrument(tmp_path, monke
 
 def test_discovery_offers_an_unregistered_esp32_as_an_instrument_too(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(yaml.safe_dump({"boards": [{"id": C6.id, "port": C6.port, "chip": C6.chip, "target": C6.target, "mac": C6.mac}]}))
@@ -398,7 +398,7 @@ def test_an_instrument_a_rig_registered_as_a_board_is_corrected_not_refused(tmp_
     stays -- flashing a suite onto an instrument is what it prevents -- and
     `--replace-board` is the operator saying which it is."""
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
     from alteriom_hil.inventory import load_registry
 
     inventory = tmp_path / "inventory.yaml"

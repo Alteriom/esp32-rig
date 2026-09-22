@@ -137,7 +137,7 @@ def test_update_script_takes_the_rig_lock_and_verifies():
     assert "install-health-service.sh" in update
     assert "verify-rig.sh --quick" in update
     assert "/healthz" in update
-    assert "health_check.py" in update and "--fail-unhealthy" in update
+    assert "alteriom-hil-health" in update and "--fail-unhealthy" in update
     install = INSTALL.read_text(encoding="utf-8")
     assert "if ! sudo systemctl start alteriom-hil-health.service" in install, \
         "an unhealthy snapshot is a report, not an install failure"
@@ -288,11 +288,20 @@ def test_an_attached_host_runs_a_node_agent_beside_the_service_on_its_own_state(
 
 
 def test_installer_refreshes_the_node_agent_the_service_imports():
-    # A node imports farm_node from beside the installed service; a deploy
-    # that refreshed only farm_service.py would run a new service with an old
-    # agent, or none.
-    assert '"$HERE/farm_node.py"' in INSTALL.read_text(encoding="utf-8")
-    assert "import farm_node" in (ROOT / "runner" / "farm_service.py").read_text(encoding="utf-8")
+    """The agent is the installed package now, not a file beside the service.
+
+    A deploy that refreshed only the copied files would have run a new
+    service with an old agent, or none; what refreshes it is the pip install
+    the update script does, and what the installer must no longer do is leave
+    an older deploy's copy where somebody would read it.
+    """
+    install = INSTALL.read_text(encoding="utf-8")
+    assert '"$HERE/farm_node.py"' not in install, "the agent is not copied any more"
+    removed = install.split("sudo rm -f \\", 1)[1][:600]
+    assert "/usr/local/lib/alteriom-hil/farm_node.py" in removed, (
+        "an older deploy's copy is left where the next reader believes it"
+    )
+    assert "from alteriom_hil import farm_node" in (ROOT / "runner" / "farm_service.py").read_text(encoding="utf-8")
 
 
 def test_installer_restarts_the_gateway_probe_it_refreshes():

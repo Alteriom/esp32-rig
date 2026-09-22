@@ -39,6 +39,14 @@ dev = [
     "jsonschema>=4",
 ]
 
+[project.scripts]
+# What a rig runs, by name out of its venv rather than by a path a deploy
+# copied into /usr/local/lib (docs/public-release-plan.md, step 12d).
+alteriom-hil-health = "alteriom_hil.health_check:main"
+alteriom-hil-admin = "alteriom_hil.admin_cli:main"
+alteriom-hil-agent = "alteriom_hil.farm_node:main"
+alteriom-hil-flash = "alteriom_hil.flash_artifacts:main"
+
 [project.entry-points.pytest11]
 # A suite's fixtures: the bank, the board client class, the simulated firmware.
 alteriom_hil = "alteriom_hil.pytest_plugin"

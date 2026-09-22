@@ -90,7 +90,7 @@ def test_no_key_or_a_key_the_portal_cannot_seal_to_is_not_reported(tmp_path, mon
 @needs_openssl
 def test_seal_key_is_made_once_private_and_rotated_only_when_asked(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     private, public = tmp_path / "etc" / "provider-seal.key", tmp_path / "etc" / "provider-seal.pub"
     monkeypatch.setattr(admin_cli.providers, "DEFAULT_SEAL_KEY", str(private))
@@ -121,7 +121,7 @@ def test_seal_key_is_made_once_private_and_rotated_only_when_asked(tmp_path, mon
 
 def test_seal_key_is_a_providers_subcommand():
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     args = admin_cli.parser().parse_args(["providers", "seal-key", "--fingerprint"])
     assert args.func is admin_cli.command_providers_seal_key and args.fingerprint and not args.rotate

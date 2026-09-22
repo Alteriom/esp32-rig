@@ -9,7 +9,10 @@ import yaml
 
 
 RUNNER = Path(__file__).resolve().parents[1] / "runner"
-CLI = RUNNER / "admin_cli.py"
+# The admin CLI is a module of the rig's distribution now, with a console
+# script (docs/public-release-plan.md, step 12d); run here as a module so
+# the test does not need the entry point installed.
+CLI = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "admin_cli.py"
 EXAMPLE = RUNNER / "hil-config.example.yaml"
 
 
@@ -48,7 +51,7 @@ def test_admin_cli_has_structured_commands():
 
 def test_board_add_default_tag_does_not_duplicate_explicit_mesh():
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     implicit = admin_cli.parser().parse_args(
         [
@@ -82,7 +85,7 @@ def test_board_add_default_tag_does_not_duplicate_explicit_mesh():
 
 def test_admin_cli_adds_validated_board_atomically(tmp_path, monkeypatch):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     board_map = tmp_path / "board-map.yaml"
     config = yaml.safe_load(EXAMPLE.read_text())
@@ -112,7 +115,7 @@ def test_admin_cli_adds_validated_board_atomically(tmp_path, monkeypatch):
 
 def test_admin_cli_allows_replacement_board_on_stale_registry_port(tmp_path, monkeypatch):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(
@@ -173,7 +176,7 @@ def test_boards_add_republishes_the_fleet_so_the_dashboard_sees_it(tmp_path, mon
     from contextlib import nullcontext
 
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
     from alteriom_hil.inventory import DetectedDevice
 
     config_path, inventory = _registry_config(tmp_path)
@@ -205,7 +208,7 @@ def test_boards_add_republishes_the_fleet_so_the_dashboard_sees_it(tmp_path, mon
 
 def test_boards_add_survives_a_failed_republish(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     config_path, inventory = _registry_config(tmp_path)
 
@@ -227,7 +230,7 @@ def test_boards_discover_reports_missing_and_the_wrong_connector(tmp_path, monke
     from contextlib import nullcontext
 
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
     from alteriom_hil.inventory import DetectedDevice
 
     config_path, inventory = _registry_config(tmp_path)
@@ -252,7 +255,7 @@ def test_discovery_from_the_command_line_registers_what_it_finds(tmp_path, monke
     from contextlib import nullcontext
 
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
     from alteriom_hil.inventory import DetectedDevice, load_registry
 
     config_path, inventory = _registry_config(tmp_path)
@@ -308,7 +311,7 @@ def _assert_no_secret(text):
 
 def test_providers_set_reads_the_link_from_stdin_and_stores_it_privately(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     url_file = tmp_path / "etc" / "providers" / "callmebot-url"
     config_path = _provider_config(tmp_path, {"callmebot": {"url_file": str(url_file), "send": "never"}})
@@ -342,7 +345,7 @@ def test_providers_set_reads_the_link_from_stdin_and_stores_it_privately(tmp_pat
 
 def test_providers_set_adds_the_section_a_configuration_lacks(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     config_path = _provider_config(tmp_path)
     url_file = tmp_path / "etc" / "providers" / "callmebot-url"
@@ -362,7 +365,7 @@ def test_providers_set_adds_the_section_a_configuration_lacks(tmp_path, monkeypa
 
 def test_the_link_is_never_an_argument():
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     with pytest.raises(SystemExit):
         admin_cli.parser().parse_args(["providers", "set", "callmebot", FAKE_LINK])
@@ -372,7 +375,7 @@ def test_providers_show_check_and_remove(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
     import os
 
-    import admin_cli
+    from alteriom_hil import admin_cli
     from alteriom_hil import providers
 
     url_file = tmp_path / "etc" / "providers" / "callmebot-url"
@@ -437,7 +440,7 @@ def _test_command(tmp_path, monkeypatch, max_per_day=2):
     sys.path.insert(0, str(RUNNER))
     import os
 
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     url_file = tmp_path / "etc" / "providers" / "callmebot-url"
     config_path = _provider_config(tmp_path, {"callmebot": {"url_file": str(url_file), "send": "release",
@@ -551,7 +554,7 @@ def test_node_control_relays_every_line_providers_test_can_end_with():
     import re
 
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     script = (RUNNER / "node-control.sh").read_text()
     pattern = script.split("provider_test)", 1)[1].split("grep -E '", 1)[1].split("'", 1)[0]
@@ -564,7 +567,7 @@ def test_notify_set_writes_the_setting_down_and_tells_the_service(tmp_path, monk
     never saved. The service that sends builds its notifier once at startup,
     so it is restarted too -- when nothing is running."""
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     config_path, _ = _registry_config(tmp_path)
     monkeypatch.setattr(admin_cli, "require_root", lambda: None)
@@ -610,7 +613,7 @@ def test_notify_set_writes_the_setting_down_and_tells_the_service(tmp_path, monk
 
 
 def hil_config_module():
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     return admin_cli.hil_config
 
@@ -642,7 +645,7 @@ def test_a_callmebot_channel_is_tested_through_the_link_it_notifies_with(tmp_pat
     no second credential -- was refused as an unconfigured webhook by the one
     button meant to prove it works."""
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     config_path, _ = _registry_config(tmp_path)
     link = tmp_path / "callmebot-url"

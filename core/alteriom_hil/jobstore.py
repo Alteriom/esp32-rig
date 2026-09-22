@@ -27,7 +27,7 @@ SIGNIN_CODE_ATTEMPTS = 5
 
 
 # What a portal asks a worker to do from its page, and the arguments each
-# takes; the worker carries it out and reports (runner/farm_node.py). Restart,
+# takes; the worker carries it out and reports (alteriom_hil.farm_node). Restart,
 # logs and configure need the host's sudo and go through the node's control
 # unit (runner/node-control.sh).
 # The furthest into a list a page may ask to start. SQLite binds a 64-bit

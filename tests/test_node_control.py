@@ -38,9 +38,9 @@ def _run(tmp_path: Path, action: str, args: dict | None = None, admin_exit: int 
     (stubs / "journalctl").write_text(f'#!/bin/sh\necho "journalctl $*" >> {calls}\necho "Sep 14 farm-api: GET /healthz"\n')
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
-    (venv / "bin" / "python").write_text(
+    (venv / "bin" / "alteriom-hil-admin").write_text(
         f'#!/bin/sh\necho "admin $*" >> {calls}\necho \'{{"queue.concurrency": 2}}\'\nexit {admin_exit}\n')
-    for stub in [*stubs.iterdir(), venv / "bin" / "python"]:
+    for stub in [*stubs.iterdir(), venv / "bin" / "alteriom-hil-admin"]:
         stub.chmod(0o755)
     result = subprocess.run(
         ["bash", str(CONTROL)], capture_output=True, text=True,
@@ -72,7 +72,7 @@ def test_settings_are_applied_by_the_admin_cli_and_then_the_node_restarts(tmp_pa
     result, outcome, calls, _ = _run(tmp_path, "configure", {"settings": {"queue.concurrency": 2}})
     assert result.returncode == 0, result.stderr
     assert outcome["status"] == "done" and outcome["result"] == {"applied": {"queue.concurrency": 2}}
-    assert calls[0].startswith("admin /usr/local/lib/alteriom-hil/admin_cli.py config set-many --file ")
+    assert calls[0].startswith("admin config set-many --file ")
     assert calls[1] == "systemctl restart alteriom-hil-farm.service"
 
 
@@ -138,7 +138,7 @@ def _run_provider(tmp_path: Path, action: str, args: dict, private_key: Path, fi
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
     said = admin_says or 'stored https://api.callmebot.com/whatsapp.php?phone=***76&apikey=*** in /etc/alteriom-hil/providers/callmebot-url'
-    (venv / "bin" / "python").write_text(
+    (venv / "bin" / "alteriom-hil-admin").write_text(
         "#!/bin/sh\n"
         f'echo "admin $*" >> {calls}\n'
         'case "$*" in\n'
@@ -148,7 +148,7 @@ def _run_provider(tmp_path: Path, action: str, args: dict, private_key: Path, fi
         f'  *"notify set"*) cat > {received}; echo "{said}" ;;\n'
         "esac\n"
         f"exit {admin_exit}\n")
-    for stub in [*stubs.iterdir(), venv / "bin" / "python"]:
+    for stub in [*stubs.iterdir(), venv / "bin" / "alteriom-hil-admin"]:
         stub.chmod(0o755)
     result = subprocess.run(
         ["bash", str(CONTROL)], capture_output=True, text=True,
@@ -237,7 +237,7 @@ def test_a_removed_link_is_deleted_by_the_admin_cli_and_the_node_restarts(tmp_pa
                                                       tmp_path / "none.key", "0" * 64)
     assert result.returncode == 0, result.stderr
     assert outcome["status"] == "done" and outcome["detail"].startswith("removed /etc/alteriom-hil/providers/callmebot-url")
-    assert calls == ["admin /usr/local/lib/alteriom-hil/admin_cli.py providers remove callmebot",
+    assert calls == ["admin providers remove callmebot",
                      "systemctl restart alteriom-hil-farm.service"]
     assert not (update / "control.taken.json").exists()
 
@@ -258,9 +258,9 @@ def _run_test_message(tmp_path: Path, args: dict, said: str, admin_exit: int = 0
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
     # The admin CLI's whole output, noise included; only its result line may be reported.
-    (venv / "bin" / "python").write_text(
+    (venv / "bin" / "alteriom-hil-admin").write_text(
         f'#!/bin/sh\necho "admin $*" >> {calls}\ncat {said_file}\nexit {admin_exit}\n')
-    for stub in [*stubs.iterdir(), venv / "bin" / "python"]:
+    for stub in [*stubs.iterdir(), venv / "bin" / "alteriom-hil-admin"]:
         stub.chmod(0o755)
     result = subprocess.run(
         ["bash", str(CONTROL)], capture_output=True, text=True,
@@ -282,7 +282,7 @@ def test_a_test_message_reports_only_the_admin_clis_result_line_and_restarts_not
     assert result.returncode == 0, result.stderr
     assert outcome == {**outcome, "id": ID, "status": "done", "detail": "test message queued by CallMeBot (HTTP 200)"}
     assert "result" not in outcome
-    assert calls == ["sudo", "admin /usr/local/lib/alteriom-hil/admin_cli.py providers test callmebot"]
+    assert calls == ["sudo", "admin providers test callmebot"]
     assert not [call for call in calls if call.startswith("systemctl")], "nothing restarts"
     _nothing_leaks(result, update)
 

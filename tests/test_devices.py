@@ -44,7 +44,7 @@ def test_the_tables_read_from_the_descriptors_are_the_ones_the_code_held():
     }
     assert INPUT_ONLY_PINS == {"esp32": frozenset({34, 35, 36, 39})}
     sys.path.insert(0, str(REPO / "runner"))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     assert admin_cli.NATIVE_USB_TARGETS == {"esp32-c3", "esp32-c5", "esp32-c6", "esp32-s3"}
     # And every family flashes through the flasher it always did.
@@ -67,9 +67,9 @@ def test_every_family_says_why_a_pin_is_not_wireable():
 
 def test_the_generic_flasher_asks_the_family_for_its_flasher(tmp_path, monkeypatch):
     sys.path.insert(0, str(REPO / "runner"))
-    import flash_artifacts
+    from alteriom_hil import flash_artifacts
 
-    source = (REPO / "runner" / "flash_artifacts.py").read_text(encoding="utf-8")
+    source = (REPO / "rig" / "alteriom_hil" / "flash_artifacts.py").read_text(encoding="utf-8")
     assert "flash_esptool" not in source and "flasher_for(board.target)" in source
     asked, flashed = [], []
     monkeypatch.setattr(flash_artifacts, "flasher_for", lambda target: asked.append(target) or (lambda *a, **k: flashed.append((a, k))))

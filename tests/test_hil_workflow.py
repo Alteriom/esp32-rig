@@ -189,7 +189,7 @@ def test_a_hardware_workflow_submits_where_the_repository_says_and_nowhere_else(
         # The host's own health snapshots are the Pi's to take, and only
         # when the job is on the Pi.
         if "ALTERIOM_HIL_VENV" in script:
-            assert "health_check.py" in script, step.get("name")
+            assert "alteriom-hil-health" in script, step.get("name")
             assert "env.FARM_VIA_PORTAL != 'true'" in step.get("if", ""), step.get("name")
     python = next(step for step in steps if str(step.get("uses", "")).startswith("actions/setup-python"))
     assert python["if"] == "env.FARM_VIA_PORTAL == 'true'", "the Pi's job keeps the host's interpreter"

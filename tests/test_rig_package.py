@@ -54,6 +54,11 @@ RIG_ONLY = {
     # The rig's half of the manager: the pipeline, the boards' health, the
     # rig's own files. It ships with the drivers because it drives them.
     "rig_manager",
+    # And the programs a rig runs: the agent that takes work from a portal,
+    # the health check, the admin CLI, the flasher. Each is a console script
+    # of the rig's distribution now rather than a file a deploy copied
+    # (docs/public-release-plan.md, step 12d).
+    "farm_node", "health_check", "admin_cli", "flash_artifacts",
 }
 
 # What both halves hold. Identity and keys above all: the farm decides who a
@@ -127,9 +132,11 @@ def hal_contents() -> set:
                   if child.is_dir() and (child / "__init__.py").exists()}
     return names
 
-# The rig's entry points, outside the HAL. `rig_manager` left this list when
-# it moved into the HAL itself (rig/alteriom_hil), where RIG_ONLY holds it.
-RIG_SCRIPTS = {"farm_node", "health_check"}
+# The rig's entry points that are still outside the HAL. They are all inside
+# it now -- the agent, the health check and the admin CLI are modules of the
+# rig's distribution with console scripts, as `rig_manager` became before
+# them -- so RIG_ONLY is what holds them and rule 2 reads the package.
+RIG_SCRIPTS: set[str] = set()
 
 
 def portal_files() -> list:
@@ -262,18 +269,18 @@ def test_the_portal_reaches_into_the_rig_exactly_this_much_and_no_more():
     )
 
 
-@pytest.mark.parametrize("script", sorted(RIG_SCRIPTS))
-def test_the_rig_does_not_reach_into_the_portal(script):
-    """Rule 2. The agent and the health check are what a rig runs; after the
-    split the portal is not in the repository they live in."""
-    path = RUNNER / f"{script}.py"
-    if not path.exists():
-        pytest.skip(f"{script} has moved; update RIG_SCRIPTS")
-    used = imports_of(path)
-    trespass = {name for name in used if set(name.split(".")) & PORTAL_MODULES}
-    assert not trespass, (
-        f"runner/{script}.py imports the portal: {sorted(trespass)}. "
-        "A rig runs this with no portal beside it."
+def test_the_rig_does_not_reach_into_the_portal():
+    """Rule 2. Everything the rig runs -- the drivers, its half of the
+    manager, the agent, the health check, the admin CLI -- with no portal in
+    the repository it lives in, because after the split there is none."""
+    offenders = {}
+    for path in sorted(RIG_DIR.rglob("*.py")) + [RUNNER / f"{name}.py" for name in sorted(RIG_SCRIPTS)]:
+        trespass = {name for name in imports_of(path) if set(name.split(".")) & PORTAL_MODULES}
+        if trespass:
+            offenders[path.name] = sorted(trespass)
+    assert not offenders, (
+        f"the rig imports the portal: {offenders}. "
+        "A rig runs these with no portal beside it."
     )
 
 
@@ -346,7 +353,7 @@ NAMES_PAINLESSMESH = {
     "core/alteriom_hil/service.py": 9,
     "portal/alteriom_hil/portal_manager.py": 1,
     "rig/alteriom_hil/rig_manager.py": 4,
-    "runner/flash_artifacts.py": 1,
+    "rig/alteriom_hil/flash_artifacts.py": 1,
     "core/alteriom_hil/hil_config.py": 1,
     # The two installers name suites/painlessmesh/ because the gateway probe
     # lives there now, and a unit on the rig runs it. That the rig installs

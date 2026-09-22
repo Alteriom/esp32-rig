@@ -30,6 +30,9 @@ from alteriom_hil.notify import EVENTS, Notification, Notifier, check_url
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The rig's programs: modules of its distribution now, with console scripts
+# (docs/public-release-plan.md, step 12d).
+RIG_PACKAGE = REPO / "rig" / "alteriom_hil"
 sys.path.insert(0, str(RUNNER))
 
 from alteriom_hil import hil_config  # noqa: E402
@@ -193,7 +196,7 @@ def test_boards_red_on_their_own_are_sent_and_farm_wide_red_is_left_to_the_pause
 
 
 def test_the_host_going_unhealthy_and_recovering_is_sent_on_the_transition_only():
-    health_check = _module("health_check_ops", RUNNER / "health_check.py")
+    health_check = _module("health_check_ops", RIG_PACKAGE / "health_check.py")
     notifier = Recorder()
     broken = {"status": "unhealthy", "hostname": "esp32-hil", "checks": [
         {"name": "disk", "status": "unhealthy", "message": "97% used"},
@@ -212,8 +215,8 @@ def test_the_host_going_unhealthy_and_recovering_is_sent_on_the_transition_only(
 def test_the_host_is_not_required_to_have_platformio(tmp_path):
     """The farm builds nothing; a correctly provisioned host was marked
     unhealthy for lacking the toolchain it no longer installs."""
-    health_check = _module("health_check_tools", RUNNER / "health_check.py")
-    source = (RUNNER / "health_check.py").read_text(encoding="utf-8")
+    health_check = _module("health_check_tools", RIG_PACKAGE / "health_check.py")
+    source = (RIG_PACKAGE / "health_check.py").read_text(encoding="utf-8")
     tools = source.split('"tools",', 1)[0].rsplit("missing = [", 1)[1]
     assert '"pio"' not in tools and '"esptool", "esptool.py"' in tools
     assert health_check.SEVERITY["unhealthy"] > health_check.SEVERITY["degraded"]
@@ -409,7 +412,7 @@ def test_the_new_settings_are_validated_like_the_rest():
 def test_the_nightly_backup_is_installed_as_the_runner_user():
     installer = (RUNNER / "install-health-service.sh").read_text(encoding="utf-8")
     unit = installer.split("alteriom-hil-backup.service >/dev/null <<EOF", 1)[1].split("EOF", 1)[0]
-    assert "User=$RUN_USER" in unit and "admin_cli.py backup create" in unit
+    assert "User=$RUN_USER" in unit and "alteriom-hil-admin backup create" in unit
     assert "OnCalendar=*-*-* 03:30:00" in installer and "systemctl enable --now alteriom-hil-backup.timer" in installer
 
 

@@ -421,7 +421,7 @@ def archive(bundle: Bundle, top: str) -> bytes:
 
     Laid out exactly as it was flashed -- manifest beside the images, at the
     paths the manifest names -- so the extracted directory is itself a valid
-    artifact directory: `flash_artifacts.py --artifacts <top>` flashes it as
+    artifact directory: `alteriom-hil-flash --artifacts <top>` flashes it as
     it comes. Every file is archived as a regular file holding the content
     it resolves to; the only links it carries are those a manifest path is
     spelled through, and those point inside the bundle.

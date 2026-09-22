@@ -70,7 +70,7 @@ from alteriom_hil import portal_manager as portal_half  # noqa: E402
 # `alteriom_hil.service` now and this file is the launcher that composes
 # the halves onto it, so a test that changes one changes it there.
 from alteriom_hil import service as core_service  # noqa: E402
-farm_node = _load("farm_node_portal", RUNNER / "farm_node.py")
+farm_node = _load("farm_node_portal", REPO / "rig" / "alteriom_hil" / "farm_node.py")
 
 SHA = "c" * 40
 BOARDS = [{"id": "b-esp32-01", "target": "esp32", "port": "/dev/esp32-farm-01", "mac": "aa:bb:cc:dd:ee:01"}]

@@ -381,7 +381,7 @@ def test_a_request_cannot_claim_to_be_somebody_elses():
 
 def test_the_admin_cli_creates_lists_and_revokes_keys(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(RUNNER))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     token_file = tmp_path / "api-token"
     token_file.write_text(FARM_TOKEN)
@@ -525,7 +525,7 @@ def test_the_cli_reads_the_farms_accounts_before_naming_a_key(tmp_path):
     import sys
 
     sys.path.insert(0, str(REPO / "runner"))
-    import admin_cli
+    from alteriom_hil import admin_cli
 
     assert admin_cli.account_handles(tmp_path) == set(), "no store yet: nothing reserved"
     with sqlite3.connect(tmp_path / "farm.sqlite3") as db:
