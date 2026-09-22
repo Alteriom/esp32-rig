@@ -43,7 +43,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hal"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rig"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 
 from alteriom_hil.artifacts import sha256  # noqa: E402
 

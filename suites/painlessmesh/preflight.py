@@ -8,7 +8,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rig"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
 
 from alteriom_hil.board import BoardMap  # noqa: E402
 from alteriom_hil.protocol import BoardClient  # noqa: E402

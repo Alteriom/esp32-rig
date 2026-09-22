@@ -1,0 +1,23 @@
+# A chip family the farm can run: what esptool calls it, how its board talks
+# to the host, which drivers the farm uses for it, and what its pins are.
+# Read by alteriom_hil.devices; docs/devices.md is the format.
+schema: 1
+family: esp32-c3
+label: ESP32-C3
+chip: esp32c3
+console: usb-serial-jtag
+drivers:
+  flasher: esptool
+  identity: esptool-mac
+  console: usb-serial
+  power: uhubctl
+pins:
+  gpios: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+  # esp32-c3-devkitm-1.
+  wireable: [0, 1, 3, 4, 5, 6, 7, 10]
+  input_only: []
+  reserved:
+    strapping: [2, 8, 9]
+    flash: [11, 12, 13, 14, 15, 16, 17]
+    usb: [18, 19]
+    console: [20, 21]

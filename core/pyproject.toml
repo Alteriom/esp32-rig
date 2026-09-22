@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# What a rig and a portal both hold: identity and keys, the sign-in,
+# notifications, webhooks, artifact storage, the job store, and the
+# descriptions a farm schedules and reports by -- families and boards,
+# profiles, bundle manifests, run records. Nothing here opens a serial port,
+# so a portal installs this and no driver
+# (docs/public-release-plan.md, step 12).
+name = "alteriom-hil-core"
+version = "0.1.0"
+description = "What both halves of the Alteriom ESP32 farm hold: identity, storage, and the descriptions a run is made of"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "jsonschema>=4",
+]
+
+[project.scripts]
+# The farm's MCP server (docs/mcp.md): an assistant reads the farm through it.
+# A client of the API, so it is the core's and needs no hardware.
+alteriom-farm-mcp = "alteriom_hil.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["alteriom_hil*"]
+# `alteriom_hil` is a namespace package: this distribution and alteriom-hil
+# each fill part of it, and neither owns an __init__.py.
+namespaces = true
+
+[tool.setuptools.package-data]
+# The family descriptors are data the core reads at import.
+"alteriom_hil.devices" = ["families/*.yaml"]

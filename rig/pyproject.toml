@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# What a rig runs beside its boards: flashing, the serial console, power,
+# discovery, the agent protocol and the pytest fixtures a suite is written
+# against. It fills the same `alteriom_hil` package as alteriom-hil-core,
+# which it requires (docs/public-release-plan.md, step 12).
+name = "alteriom-hil"
+version = "0.1.0"
+description = "Hardware-abstraction layer for the Alteriom ESP32 HIL test rig"
+requires-python = ">=3.9"
+dependencies = [
+    "alteriom-hil-core",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+hardware = [
+    "pyserial>=3.5",
+    "esptool>=4.7",
+    # alteriom_hil.mqtt opens a connection only on a real run; sim mode
+    # feeds a capture without one and needs none of this.
+    "paho-mqtt>=2.0",
+]
+dev = [
+    "pytest>=7",
+    # The rig configuration's published schema is what other tooling validates
+    # a config.yaml with; nothing checked that it agreed with the service's own
+    # validation until a Telegram-only config was accepted by one and refused
+    # by the other.
+    "jsonschema>=4",
+]
+
+[project.entry-points.pytest11]
+# A suite's fixtures: the bank, the board client class, the simulated firmware.
+alteriom_hil = "alteriom_hil.pytest_plugin"
+
+[tool.setuptools.packages.find]
+include = ["alteriom_hil*"]
+namespaces = true

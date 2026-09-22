@@ -25,7 +25,8 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "hal"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "rig"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
 from alteriom_hil.artifacts import load_artifacts  # noqa: E402
 from alteriom_hil.board import BoardMap  # noqa: E402
 from alteriom_hil.flash import flash_esptool  # noqa: E402

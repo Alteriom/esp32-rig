@@ -1,0 +1,27 @@
+# A chip family the farm can run: what esptool calls it, how its board talks
+# to the host, which drivers the farm uses for it, and what its pins are.
+# Read by alteriom_hil.devices; docs/devices.md is the format.
+schema: 1
+family: esp32-s3
+label: ESP32-S3
+chip: esp32s3
+console: usb-serial-jtag
+drivers:
+  flasher: esptool
+  identity: esptool-mac
+  console: usb-serial
+  power: uhubctl
+pins:
+  gpios: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48]
+  # esp32-s3-devkitc-1.
+  wireable: [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 39, 40, 41, 42]
+  input_only: []
+  reserved:
+    strapping: [0, 3, 45, 46]
+    usb: [19, 20]
+    flash: [26, 27, 28, 29, 30, 31, 32]
+    psram: [33, 34, 35, 36, 37]
+    # The RGB LED is on 38 on one devkit revision and 48 on the other; 47 is
+    # kept out with 48.
+    led: [38, 47, 48]
+    console: [43, 44]
