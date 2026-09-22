@@ -49,6 +49,10 @@ farm_service = _load("farm_service_portal", RUNNER / "farm_service.py")
 # The portal's half reads its own constants; a test that changes one for a
 # run changes it where it is read.
 from alteriom_hil import portal_manager as portal_half  # noqa: E402
+# The service itself, where those names are read: it is
+# `alteriom_hil.service` now and this file is the launcher that composes
+# the halves onto it, so a test that changes one changes it there.
+from alteriom_hil import service as core_service  # noqa: E402
 farm_node = _load("farm_node_portal", RUNNER / "farm_node.py")
 
 SHA = "c" * 40
@@ -422,7 +426,7 @@ def test_a_node_installs_the_portals_release_once_idle_and_is_given_no_work_mean
     (releases / "status.json").write_text(json.dumps({
         "state": "installed", "commit": commit, "detail": "deployed", "at": farm_node._utcnow(),
     }))
-    monkeypatch.setattr(farm_service, "service_version", lambda: {"version": "1.0.1", "short": commit[:7], "commit": commit})
+    monkeypatch.setattr(core_service, "service_version", lambda: {"version": "1.0.1", "short": commit[:7], "commit": commit})
     farm.start_agent(_canary_pipeline(farm.node), releases=releases)
 
     done = _wait(lambda: (job := farm.portal.store.get(job_id))["status"] == "passed" and job, what="the run, after the update")
@@ -627,7 +631,7 @@ def test_the_portal_lists_who_holds_a_key_and_never_a_key(farm):
 
 
 def test_a_portal_says_what_it_is_configured_with_even_with_no_file(farm, monkeypatch):
-    import hil_config
+    from alteriom_hil import hil_config
 
     monkeypatch.setattr(hil_config, "CONFIG_PATH", Path("/nonexistent/config.yaml"))
     monkeypatch.setattr(hil_config, "load_config", lambda path=Path("/nonexistent/config.yaml"): (_ for _ in ()).throw(hil_config.ConfigError("no file")))
@@ -758,7 +762,7 @@ def test_a_command_nobody_reports_on_expires(farm):
 
 
 def test_a_node_says_its_release_as_a_version_and_its_commit_beside_it(farm, monkeypatch):
-    monkeypatch.setattr(farm_service, "service_version",
+    monkeypatch.setattr(core_service, "service_version",
                         lambda: {"version": "1.0.277", "short": "3c9b46429", "commit": "3c9b" + "0" * 36})
     farm.start_agent(_canary_pipeline(farm.node))
     worker = _wait(lambda: next((item for item in farm.portal.workers_view() if item["name"] == "node-a"), None),
@@ -2035,7 +2039,7 @@ def test_every_run_event_a_subscription_may_ask_for_is_one_the_farm_sends(farm):
 
     # Every action the farm advertises is one something emits: a subscription
     # that can be accepted for it must be able to receive it.
-    source = (REPO / "runner" / "farm_service.py").read_text(encoding="utf-8")
+    source = (REPO / "core" / "alteriom_hil" / "service.py").read_text(encoding="utf-8")
     for status in webhooks.EVENTS["run"]:
         assert f'_emit_run(' in source and f'"{status}"' in source, status
     # And the helper refuses one that is not advertised.
@@ -2304,8 +2308,8 @@ def test_a_person_signs_in_with_github_or_by_email_and_is_one_account_either_way
     monkeypatch.setenv("ALTERIOM_HIL_USERS", "Ada-Lovelace")
     # One address asking for a sixth link in ten minutes is not a person;
     # this test is not a person either, and asks for more than that.
-    monkeypatch.setattr(farm_service, "SIGNIN_REQUESTS_ALLOWED", 50)
-    monkeypatch.setattr(farm_service, "SIGNIN_STARTS_ALLOWED", 50)
+    monkeypatch.setattr(core_service, "SIGNIN_REQUESTS_ALLOWED", 50)
+    monkeypatch.setattr(core_service, "SIGNIN_STARTS_ALLOWED", 50)
     monkeypatch.setattr(portal_half, "SIGNIN_CODES_PER_ADDRESS", 50)
 
     mails = []
@@ -3266,7 +3270,7 @@ def test_a_portal_with_no_sign_in_set_up_says_so_and_offers_a_key(farm, monkeypa
     assert _raw(farm, "GET", "/auth/github")[0] == 409
     # Starting a sign-in is free to the caller and writes a row: an address
     # that starts one after another is stopped, well before the table minds.
-    monkeypatch.setattr(farm_service, "SIGNIN_STARTS_ALLOWED", 3)
+    monkeypatch.setattr(core_service, "SIGNIN_STARTS_ALLOWED", 3)
     assert [_raw(farm, "GET", "/auth/github")[0] for _ in range(4)][-1] == 429
     status, _, raw = _raw(farm, "POST", "/auth/email", headers={"Content-Type": "application/json"},
                           body=b'{"email": "ada@example.org"}')
@@ -3310,8 +3314,8 @@ def _github_env(farm, monkeypatch):
     monkeypatch.setenv("ALTERIOM_HIL_NORTHRELAY_KEY", "nr_live_test")
     monkeypatch.setenv("ALTERIOM_HIL_MAIL_FROM", "farm@example.org")
     monkeypatch.setenv("ALTERIOM_HIL_SIGNIN_TEMPLATE", "tmpl_signin")
-    monkeypatch.setattr(farm_service, "SIGNIN_REQUESTS_ALLOWED", 50)
-    monkeypatch.setattr(farm_service, "SIGNIN_STARTS_ALLOWED", 50)
+    monkeypatch.setattr(core_service, "SIGNIN_REQUESTS_ALLOWED", 50)
+    monkeypatch.setattr(core_service, "SIGNIN_STARTS_ALLOWED", 50)
     monkeypatch.setattr(portal_half, "SIGNIN_CODES_PER_ADDRESS", 50)
 
     who = {"id": 1, "login": "octo", "name": "Octo", "emails": []}

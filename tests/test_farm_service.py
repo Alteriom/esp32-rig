@@ -13,11 +13,17 @@ from alteriom_hil.inventory import DetectedDevice, DeviceDetails
 
 
 SERVICE_PATH = Path(__file__).resolve().parents[1] / "runner" / "farm_service.py"
+HIL_CONFIG_PATH = Path(__file__).resolve().parents[1] / "core" / "alteriom_hil" / "hil_config.py"
 SPEC = importlib.util.spec_from_file_location("farm_service", SERVICE_PATH)
 farm_service = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader
 SPEC.loader.exec_module(farm_service)
 from alteriom_hil import rig_manager  # noqa: E402 -- the rig's half reads its own names
+# The service itself, where those names are read: it is
+# `alteriom_hil.service` now and this file is the launcher that composes
+# the halves onto it, so a test that changes one changes it there.
+from alteriom_hil import service as core_service  # noqa: E402
+import alteriom_hil  # noqa: E402 -- the package a faked hil_config is read from
 
 
 def _install_profiles(repo: Path) -> Path:
@@ -395,7 +401,7 @@ def test_service_version_reports_the_installed_version_number(tmp_path, monkeypa
         ' "commit": "abc123def", "installed_at": "2026-09-04T18:00:00Z"}',
         encoding="utf-8",
     )
-    monkeypatch.setattr(farm_service, "VERSION_FILE", stamp)
+    monkeypatch.setattr(core_service, "VERSION_FILE", stamp)
     version = farm_service.service_version()
     assert version["version"] == "1.0.122", "the number is what an operator compares"
     assert version["build"] == 122
@@ -406,19 +412,19 @@ def test_service_version_says_unknown_rather_than_guessing(tmp_path, monkeypatch
     # A host provisioned before versions were stamped, or by hand: the
     # dashboard must say so instead of showing a stale or invented version.
     unknown = {"version": "unknown", "short": "unknown", "commit": None}
-    monkeypatch.setattr(farm_service, "VERSION_FILE", tmp_path / "absent.json")
+    monkeypatch.setattr(core_service, "VERSION_FILE", tmp_path / "absent.json")
     assert farm_service.service_version() == unknown
     broken = tmp_path / "broken.json"
     broken.write_text("not json at all", encoding="utf-8")
-    monkeypatch.setattr(farm_service, "VERSION_FILE", broken)
+    monkeypatch.setattr(core_service, "VERSION_FILE", broken)
     assert farm_service.service_version() == unknown
     listy = tmp_path / "listy.json"
     listy.write_text("[1, 2, 3]", encoding="utf-8")
-    monkeypatch.setattr(farm_service, "VERSION_FILE", listy)
+    monkeypatch.setattr(core_service, "VERSION_FILE", listy)
     assert farm_service.service_version() == unknown, "a JSON list is not a version"
     legacy = tmp_path / "legacy.json"
     legacy.write_text('{"short": "abc123", "commit": "abc123def"}', encoding="utf-8")
-    monkeypatch.setattr(farm_service, "VERSION_FILE", legacy)
+    monkeypatch.setattr(core_service, "VERSION_FILE", legacy)
     assert farm_service.service_version() == unknown, "a stamp predating version numbers is not a version"
 
 
@@ -830,7 +836,7 @@ def test_chip_details_are_read_at_discovery_kept_on_file_and_merged_into_the_sna
     ]
     inventory = {"boards": boards, "missing": [], "unregistered": [], "probe_errors": []}
     monkeypatch.setattr(rig_manager, "publish_inventory", lambda *a, **k: inventory)
-    monkeypatch.setattr(farm_service, "load_inventory_snapshot", lambda *a, **k: {
+    monkeypatch.setattr(core_service, "load_inventory_snapshot", lambda *a, **k: {
         "boards": [dict(b) for b in boards], "missing": [], "unregistered": [], "probe_errors": []})
     probes = []
 
@@ -1275,7 +1281,7 @@ def test_configuration_shows_the_callmebot_link_only_redacted_and_the_rigs_seal_
     does not load in any form, and the public key a link is sealed to."""
     import types
 
-    spec = importlib.util.spec_from_file_location("hil_config_for_link", SERVICE_PATH.parent / "hil_config.py")
+    spec = importlib.util.spec_from_file_location("hil_config_for_link", HIL_CONFIG_PATH)
     real = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(real)
     link_file = tmp_path / "callmebot-url"
@@ -1285,7 +1291,7 @@ def test_configuration_shows_the_callmebot_link_only_redacted_and_the_rigs_seal_
                                         "providers": {"callmebot": {"url_file": str(link_file), "send": "never"}}}
     stub.callmebot_settings = real.callmebot_settings
     stub.callmebot_budget_file = real.callmebot_budget_file
-    monkeypatch.setitem(sys.modules, "hil_config", stub)
+    monkeypatch.setattr(alteriom_hil, "hil_config", stub)
     monkeypatch.setenv("ALTERIOM_HIL_PROVIDER_SEAL_PUB", str(tmp_path / "no-key.pub"))
     manager = _store_manager(tmp_path)
     manager.registry = tmp_path / "inventory.yaml"
@@ -1664,7 +1670,7 @@ def test_a_preview_lists_no_more_than_a_confirmation_may_send_back(tmp_path, mon
     """A rule can match more bundles than a confirmation may name. The
     preview then lists the oldest that many and says how many more match,
     so what it shows can always be confirmed."""
-    monkeypatch.setattr(farm_service, "MAX_PRUNE_IDS", 2)
+    monkeypatch.setattr(core_service, "MAX_PRUNE_IDS", 2)
     manager = _store_manager(tmp_path)
     root = tmp_path / "artifacts"
     made = []
@@ -2028,7 +2034,7 @@ def test_a_host_with_no_configuration_says_so_rather_than_reporting_defaults(tmp
 
     empty = types.ModuleType("hil_config")
     empty.load_config = lambda *a, **k: (_ for _ in ()).throw(OSError("no such file"))
-    monkeypatch.setitem(sys.modules, "hil_config", empty)
+    monkeypatch.setattr(alteriom_hil, "hil_config", empty)
 
     config = manager.configuration()
     assert config["gateway"] == {
@@ -2046,7 +2052,7 @@ def test_a_host_with_no_configuration_says_so_rather_than_reporting_defaults(tmp
         "schema": 1, "gateway": {"enabled": False}, "mqtt": {"enabled": False},
         "service": {"enabled": False},
     }
-    monkeypatch.setitem(sys.modules, "hil_config", readable)
+    monkeypatch.setattr(alteriom_hil, "hil_config", readable)
     config = manager.configuration()
     assert config["gateway"]["enabled"] is False and config["mqtt"]["enabled"] is False
     assert config["service"]["enabled"] is False and config["host"]["config_schema"] == 1
@@ -2455,7 +2461,7 @@ def test_an_archive_that_expands_past_the_limit_is_refused(tmp_path, monkeypatch
     import tarfile
 
     manager = _supply_manager(tmp_path)
-    monkeypatch.setattr(farm_service, "MAX_BUNDLE_BYTES", 4096)
+    monkeypatch.setattr(core_service, "MAX_BUNDLE_BYTES", 4096)
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         info = tarfile.TarInfo("hil-firmware/flash-image.bin")
@@ -2857,7 +2863,7 @@ def test_a_day_is_the_operators_day(tmp_path):
 def test_the_statistics_route_answers_and_refuses_what_it_cannot_count(tmp_path):
     manager = _store_manager(tmp_path)
     manager.inventory_snapshot = lambda annotate=False: {"boards": []}
-    source = (Path(farm_service.__file__)).read_text(encoding="utf-8")
+    source = Path(core_service.__file__).read_text(encoding="utf-8")
     assert 'if path == "/api/v1/stats":' in source
     assert manager.farm_statistics(90)["window"]["days"] == 90
 

@@ -44,61 +44,20 @@ from alteriom_hil.inventory import discover, probe_details, publish_inventory
 from alteriom_hil.jobstore import JobCancelled, utcnow
 from alteriom_hil.providers import Redactor, scrub_tree
 from alteriom_hil.farm_shared import BOARD_ID_PATTERN, DEFAULT_PROFILE, ElsewhereError, PipelineError, RigBusyError, TARGETS
+from alteriom_hil.farm_shared import (  # noqa: F401 -- re-exported: found here before core had them
+    FARM_OWNED_ENV_KEYS,
+    RIG_OWNED_ENV_PREFIXES,
+    RUN_KINDS,
+    RUN_KIND_ENV_KEY,
+    _STATE_FILE_LOCK,
+    _runtime_env_keys,
+    refused_suite_env,
+)
 
 
 # How long an interrupted suite gets to tear down: restore the gateway, put
 # the mesh back, and dump every board's serial log.
 TEARDOWN_GRACE_SECONDS = 300
-
-
-# Names in that namespace a dispatch still may not set, because the rig or
-# the farm does. The dispatch's env is laid over the service's own environment,
-# so without this a run could point the suite at another Wi-Fi password file,
-# another gateway endpoint, or a provider link it chose -- the farm re-applies
-# only its per-run values after the dispatch's, not the rig's. What the
-# runtime environment can hold is derived from runner/hil_config.py; these are
-# what the service sets per run or reads from its own environment.
-FARM_OWNED_ENV_KEYS = frozenset({
-    "ALTERIOM_HIL_MODE", "ALTERIOM_HIL_BOARD_MAP", "ALTERIOM_HIL_ARTIFACT_DIR",
-    "ALTERIOM_HIL_LOG_DIR", "ALTERIOM_HIL_RUN_LOG", "ALTERIOM_HIL_SUITE_TIMEOUT",
-    "ALTERIOM_HIL_CONFIG", "ALTERIOM_HIL_HOME", "ALTERIOM_HIL_UPDATE_DIR",
-    "ALTERIOM_HIL_VERSION_FILE", "ALTERIOM_HIL_SERVICE_UNIT", "ALTERIOM_HIL_GATEWAY_PROBE_UNIT",
-})
-
-
-# Every provider's settings are the rig's (docs/providers.md).
-RIG_OWNED_ENV_PREFIXES = ("ALTERIOM_HIL_CALLMEBOT_",)
-
-
-# What a dispatch says about the run that the rig's providers act on: a
-# release build is the only run a rig with `send: release` spends a real
-# message on. The one value it may take.
-RUN_KIND_ENV_KEY = "ALTERIOM_HIL_RUN_KIND"
-
-
-RUN_KINDS = ("release",)
-
-
-def _runtime_env_keys() -> frozenset:
-    """The names runner/hil_config.py can write into the runtime environment."""
-    cached = globals().get("_RUNTIME_ENV_KEYS")
-    if cached is not None:
-        return cached
-    try:
-        import hil_config
-    except ImportError:
-        # Loaded by path (the tests, a snapshot run from elsewhere): the
-        # configuration module sits beside this one.
-        import importlib.util
-
-        spec = importlib.util.spec_from_file_location(
-            "hil_config", Path(__file__).resolve().with_name("hil_config.py")
-        )
-        hil_config = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(hil_config)
-    keys = frozenset(hil_config.runtime_env_keys())
-    globals()["_RUNTIME_ENV_KEYS"] = keys
-    return keys
 
 
 class ScrubbedLog:
@@ -135,24 +94,6 @@ def _pump_output(stream, log) -> None:
         log.write(raw.decode("utf-8", errors="replace"))
         log.flush()
     stream.close()
-
-
-def refused_suite_env(key: str, value: str) -> str | None:
-    """Why a dispatch may not set this name, or None when it may."""
-    if key == RUN_KIND_ENV_KEY:
-        return None if value in RUN_KINDS else f"{key} may only be {' or '.join(RUN_KINDS)}"
-    if key.endswith("_FILE"):
-        return f"{key} names a file on the rig; the rig sets it"
-    if key.startswith(RIG_OWNED_ENV_PREFIXES):
-        return f"{key} is a provider setting; the rig sets it"
-    if key in FARM_OWNED_ENV_KEYS or key in _runtime_env_keys():
-        return f"{key} is set by the rig, not by a dispatch"
-    return None
-
-
-# The JSON files beside the job store that several jobs may now write at once:
-# chip details and board health. Each write is read-modify-replace.
-_STATE_FILE_LOCK = threading.Lock()
 
 
 def _plural(count: int, noun: str) -> str:

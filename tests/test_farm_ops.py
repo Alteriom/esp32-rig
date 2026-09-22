@@ -32,7 +32,7 @@ REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
 sys.path.insert(0, str(RUNNER))
 
-import hil_config  # noqa: E402
+from alteriom_hil import hil_config  # noqa: E402
 
 
 def _module(name: str, path: Path):

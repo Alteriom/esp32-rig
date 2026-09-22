@@ -40,6 +40,10 @@ _SPEC = importlib.util.spec_from_file_location(
 )
 farm_service = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(farm_service)
+# The service itself, where those names are read: it is
+# `alteriom_hil.service` now and runner/farm_service.py is the launcher
+# that composes the halves onto it, so a test changes it there.
+from alteriom_hil import service as core_service  # noqa: E402
 
 
 def profile_document(name: str) -> dict:
@@ -109,7 +113,7 @@ def test_the_service_takes_no_build_job(tmp_path):
         manager.submit("build", {"profile": "canary", "targets": ["esp32-c6"]})
     with pytest.raises(ValueError, match="unsupported job kind"):
         manager._validate("build", {"profile": "canary", "targets": ["esp32-c6"]})
-    source = (REPO / "runner" / "farm_service.py").read_text(encoding="utf-8")
+    source = (REPO / "core" / "alteriom_hil" / "service.py").read_text(encoding="utf-8")
     assert "HTTPStatus.GONE" in source.split('path == "/api/v1/builds"', 1)[1][:200]
 
 
@@ -118,7 +122,7 @@ def test_a_run_with_no_bundle_is_refused_at_submit_naming_the_workflow(tmp_path,
     refusal names the workflow that builds and dispatches, because that is
     what the operator has to run instead."""
     manager = _manager(tmp_path, reusable=None)
-    monkeypatch.setattr(farm_service, "_reject_missing_ref", lambda ref, remote, project: "a" * 40)
+    monkeypatch.setattr(core_service, "_reject_missing_ref", lambda ref, remote, project: "a" * 40)
 
     with pytest.raises(ValueError) as refused:
         manager._validate("suite", {"profile": "canary", "targets": ["esp32-c6"]})
@@ -132,7 +136,7 @@ def test_a_run_with_no_bundle_is_refused_at_submit_naming_the_workflow(tmp_path,
 def test_a_run_that_supplies_or_names_a_held_bundle_is_taken(tmp_path, monkeypatch):
     """The two ways a run gets firmware, and neither compiles anything."""
     manager = _manager(tmp_path, reusable=("j" * 32, Path("artifacts/j")))
-    monkeypatch.setattr(farm_service, "_reject_missing_ref", lambda ref, remote, project: "a" * 40)
+    monkeypatch.setattr(core_service, "_reject_missing_ref", lambda ref, remote, project: "a" * 40)
 
     # The farm holds a bundle for this commit.
     manager._validate("suite", {"profile": "canary", "targets": ["esp32-c6"]})

@@ -49,7 +49,7 @@ RUNNER = ROOT / "runner"
 # portal has no boards, no serial ports and no power relay.
 RIG_ONLY = {
     "flash", "power", "serial_capture", "protocol",
-    "plugins", "connectors", "pytest_plugin", "sim",
+    "plugins", "pytest_plugin", "sim",
     "inventory", "instrument", "report", "mqtt",
     # The rig's half of the manager: the pipeline, the boards' health, the
     # rig's own files. It ships with the drivers because it drives them.
@@ -81,6 +81,18 @@ CORE = {
     # an agent is known by. A portal times a rig out by these and a rig
     # heartbeats by them, so neither half can own them.
     "wire",
+    # The service itself: the queue and its dispatcher, health and quarantine,
+    # retention, statistics, storage, and the HTTP surface over them. It
+    # imports neither half -- what composes a mode's class from the base and
+    # the halves installed is the launcher, runner/farm_service.py.
+    "service",
+    # The host's own configuration: what a rig or a portal reads its settings
+    # from, and the runtime environment those settings become. It names the
+    # connectors a rig offers, which is why they are core too: `connectors`
+    # is a contract a consumer reads -- a name, what it gives a suite, the
+    # environment it arrives in -- and runs nothing. A portal shows them.
+    "hil_config",
+    "connectors",
 }
 
 # The portal's own. A rig never imports these; after the split they are not
@@ -322,7 +334,7 @@ NAMES_PAINLESSMESH = {
     "core/alteriom_hil/artifact_store.py": 1,
     "core/alteriom_hil/artifacts.py": 2,
     "core/alteriom_hil/board.py": 1,
-    "rig/alteriom_hil/connectors.py": 2,
+    "core/alteriom_hil/connectors.py": 2,
     "core/alteriom_hil/farm_shared.py": 2,
     "rig/alteriom_hil/flash.py": 1,
     "core/alteriom_hil/profiles.py": 3,
@@ -331,11 +343,11 @@ NAMES_PAINLESSMESH = {
     "rig/alteriom_hil/report.py": 3,
     "core/alteriom_hil/run_record.py": 1,
     "runner/ci_farm_client.py": 5,
-    "runner/farm_service.py": 9,
+    "core/alteriom_hil/service.py": 9,
     "portal/alteriom_hil/portal_manager.py": 1,
     "rig/alteriom_hil/rig_manager.py": 4,
     "runner/flash_artifacts.py": 1,
-    "runner/hil_config.py": 1,
+    "core/alteriom_hil/hil_config.py": 1,
     # The two installers name suites/painlessmesh/ because the gateway probe
     # lives there now, and a unit on the rig runs it. That the rig installs
     # a consumer's service is what step 4's `services:` in the profile ends.

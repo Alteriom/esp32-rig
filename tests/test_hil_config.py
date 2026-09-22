@@ -6,7 +6,8 @@ import yaml
 
 
 RUNNER = Path(__file__).resolve().parents[1] / "runner"
-SPEC = importlib.util.spec_from_file_location("hil_config", RUNNER / "hil_config.py")
+SPEC = importlib.util.spec_from_file_location(
+    "hil_config", RUNNER.parent / "core" / "alteriom_hil" / "hil_config.py")
 hil_config = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(hil_config)
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from pathlib import Path
 
 from .board import SUPPORTED_TARGETS
@@ -76,3 +77,65 @@ def board_lock_path(board_id: str) -> Path:
     them. Board ids are filename-safe by BOARD_ID_PATTERN.
     """
     return RIG_LOCK_PATH.with_name(f"alteriom-hil-board-{board_id}.lock")
+
+
+# What a dispatch may put in a run's environment, and what it may not. The
+# base checks it when a run is submitted -- on a portal as much as on a rig,
+# and a portal has no rig's half to ask -- so the rule lives here with the
+# rest of what both halves say the same way.
+# Names in that namespace a dispatch still may not set, because the rig or
+# the farm does. The dispatch's env is laid over the service's own environment,
+# so without this a run could point the suite at another Wi-Fi password file,
+# another gateway endpoint, or a provider link it chose -- the farm re-applies
+# only its per-run values after the dispatch's, not the rig's. What the
+# runtime environment can hold is derived from alteriom_hil.hil_config; these are
+# what the service sets per run or reads from its own environment.
+FARM_OWNED_ENV_KEYS = frozenset({
+    "ALTERIOM_HIL_MODE", "ALTERIOM_HIL_BOARD_MAP", "ALTERIOM_HIL_ARTIFACT_DIR",
+    "ALTERIOM_HIL_LOG_DIR", "ALTERIOM_HIL_RUN_LOG", "ALTERIOM_HIL_SUITE_TIMEOUT",
+    "ALTERIOM_HIL_CONFIG", "ALTERIOM_HIL_HOME", "ALTERIOM_HIL_UPDATE_DIR",
+    "ALTERIOM_HIL_VERSION_FILE", "ALTERIOM_HIL_SERVICE_UNIT", "ALTERIOM_HIL_GATEWAY_PROBE_UNIT",
+})
+
+
+# Every provider's settings are the rig's (docs/providers.md).
+RIG_OWNED_ENV_PREFIXES = ("ALTERIOM_HIL_CALLMEBOT_",)
+
+
+# What a dispatch says about the run that the rig's providers act on: a
+# release build is the only run a rig with `send: release` spends a real
+# message on. The one value it may take.
+RUN_KIND_ENV_KEY = "ALTERIOM_HIL_RUN_KIND"
+
+
+RUN_KINDS = ("release",)
+
+
+def _runtime_env_keys() -> frozenset:
+    """The names alteriom_hil.hil_config can write into the runtime environment."""
+    cached = globals().get("_RUNTIME_ENV_KEYS")
+    if cached is not None:
+        return cached
+    from alteriom_hil import hil_config
+
+    keys = frozenset(hil_config.runtime_env_keys())
+    globals()["_RUNTIME_ENV_KEYS"] = keys
+    return keys
+
+
+def refused_suite_env(key: str, value: str) -> str | None:
+    """Why a dispatch may not set this name, or None when it may."""
+    if key == RUN_KIND_ENV_KEY:
+        return None if value in RUN_KINDS else f"{key} may only be {' or '.join(RUN_KINDS)}"
+    if key.endswith("_FILE"):
+        return f"{key} names a file on the rig; the rig sets it"
+    if key.startswith(RIG_OWNED_ENV_PREFIXES):
+        return f"{key} is a provider setting; the rig sets it"
+    if key in FARM_OWNED_ENV_KEYS or key in _runtime_env_keys():
+        return f"{key} is set by the rig, not by a dispatch"
+    return None
+
+
+# The JSON files beside the job store that several jobs may now write at once:
+# chip details and board health. Each write is read-modify-replace.
+_STATE_FILE_LOCK = threading.Lock()

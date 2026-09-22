@@ -39,6 +39,9 @@ from alteriom_hil.api_keys import (
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
+# The service's own source: `alteriom_hil.service` in the core, which is
+# where the routes and the handler live (docs/public-release-plan.md, 12c).
+SERVICE = REPO / "core" / "alteriom_hil" / "service.py"
 WEB = RUNNER / "web"
 FARM_TOKEN = "f" * 64
 JOB = "0123456789abcdef0123456789abcdef"
@@ -232,7 +235,7 @@ def test_a_worker_key_reaches_the_worker_routes_and_nothing_else():
 
 
 def test_no_route_in_the_service_is_left_out_of_that_decision():
-    source = (RUNNER / "farm_service.py").read_text(encoding="utf-8")
+    source = SERVICE.read_text(encoding="utf-8")
     post = source.split("def _post(self, path: str, identity: Identity):", 1)[1].split("def _delete(", 1)[0]
     delete = source.split("def _delete(self, path: str, identity: Identity):", 1)[1].split("def log_message", 1)[0]
     literal = set(re.findall(r'path == "(/api/v1/[^"]+)"', post))

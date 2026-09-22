@@ -8,6 +8,9 @@ WEB = Path(__file__).resolve().parents[1] / "runner" / "web"
 # (docs/public-release-plan.md, step 12b), not beside the service.
 RIG_HALF = Path(__file__).resolve().parents[1] / "rig" / "alteriom_hil" / "rig_manager.py"
 PORTAL_HALF = Path(__file__).resolve().parents[1] / "portal" / "alteriom_hil" / "portal_manager.py"
+# The service's own source: `alteriom_hil.service` in the core, which is
+# where the routes and the handler live (docs/public-release-plan.md, 12c).
+SERVICE = Path(__file__).resolve().parents[1] / "core" / "alteriom_hil" / "service.py"
 
 
 def dashboard() -> str:
@@ -95,7 +98,7 @@ def test_artifact_family_picker_is_built_from_the_service_not_hard_coded():
     targets and the page renders them, pre-checking connected families."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     assert 'id="artifact-families"' in page
     assert 'name="target"' not in page, "family checkboxes are rendered by app.js"
     assert '"targets": sorted(TARGETS)' in service
@@ -129,7 +132,7 @@ def test_reports_are_rendered_from_markdown_and_never_carry_script():
 
 def test_artifacts_open_through_the_api_with_the_token_never_in_a_url():
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     assert "/artifacts/" in script and "URL.createObjectURL" in script
     assert "token=" not in script.replace("farmToken", ""), "no token in a query string"
     assert "ARTIFACT_TYPES" in service and '"passwd"' not in service
@@ -181,7 +184,7 @@ def test_both_long_lists_are_paged_by_the_service_and_say_where_you_are():
     differently."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     assert 'id="bundle-range"' in page and 'id="bundle-prev"' in page and 'id="bundle-next"' in page
     assert "function renderPager" in script
     # Both lists, through the one function.
@@ -241,7 +244,7 @@ def test_the_configuration_page_covers_every_parameter_the_host_can_set():
         (WEB.parent / "hil-config.schema.json").read_text(encoding="utf-8")
     )
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
 
     def leaves(node, prefix=""):
         for name, child in (node.get("properties") or {}).items():
@@ -288,7 +291,7 @@ def test_header_keeps_its_title_and_links_to_the_repository_and_deployed_commit(
 
 def test_hardware_page_refuses_rediscovery_and_probes_while_the_rig_works():
     script = dashboard()
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     # A farm host rediscovers itself, and not under a run; a portal asks its
     # rigs at their next heartbeat, and each waits for its own rig.
     # On a rig the button waits for the rig; on a portal it never does (the
@@ -311,7 +314,7 @@ def test_the_run_form_offers_a_partial_run_and_reuse():
     the flash when the boards already run it."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     assert 'id="test-files"' in page and 'name="keyword"' in page and 'id="bundle-select"' in page
     assert 'name="test"' not in page, "test files are rendered by app.js from the service"
     assert "renderSuiteTests(data.suite_tests" in script and '"suite_tests": manager.suite_catalogue()' in service
@@ -364,7 +367,7 @@ def test_every_kind_of_storage_has_a_page_of_what_fills_it():
     an orphan says so."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     assert 'data-page="storage"' in page
     assert "`#storage/${encodeURIComponent(category.name)}`" in script
     assert "/api/v1/storage/${encodeURIComponent(kind)}?limit=" in script
@@ -1000,7 +1003,7 @@ def test_a_rigs_own_subscriptions_are_managed_by_the_person_whose_rig_it_is():
     # The service decides the same way, and refuses what the page hides: a
     # page is not where access is enforced.
     manager = PORTAL_HALF.read_text(encoding="utf-8")
-    service = (WEB.parent / "farm_service.py").read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     decide = manager.split("def may_manage_rig(self, name: str, identity)", 1)[1].split("\n    def ", 1)[0]
     assert 'getattr(identity, "is_admin", False)' in decide
     assert "owner == getattr(identity" in decide

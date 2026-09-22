@@ -45,6 +45,9 @@ _SERVICE = importlib.util.spec_from_file_location(
 )
 farm_service = importlib.util.module_from_spec(_SERVICE)
 _SERVICE.loader.exec_module(farm_service)
+# The service itself, where `load_inventory_snapshot` is read: it is
+# `alteriom_hil.service` now and this file loads the launcher.
+from alteriom_hil import service as core_service  # noqa: E402
 
 
 def test_the_canary_builds_the_same_manifest_contract_every_producer_does(tmp_path, monkeypatch):
@@ -627,7 +630,7 @@ def test_each_board_keeps_the_canary_s_last_verdict_and_the_farm_owns_its_own(tm
     # checked, and it is the annotation the dashboard reads.
     discovered = manager.inventory_snapshot()
     monkeypatch.setattr(
-        farm_service, "load_inventory_snapshot",
+        core_service, "load_inventory_snapshot",
         lambda state, registry: {**discovered, "boards": [dict(b) for b in discovered["boards"]]},
     )
     annotated = farm_service.FarmManager.inventory_snapshot(manager, annotate=True)

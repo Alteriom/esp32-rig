@@ -385,7 +385,8 @@ def test_the_route_check_resolves_and_connects_and_sends_nothing():
 
 
 def test_the_configuration_module_agrees_with_this_one():
-    spec = importlib.util.spec_from_file_location("hil_config_providers", REPO / "runner" / "hil_config.py")
+    spec = importlib.util.spec_from_file_location(
+        "hil_config_providers", REPO / "core" / "alteriom_hil" / "hil_config.py")
     hil_config = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(hil_config)
     assert hil_config.PROVIDER_SEND_POLICIES == providers.SEND_POLICIES
