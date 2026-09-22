@@ -1,4 +1,6 @@
 import importlib.util
+import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -40,10 +42,13 @@ def test_pi_throttle_history_is_visible_but_not_a_current_failure():
     assert "latched history" in result["message"]
 
 
-def test_current_pi_throttling_remains_unhealthy():
+def test_current_pi_throttling_is_a_fault_and_says_which():
+    """One check with the flag set is a fault -- named, with its bits -- and
+    on its own a dip rather than a supply that is down (below)."""
     result = health_check.classify_throttling(0, "throttled=0x80008")
-    assert result["status"] == "unhealthy"
+    assert result["status"] == "degraded"
     assert result["current_flags"] == 8
+    assert "faulting_since" in result
 
 
 def test_missing_hardware_is_degraded_not_unhealthy(tmp_path, monkeypatch):
@@ -526,7 +531,10 @@ def test_a_rig_that_cannot_read_its_throttling_is_not_called_broken():
     # Something else vcgencmd could not answer is still a fault, and so is a
     # throttling flag it did answer with.
     assert health_check.classify_throttling(1, "VCHI initialization failed")["status"] == "unhealthy"
-    assert health_check.classify_throttling(0, "throttled=0x5")["status"] == "unhealthy"
+    assert health_check.classify_throttling(0, "throttled=0x5")["status"] == "degraded"
+    # And the one that could not be read starts no spell for the next check.
+    assert health_check.power_fault_since({"timestamp": "2026-09-22T10:00:00+00:00",
+                                           "checks": [{"name": "pi_power", **denied}]}) is None
 
 def test_the_host_says_what_it_is_doing(tmp_path):
     """A rig is a computer in a cupboard. The farm knew whether its disk was
@@ -631,17 +639,46 @@ def test_the_service_and_the_cli_take_the_same_lock():
     assert "ReadWritePaths=/var/lib/alteriom-hil /run/lock" in installer
 
 
-def test_a_supply_that_dips_is_said_so_and_a_supply_that_is_down_is_unhealthy():
+def test_a_supply_that_dips_is_said_so_and_a_supply_that_stays_down_is_unhealthy():
     """The flag is a comparator against a threshold, so a supply sitting near
     it reads set in one sample and clear in the next -- esp32-hil measured
     4.63-4.79 V against 4.8 V. One glance decided by coin toss, and a rig
-    that is demonstrably running was called broken every other deploy."""
+    that is demonstrably running was called broken every other deploy.
+
+    Nor do three glances 0.4 s apart decide it: the same rig's kernel log has
+    326 dips in 12 hours and none shorter than 2 s, so every one of them
+    outlasts the samples, and the check read "down" at one check and
+    "dipping" at the next for the same rail (2026-09-22, 10:07-10:47). What
+    separates a dip from a supply that is down is the fault still being there
+    at the next check, and that is what decides it."""
+    now = datetime(2026, 9, 22, 14, 10, tzinfo=timezone.utc)
+    all_three = (0, "throttled=0xf0005"), (0, "throttled=0xf0005"), (0, "throttled=0xf0005")
+
+    # First seen now, in every reading: a dip until proven otherwise.
+    first = health_check.classify_throttling(*all_three[0], *all_three[1:], now=now)
+    assert first["status"] == "degraded" and first["readings_faulted"] == 3
+    assert first["faulting_since"] == now.isoformat() and first["persisted_seconds"] == 0
+
+    # Still there one health interval later: that is the supply.
+    later = now + timedelta(minutes=5)
     down = health_check.classify_throttling(
-        0, "throttled=0xf0005", (0, "throttled=0xf0005"), (0, "throttled=0xf0005"))
-    assert down["status"] == "unhealthy" and down["readings_faulted"] == 3
+        *all_three[0], *all_three[1:], since=first["faulting_since"], now=later)
+    assert down["status"] == "unhealthy"
+    assert "persisting for 5 min" in down["message"] and "not carrying the rig" in down["message"]
+    # The spell keeps its start, so the next check reads the same way.
+    assert down["faulting_since"] == first["faulting_since"] and down["persisted_seconds"] == 300
+    again = health_check.classify_throttling(
+        0, "throttled=0xf0005", since=down["faulting_since"], now=later + timedelta(minutes=5))
+    assert again["status"] == "unhealthy" and again["persisted_seconds"] == 600
+
+    # The deploy's own check runs seconds after the timer's. Two looks at
+    # one dip are still one dip.
+    soon = health_check.classify_throttling(
+        *all_three[0], *all_three[1:], since=first["faulting_since"], now=now + timedelta(seconds=3))
+    assert soon["status"] == "degraded" and soon["persisted_seconds"] == 3
 
     dips = health_check.classify_throttling(
-        0, "throttled=0xf0005", (0, "throttled=0xf0000"), (0, "throttled=0xf0000"))
+        0, "throttled=0xf0005", (0, "throttled=0xf0000"), (0, "throttled=0xf0000"), now=now)
     assert dips["status"] == "degraded", "a rig that runs is not broken"
     assert dips["readings_faulted"] == 1 and dips["readings"] == 3
     assert "dips under load" in dips["message"] and "marginal" in dips["message"]
@@ -649,14 +686,117 @@ def test_a_supply_that_dips_is_said_so_and_a_supply_that_is_down_is_unhealthy():
     assert dips["current_flags"] == 5 and dips["historical_flags"] == 0xF
 
     # A dip that shows up in a later reading rather than the first is the
-    # same condition, and reads the same way.
-    later = health_check.classify_throttling(
-        0, "throttled=0xf0000", (0, "throttled=0xf0005"), (0, "throttled=0xf0000"))
-    assert later["status"] == "degraded" and later["readings_faulted"] == 1
+    # same condition, and reads the same way; and one reading in three at a
+    # check five minutes into a spell is the spell, not a fresh dip.
+    later_reading = health_check.classify_throttling(
+        0, "throttled=0xf0000", (0, "throttled=0xf0005"), (0, "throttled=0xf0000"),
+        since=first["faulting_since"], now=later)
+    assert later_reading["status"] == "unhealthy" and later_reading["readings_faulted"] == 1
 
+    # A clear reading ends the spell: no start is carried, so the next fault
+    # is a new dip.
     clear = health_check.classify_throttling(
-        0, "throttled=0x0", (0, "throttled=0x0"), (0, "throttled=0x0"))
-    assert clear["status"] == "ok"
+        0, "throttled=0x0", (0, "throttled=0x0"), (0, "throttled=0x0"), since=first["faulting_since"])
+    assert clear["status"] == "ok" and "faulting_since" not in clear
+
+    # A start the previous check wrote that cannot be read is not a start.
+    odd = health_check.classify_throttling(0, "throttled=0x5", since="yesterday-ish", now=now)
+    assert odd["status"] == "degraded" and odd["faulting_since"] == now.isoformat()
+
+
+def test_the_spell_is_read_from_the_previous_snapshot():
+    """The record of when the fault began is status.json, which the five-minute
+    unit and the deploy's check both write and both read back."""
+    snapshot = lambda check: {"timestamp": "2026-09-22T14:00:00+00:00", "checks": [
+        {"name": "disk", "status": "ok", "message": "x"}, check]}
+    assert health_check.power_fault_since(None) is None
+    assert health_check.power_fault_since({}) is None
+    assert health_check.power_fault_since(snapshot(
+        {"name": "pi_power", "status": "ok", "message": "x", "current_flags": 0})) is None
+    assert health_check.power_fault_since(snapshot(
+        {"name": "pi_power", "status": "degraded", "message": "x", "current_flags": 5,
+         "faulting_since": "2026-09-22T13:50:00+00:00"})) == "2026-09-22T13:50:00+00:00"
+    # A snapshot written before the start was recorded: the spell began no
+    # later than that snapshot.
+    assert health_check.power_fault_since(snapshot(
+        {"name": "pi_power", "status": "unhealthy", "message": "x", "current_flags": 5,
+         "readings_faulted": 3})) == "2026-09-22T14:00:00+00:00"
+    # A snapshot with no pi_power at all (a host without vcgencmd).
+    assert health_check.power_fault_since({"timestamp": "2026-09-22T14:00:00+00:00",
+                                           "checks": [{"name": "disk", "status": "ok"}]}) is None
+
+
+def test_the_deploy_check_and_the_timer_share_the_spell(monkeypatch, tmp_path):
+    """collect_health is handed the snapshot the last check wrote, from the
+    same --output the next one will write, so the deploy's check five minutes
+    into a spell reads the spell and the timer's after it reads what the
+    deploy's wrote."""
+    seen = {}
+
+    def fake_collect(env=None, previous=None):
+        seen["previous"] = previous
+        return {"status": "ok", "timestamp": "2026-09-22T14:05:00+00:00", "checks": []}
+
+    monkeypatch.setattr(health_check, "collect_health", fake_collect)
+    output = tmp_path / "status.json"
+    assert health_check.main(["--output", str(output)]) == 0
+    assert seen["previous"] is None, "no snapshot yet"
+    output.write_text(json.dumps({"timestamp": "2026-09-22T14:00:00+00:00", "checks": [
+        {"name": "pi_power", "status": "degraded", "message": "x", "current_flags": 5,
+         "faulting_since": "2026-09-22T14:00:00+00:00"}]}), encoding="utf-8")
+    assert health_check.main(["--output", str(output)]) == 0
+    assert health_check.power_fault_since(seen["previous"]) == "2026-09-22T14:00:00+00:00"
+    # Whatever is in the file that is not a snapshot is no snapshot.
+    output.write_text("[]", encoding="utf-8")
+    assert health_check.main(["--output", str(output)]) == 0
+    assert seen["previous"] is None
+    # Without --output there is no record, so a fault is at most a dip.
+    assert health_check.main([]) == 0 and seen["previous"] is None
+
+
+def test_a_flapping_supply_reads_one_way_through_the_whole_check(monkeypatch, tmp_path):
+    """End to end: the rail under threshold at two checks five minutes apart
+    is unhealthy on the rig's own page and in its notification, and still
+    not a failed install (--except-supply)."""
+    python = tmp_path / "venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.touch()
+    monkeypatch.setattr(health_check.shutil, "which", lambda _name, **_kwargs: "/usr/bin/tool")
+    monkeypatch.setattr(health_check.shutil, "disk_usage", lambda _path: SimpleNamespace(total=100, used=10))
+    monkeypatch.setattr(health_check, "THROTTLE_SAMPLE_GAP", 0)
+
+    def fake_command(*args, **_kwargs):
+        if args[:2] == ("systemctl", "is-active"):
+            return 0, "active"
+        if args[0] == "vcgencmd":
+            return 0, "throttled=0xf0005"
+        return 1, "No compatible devices detected"
+
+    monkeypatch.setattr(health_check, "command", fake_command)
+    env = {
+        "ALTERIOM_HIL_MODE": "hardware",
+        "ALTERIOM_HIL_VENV": str(tmp_path / "venv"),
+        "ALTERIOM_HIL_BOARD_MAP": str(tmp_path / "board-map.yaml"),
+        "HIL_RUNNER_UNIT": "actions.runner.example.service",
+        "ALTERIOM_HIL_RIG_LOCK": str(tmp_path / "rig.lock"),
+    }
+    first = health_check.collect_health(env)
+    power = {check["name"]: check for check in first["checks"]}["pi_power"]
+    assert power["status"] == "degraded" and power["readings_faulted"] == 3
+
+    # Five minutes on, the previous snapshot says the fault began then.
+    began = datetime.fromisoformat(power["faulting_since"]) - timedelta(minutes=5)
+    power["faulting_since"] = began.isoformat()
+    second = health_check.collect_health(env, previous=first)
+    power = {check["name"]: check for check in second["checks"]}["pi_power"]
+    assert power["status"] == "unhealthy" and second["status"] == "unhealthy"
+    assert power["faulting_since"] == began.isoformat()
+
+    # The deploy gate reads the same snapshot and still does not call the
+    # release failed for it.
+    monkeypatch.setattr(health_check, "collect_health", lambda env=None, previous=None: second)
+    assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 0
+    assert health_check.main(["--fail-unhealthy"]) == 1
 
 
 def test_the_supply_is_sampled_more_than_once(monkeypatch):
@@ -689,15 +829,15 @@ def test_a_power_supply_fault_does_not_say_the_release_failed_to_install(monkeyp
             "checks": [{"name": name, "status": status, "message": "x"}],
         }
 
-    monkeypatch.setattr(health_check, "collect_health", lambda: payload("unhealthy", "pi_power"))
+    monkeypatch.setattr(health_check, "collect_health", lambda **_: payload("unhealthy", "pi_power"))
     assert health_check.main(["--fail-unhealthy"]) == 1, "on its own it is still a fault"
     assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 0
 
     # Anything else unhealthy still fails the install, supply exception or not.
-    monkeypatch.setattr(health_check, "collect_health", lambda: payload("unhealthy", "farm_service"))
+    monkeypatch.setattr(health_check, "collect_health", lambda **_: payload("unhealthy", "farm_service"))
     assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 1
     # And --strict is unchanged: it fails on anything short of ok.
-    monkeypatch.setattr(health_check, "collect_health", lambda: payload("degraded", "pi_power"))
+    monkeypatch.setattr(health_check, "collect_health", lambda **_: payload("degraded", "pi_power"))
     assert health_check.main(["--strict", "--except-supply"]) == 1
     assert health_check.main(["--fail-unhealthy", "--except-supply"]) == 0
 
