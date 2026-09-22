@@ -50,7 +50,11 @@ flash:
   # script and gets flashing for free, which is the point of the contract.
   command:
     - "{python}"
-    - runner/flash_artifacts.py
+    # The flasher is a module of the rig's distribution now, so it is run out
+    # of the venv rather than from a path in the checkout
+    # (docs/public-release-plan.md, step 12d).
+    - -m
+    - alteriom_hil.flash_artifacts
     - --artifacts
     - "{artifact_dir}"
     - --board-map

@@ -477,3 +477,46 @@ def test_a_rig_composes_without_the_portals_half():
                           capture_output=True, text=True, cwd=str(ROOT))
     assert done.returncode == 0, done.stderr or done.stdout
     assert done.stdout.strip().endswith("ok")
+
+
+def test_no_profile_names_a_program_by_a_path_that_moved():
+    """A profile's stage command is run on the rig, and nothing checks it
+    until it runs there.
+
+    `profiles/canary.yaml` named `runner/flash_artifacts.py`. The file had
+    become `alteriom_hil.flash_artifacts` and every test passed, because no
+    test runs a stage command against the filesystem -- so the first thing
+    that noticed was the Rig Health Check on the deploy, saying "one or more
+    devices failed to flash" for a file that was not there (2026-09-22).
+
+    So: every part of a stage command that looks like a path into this
+    repository must be a file that exists. What a rig runs out of its venv
+    is `-m <module>`, which has no path to be wrong.
+    """
+    import yaml
+
+    looks_like_a_path = re.compile(r"^[A-Za-z0-9_{}][A-Za-z0-9_{}/.-]*\.(?:py|sh)\Z")
+    missing = {}
+    for profile in sorted((ROOT / "profiles").glob("*.yaml")):
+        document = yaml.safe_load(profile.read_text(encoding="utf-8")) or {}
+        for stage, spec in document.items():
+            if not isinstance(spec, dict):
+                continue
+            command = spec.get("command")
+            if not isinstance(command, list):
+                continue
+            for part in command:
+                if not isinstance(part, str) or not looks_like_a_path.match(part):
+                    continue
+                # `{farm_runner}/x.py` is that path under runner/; anything
+                # else is relative to the checkout the stage runs in.
+                relative = part.replace("{farm_runner}", "runner").replace("{farm_repo}", ".")
+                if "{" in relative:
+                    continue  # a consumer's own checkout, not ours to check
+                if not (ROOT / relative).is_file():
+                    missing[f"{profile.name}:{stage}"] = part
+    assert not missing, (
+        f"profiles name files that are not there: {missing}. A program that "
+        "moved into the rig's distribution is run as `-m alteriom_hil.<name>`, "
+        "which cannot go stale the way a path does."
+    )
