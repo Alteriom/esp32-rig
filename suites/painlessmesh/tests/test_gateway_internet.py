@@ -816,7 +816,7 @@ def test_bridge_relays_its_own_request_right_after_association(gateway_mesh):
 
 
 # profile -> (delivered, words the application must be able to read in the
-# reply). Mirrors runner/gateway_probe_server.py, which mirrors painlessMesh's
+# reply). Mirrors ../gateway_probe_server.py, which mirrors painlessMesh's
 # test/mock-http-server/server.py. The 208 is painlessMesh #452's field
 # finding: CallMeBot answered it to a message that never arrived, so no body
 # makes it a delivery -- `queued-208` carries the delivered profile's own body.
