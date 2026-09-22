@@ -10,15 +10,29 @@ from __future__ import annotations
 import os
 import secrets
 
+import sys
+from pathlib import Path
+
 import pytest
 
-from alteriom_hil.protocol import BoardClient
+# The agent's client lives beside the suite, one directory up, with the
+# scripts that build, flash and preflight the same firmware.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from meshclient import MeshBoardClient as BoardClient  # noqa: E402
 
 MESH_FORM_TIMEOUT = float(os.environ.get("ALTERIOM_HIL_MESH_TIMEOUT", "120"))
 
 # How long `pair` will wait for its two boards to see each other before it
 # calls the mesh broken. Deliberately short: see the fixture.
 PAIR_PEER_TIMEOUT = float(os.environ.get("ALTERIOM_HIL_PAIR_PEER_TIMEOUT", "3"))
+
+
+@pytest.fixture(scope="session")
+def board_client_class():
+    """This suite's boards run painlessMesh's HIL agent, and are driven
+    through its verbs (alteriom_hil.pytest_plugin.board_client_class)."""
+    return BoardClient
 
 
 @pytest.fixture(scope="session")

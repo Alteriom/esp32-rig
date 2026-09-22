@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import time
 import os
+import sys
 from pathlib import Path
 
 import pytest
 
-from alteriom_hil.protocol import BoardClient
+# Beside the suite, one directory up. Said here and not left to conftest:
+# this module is also loaded by path, where no conftest has run.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from meshclient import MeshBoardClient as BoardClient  # noqa: E402
 
 pytestmark = [
     pytest.mark.hil_only(reason="peripheral"),

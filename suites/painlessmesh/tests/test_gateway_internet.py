@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from urllib.error import HTTPError
@@ -14,7 +15,11 @@ from urllib.request import urlopen
 import pytest
 
 from alteriom_hil import providers
-from alteriom_hil.protocol import BoardClient, TimeoutWaitingFor
+from alteriom_hil.protocol import TimeoutWaitingFor
+# Beside the suite, one directory up. Said here and not left to conftest:
+# this module is also loaded by path, where no conftest has run.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from meshclient import MeshBoardClient as BoardClient  # noqa: E402
 
 pytestmark = [
     pytest.mark.hil_only(reason="peripheral"),
