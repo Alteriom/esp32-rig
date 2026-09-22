@@ -58,7 +58,7 @@ class PipelineError(RuntimeError):
 
 
 # /run/lock, not /var/lock. On Raspberry Pi OS the second is a symlink to the
-# first and either works; on the Ubuntu image rig02 runs it is a directory of
+# first and either works; on the Ubuntu image one rig runs it is a directory of
 # its own, which `ProtectSystem=strict` makes read-only inside the unit -- so
 # the service answered "[Errno 30] Read-only file system" for a lock the rest
 # of the farm was taking somewhere else entirely (2026-09-16). The units'

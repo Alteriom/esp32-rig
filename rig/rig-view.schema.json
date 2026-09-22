@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://espfarm.alteriom.net/contract/rig-view/v1",
+  "$id": "https://github.com/Alteriom/esp32-rig/contract/rig-view/v1",
   "title": "Rig view, version 1",
   "description": "One rig, as the dashboard draws it. A rig serves this about itself at GET /api/v1/view; a portal serves it about each connected rig at GET /api/v1/rigs/<name>/view, from what the rig reported. The same page reads either. Keys are never removed within a version; a key that changes meaning bumps `contract`.",
   "type": "object",

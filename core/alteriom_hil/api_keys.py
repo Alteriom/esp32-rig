@@ -665,7 +665,7 @@ def allowed(identity: Identity, method: str, path: str) -> bool:
 # ---- a keys file where there is no host configuration -------------------------
 # On a farm host, `alteriom-hil-admin keys` manages keys beside the token the
 # host configuration names. A portal in a container has no such configuration:
-#   python -m alteriom_hil.api_keys create --name esp32-hil --role node
+#   python -m alteriom_hil.api_keys create --name rig-01 --role node
 # with the file from --file or ALTERIOM_HIL_API_KEYS_FILE.
 
 

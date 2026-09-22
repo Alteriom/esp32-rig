@@ -609,7 +609,11 @@ def test_settings_say_what_each_decision_is_and_where_it_is_changed():
     render = script.split("function renderConfig(config)", 1)[1].split("\n}\n", 1)[0]
     for group in ("Quarantine", "Retention", "Notifications", "Backup"):
         assert f'viewGroup("{group}"' in render, group
-    assert "espfarm-config" in render and "alteriom-hil-admin config set" in render
+    # A portal says which file it read its settings from; it does not name
+    # the deployment's ConfigMap, which is ours and ships to a rig
+    # (tests/test_public_scrub.py).
+    assert "config_file" in render and "read on each decision" in render
+    assert "alteriom-hil-admin config set" in render
 
 
 def test_every_section_of_a_rigs_page_belongs_to_exactly_one_tab():

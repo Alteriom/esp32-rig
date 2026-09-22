@@ -4596,7 +4596,7 @@ function renderConfig(config) {
   $("config-title").textContent = portal ? "What the portal decides with" : "What this farm decides with";
   const file = config?.portal?.config_file;
   $("config-source").innerHTML = portal
-    ? (file ? `Set in <code>${escapeHtml(file)}</code> -- the <code>espfarm-config</code> ConfigMap -- and read on each decision, without a restart.` : "No configuration is mounted on the portal: these are its defaults.")
+    ? (file ? `Set in <code>${escapeHtml(file)}</code>, read on each decision, without a restart.` : "No configuration is mounted on the portal: these are its defaults.")
     : "Set on this host: <code>sudo alteriom-hil-admin config set &lt;section.key&gt; &lt;value&gt;</code>, or <code>/etc/alteriom-hil/config.yaml</code>.";
   if (!config) {
     $("config").innerHTML = `<p class="failure-summary">The service returned no configuration. It may be running from a host provisioned before <code>/etc/alteriom-hil/config.yaml</code> existed.</p>`;

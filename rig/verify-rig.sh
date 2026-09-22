@@ -32,7 +32,7 @@ REGISTRY="${ALTERIOM_HIL_INVENTORY:-/var/lib/alteriom-hil/inventory.yaml}"
 # A rig nobody has registered a board on yet is a rig in bring-up, not a
 # broken one: its boards, its udev names and its board map are steps still
 # ahead of it, and failing them fails the release install that a new rig is
-# in the middle of (rig02, 2026-09-16). They are reported either way; what
+# in the middle of (a rig in bring-up, 2026-09-16). They are reported either way; what
 # changes is whether they are a fault.
 # Asked of the loader the farm itself uses. A line-oriented guess read
 # `boards: [{id: esp32-01, ...}]` -- a registry an operator may well write --
@@ -199,7 +199,7 @@ try:
 except ValueError as exc:
     # `boards: []` is what a rig publishes before anything is registered: not
     # a map that cannot be read, and reading it as one failed the release
-    # install of a rig in bring-up (rig02, 2026-09-16). Only that document is
+    # install of a rig in bring-up (2026-09-16). Only that document is
     # excused -- an empty file, `{}`, `boards: null` or a mapping with no
     # `boards` key are all a map somebody got wrong, and are still failures.
     import yaml

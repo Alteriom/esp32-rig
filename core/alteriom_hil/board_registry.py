@@ -173,7 +173,7 @@ def load_registry(path: str | Path) -> list[Board]:
     A registry that is absent or empty is the state every rig starts in, and
     the two things you do there -- discover what is on the ports, and register
     the first board -- both read it first. Refusing to read it made those the
-    two commands a new rig could not run: on rig02 (2026-09-16, a fresh
+    two commands a new rig could not run: on one rig (2026-09-16, a fresh
     install) `boards discover` answered "No such file or directory" about a
     file it exists to help write. Duplicate ids and MACs are still refused,
     since those are a registry that is wrong rather than one not written yet.

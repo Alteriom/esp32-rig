@@ -55,7 +55,7 @@ def rig_lock():
     The lock lives on a tmpfs, so it is gone after every reboot and the
     installer's copy only covers the boot it ran on: a rig that had been
     restarted answered `boards discover` with "No such file or directory"
-    (rig02, a fresh install, 2026-09-16). It is a lock, not a record -- an
+    (a fresh install, 2026-09-16). It is a lock, not a record -- an
     absent one means nothing is holding the rig -- so it is created here when
     it is missing rather than reported as a fault. `/run/lock` is world
     writable with the sticky bit, which is what lets the rig's own user make
@@ -958,7 +958,7 @@ def auto_register(payload: dict) -> bool:
     The rig's setting, read here as the service reads it: discovery from the
     command line and discovery from the portal are the same discovery, and a
     rig where one registers boards and the other does not is a rig nobody can
-    reason about (rig02, 2026-09-16 -- four boards found, none registered).
+    reason about (a rig in bring-up, 2026-09-16: four boards found, none registered).
     """
     return bool((payload.get("inventory") or {}).get("auto_register", True))
 

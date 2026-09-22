@@ -4,8 +4,8 @@
 # The portal's Rigs page (Add rig) gives the whole command, with a token that
 # works once, for an hour:
 #
-#   curl -fsSL https://espfarm.alteriom.net/api/v1/join.sh | bash -s -- \
-#     --portal https://espfarm.alteriom.net --token afj_...
+#   curl -fsSL https://<your-portal>/api/v1/join.sh | bash -s -- \
+#     --portal https://<your-portal> --token afj_...
 #
 # Run it as the user the rig runs as -- sudo-capable, not root -- on Raspberry
 # Pi OS or Debian. It:

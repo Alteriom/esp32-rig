@@ -12,7 +12,7 @@ The shape is deliberately the one Alteriom's webhook connector already sends
 second format:
 
     {"event": "run", "action": "failed", "delivery_id": "...",
-     "rig": "rig02", "summary": "...", "payload": {...},
+     "rig": "rig-01", "summary": "...", "payload": {...},
      "received_at": "...", "dispatched_at": "..."}
 
 `event` is the base type and `action` is separate: `run.failed` is a

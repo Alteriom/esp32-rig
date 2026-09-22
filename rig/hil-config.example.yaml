@@ -2,12 +2,12 @@
 schema: 2
 mode: hardware
 runner:
-  unit: actions.runner.Alteriom-alteriom-esp32-farm.esp32-hil.service
+  unit: actions.runner.example-org-esp32-rig.rig-01.service
 paths:
-  venv: /home/sparck/.local/share/alteriom-hil/venv
+  venv: /home/rig/.local/share/alteriom-hil/venv
   inventory: /var/lib/alteriom-hil/inventory.yaml
   board_map: /var/lib/alteriom-hil/board-map.active.yaml
-  repo: /home/sparck/esp32-farm-src
+  repo: /home/rig/esp32-rig
   state: /var/lib/alteriom-hil
 health:
   interval_minutes: 5
@@ -63,8 +63,8 @@ farm:
   # from the portal (docs/portal-plan.md). The portal issues the node key,
   # named for this worker.
   mode: standalone
-  # portal_url: https://espfarm.alteriom.net
-  # worker_name: esp32-hil
+  # portal_url: https://portal.example.org
+  # worker_name: rig-01
   # node_key_file: /etc/alteriom-hil/node-key
 quarantine:
   # A board red on its own canary checks this many canary runs in a row is
@@ -81,7 +81,7 @@ backup:
   enabled: true
   directory: /var/lib/alteriom-hil/backups
   keep: 14
-  # target: sparck@alteriom03:/srv/alteriom-hil-backups
+  # target: backups@backup-host.example.org:/srv/alteriom-hil-backups
 retention:
   # Daily: removes old runs' serial and broker captures, old job logs and stale
   # checkouts -- never a run's report or records, never the newest runs, never

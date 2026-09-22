@@ -120,7 +120,7 @@ def rig_lock(path: str | None = None) -> dict:
     tmpfiles rule. A rig where that rule is missing, or where the lock ended up
     somewhere the service's `ProtectSystem=strict` cannot write, fails every
     run with an errno nobody reads until they open the journal -- which is how
-    rig02 spent a morning (2026-09-16).
+    a rig spent a morning (2026-09-16).
     """
     lock = Path(path or "/run/lock/alteriom-hil.lock")
     try:
@@ -165,7 +165,7 @@ def ap_channel(output: str) -> int | None:
 # is the host's standing condition, not evidence about the release that was
 # just put on it: the install either worked or it did not, and saying "could
 # not install the current release" because a rail sagged is both untrue and
-# the kind of red that hides a real one (esp32-hil, 2026-09-21 and -22). The
+# the kind of red that hides a real one (one rig, 2026-09-21 and -22). The
 # fault is still reported, still notified on, and still shown on the rig's
 # page; it just does not fail the install.
 HOST_SUPPLY_CHECKS = frozenset({"pi_power"})
@@ -177,7 +177,7 @@ def add(checks: list[dict], name: str, status: str, message: str, **data):
 
 # How many times the throttling flag is read, and how long apart. The flag
 # is a comparator against a threshold, so a supply sitting near it reads set
-# in one sample and clear in the next: esp32-hil measured 4.63-4.79 V against
+# in one sample and clear in the next: a rig measured 4.63-4.79 V against
 # a 4.8 V threshold on 2026-09-22 and flipped between readings seconds apart.
 # Several samples catch the flag at all; they do not say whether the rail is
 # down or dipping, because a dip outlasts them (below).
@@ -185,7 +185,7 @@ THROTTLE_SAMPLES = 3
 THROTTLE_SAMPLE_GAP = 0.4
 
 # How long a power fault must have been seen for before it is the rig's
-# supply rather than a dip in it. Measured, not guessed: esp32-hil's kernel
+# supply rather than a dip in it. Measured, not guessed: a rig's kernel
 # log on 2026-09-22 had 326 under-voltage dips in 12 hours, none shorter than
 # 2 s, a median of 4 s, a tenth over a minute and one of 34 minutes -- so
 # three samples 0.4 s apart all land inside one dip and call the same supply
@@ -259,7 +259,7 @@ def classify_throttling(
         # host whose user is not in the `video` group, /dev/vcio answers
         # "Can't open device file" and the whole rig was reported UNHEALTHY --
         # which reads as failing hardware, and failed the release install a
-        # new rig was in the middle of (rig02, 2026-09-16). Say what to do,
+        # new rig was in the middle of (a rig in bring-up, 2026-09-16). Say what to do,
         # and leave the verdict to the checks that are about the hardware.
         denied = "vcio" in output or "permission" in output.lower()
         return {

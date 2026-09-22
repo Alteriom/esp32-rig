@@ -28,7 +28,7 @@ echo "==> serial-port and board-health group access"
 # dialout for the boards' serial ports; video for /dev/vcio, which is how
 # vcgencmd reads a Pi's throttling and temperature. Without video the health
 # check reports the host unhealthy over a permission, which reads like a
-# hardware fault (rig02, 2026-09-16).
+# hardware fault (a rig in bring-up, 2026-09-16).
 sudo usermod -aG dialout "$USER"
 if [ -e /dev/vcio ]; then
   sudo usermod -aG video "$USER"

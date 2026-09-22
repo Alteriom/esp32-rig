@@ -29,7 +29,7 @@ if [ ! -f "$PASSWORD_FILE" ]; then
 fi
 # NetworkManager runs the AP. Raspberry Pi OS has it; Ubuntu Server images use
 # netplan with systemd-networkd and ship no nmcli, so this script would fail
-# half-way with "command not found" (rig02, 2026-09-16). Say so up front, with
+# half-way with "command not found" (a rig in bring-up, 2026-09-16). Say so up front, with
 # what to install.
 if ! command -v nmcli >/dev/null 2>&1; then
   cat >&2 <<'EOF'
