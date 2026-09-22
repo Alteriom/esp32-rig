@@ -8,7 +8,10 @@ build-backend = "setuptools.build_meta"
 # against. It fills the same `alteriom_hil` package as alteriom-hil-core,
 # which it requires (docs/public-release-plan.md, step 12).
 name = "alteriom-hil"
-version = "0.1.0"
+# MAJOR.MINOR, the same number as VERSION at the root. A release build
+# stamps the commit count on as PATCH (runner/ci/build-release.sh), which
+# is the version install-health-service.sh writes and the dashboard shows.
+version = "1.0"
 description = "Hardware-abstraction layer for the Alteriom ESP32 HIL test rig"
 # Apache-2.0: the patent grant is what a hardware-adjacent tool wants, and it
 # is what the rig is published under (docs/public-release-plan.md). The text
@@ -32,6 +35,8 @@ hardware = [
 ]
 dev = [
     "pytest>=7",
+    # What builds a release of this (runner/ci/build-release.sh).
+    "build>=1.0",
     # The rig configuration's published schema is what other tooling validates
     # a config.yaml with; nothing checked that it agreed with the service's own
     # validation until a Telegram-only config was accepted by one and refused

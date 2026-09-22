@@ -10,7 +10,10 @@ build-backend = "setuptools.build_meta"
 # so a portal installs this and no driver
 # (docs/public-release-plan.md, step 12).
 name = "alteriom-hil-core"
-version = "0.1.0"
+# MAJOR.MINOR, the same number as VERSION at the root. A release build
+# stamps the commit count on as PATCH (runner/ci/build-release.sh), which
+# is the version install-health-service.sh writes and the dashboard shows.
+version = "1.0"
 description = "What both halves of the Alteriom ESP32 farm hold: identity, storage, and the descriptions a run is made of"
 # Apache-2.0: the patent grant is what a hardware-adjacent tool wants, and it
 # is what the rig is published under (docs/public-release-plan.md). The text
@@ -26,6 +29,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7",
+    # What builds a release of this (runner/ci/build-release.sh).
+    "build>=1.0",
     "jsonschema>=4",
 ]
 
