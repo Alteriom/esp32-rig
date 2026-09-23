@@ -265,6 +265,13 @@ def test_a_shell_adds_its_own_settings_tabs_and_the_rig_adds_none():
     assert 'panel.id = `settings-${tab.id}`' in built
     assert "$(\"settings-access\").parentNode.insertBefore(panel" in built
 
+    # A tab the shell adds is asked for before anything knows which shell this
+    # is -- the mode arrives with the status -- so a link straight to one is
+    # remembered and shown once it does, rather than quietly becoming General.
+    assert "let settingsWanted = null;" in app
+    assert "settingsWanted = known || !tab ? null : tab;" in app
+    assert "if (settingsWanted) showSettingsTab(settingsWanted);" in app
+
     # Showing one hides the others, whichever they are, and the shell fills it.
     showing = app.split("function showSettingsTab(", 1)[1].split("\n}\n", 1)[0]
     assert "for (const name of settingsTabs())" in showing
