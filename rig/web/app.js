@@ -403,8 +403,15 @@ let webhookEditing = null;   // null, or the scope whose form is open
 
 // Whether the key this page holds administers this rig: its owner, or the
 // farm's admin. A rig nobody owns is the farm's until somebody is named.
+// A key administers every rig: it is only ever created by an admin, for a
+// job that needs it. A person administers their own -- the person who
+// administers the platform included, because administering a platform is
+// releases, keys and access, not ownership of everybody's hardware. The
+// fleet is a page they go to on purpose (docs/public-release-plan.md,
+// phase 4). `you.account` is what tells the two apart: it is there when
+// somebody signed in and absent when a key was pasted.
 function ownsRig(rig) {
-  if (isAdmin()) return true;
+  if (isAdmin() && !you?.account) return true;
   return Boolean(rig?.owner) && rig.owner === you?.name;
 }
 
@@ -4759,6 +4766,9 @@ function buildSettingsTabs() {
     link.href = `#configuration/${tab.id}`;
     link.dataset.tab = tab.id;
     link.textContent = tab.label;
+    // The dashboard hides `.admin-only` for anybody who is not one; the
+    // service refuses the route regardless.
+    if (tab.admin) link.classList.add("admin-only");
     nav.insertBefore(link, access);
     const panel = document.createElement("div");
     panel.id = `settings-${tab.id}`;
