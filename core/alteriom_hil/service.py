@@ -4713,11 +4713,14 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # A handler that raised before answering is still recorded.
                 self._record_audit(500)
 
-        def _half_answer(self, method: str, path: str, identity, body=None):
+        def _half_answer(self, method: str, path: str, identity, body=False):
             """A route a half declared, answered by the method it named.
 
             Returns True when it answered. Consulted after the service's own
-            routes, so a half cannot shadow one of them by accident.
+            routes, so a half cannot shadow one of them by accident -- and the
+            body is read only once a route has matched, because reading it for
+            a route that did not leaves the next reader waiting for a stream
+            that has already been consumed.
             """
             route = half_route(extra_routes, method, path)
             if route is None:
@@ -4725,7 +4728,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             answer = getattr(manager, route.answers)
             fields = (route.pattern.fullmatch(path) or {}).groupdict()
             try:
-                result = answer(body, identity=identity, **fields) if body is not None \
+                given = (self._request_json_limit(64 * 1024) or {}) if body else None
+                result = answer(given, identity=identity, **fields) if body \
                     else answer(identity=identity, **fields)
             except ElsewhereError as exc:
                 self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
@@ -5828,7 +5832,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 )})
             if path == "/api/v1/inventory/refresh" and manager.__dict__.get("mode") == "portal":
                 return self._json(HTTPStatus.ACCEPTED, manager.request_rediscovery())
-            if self._half_answer("POST", path, identity, body=self._request_json_limit(64 * 1024) or {}):
+            if self._half_answer("POST", path, identity, body=True):
                 return
             kinds = {"/api/v1/inventory/refresh": "inventory", "/api/v1/suites": "suite"}
             if path not in kinds:
