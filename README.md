@@ -56,8 +56,9 @@ Then open the dashboard, register your boards, and run the health check.
 
 ## Installing it as packages
 
-A release is two wheels, the dashboard bundle and a `release.json` naming each
-with its digest, attached to a [GitHub release][releases]. Not PyPI yet.
+A release is two wheels, the dashboard bundle, the Rig Health Check firmware
+and a `release.json` naming each with its digest, attached to a
+[GitHub release][releases]. Not PyPI yet.
 
 ```bash
 base=https://github.com/Alteriom/esp32-rig/releases/download/v1.0.0
@@ -66,6 +67,11 @@ pip install   $base/alteriom_hil_core-1.0.0-py3-none-any.whl   $base/alteriom_hi
 
 Both on one command line: that is what satisfies `alteriom-hil`'s dependency on
 `alteriom-hil-core` without a package index.
+
+The firmware comes with it, one bundle for every board family the rig supports,
+so bringing a rig up needs no compiler and no toolchain. It is the same build
+for everyone who installs that release, which is what makes one rig's health
+check comparable to another's.
 
 The commands it brings: `alteriom-hil-service` (the farm), `alteriom-hil-admin`
 (configuration, keys, boards, providers), `alteriom-hil-health` (is this host

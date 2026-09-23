@@ -30,14 +30,21 @@ def _wheel(name: str, payload: bytes) -> tuple[str, bytes]:
     return name, payload
 
 
+FIRMWARE = "alteriom-hil-canary-1.0.12.tar.gz"
+
+
 def _manifest(commit: str, files: dict, dashboard: str, contract: int = 1) -> bytes:
     def entry(name):
         return {"name": name, "sha256": hashlib.sha256(files[name]).hexdigest(), "bytes": len(files[name])}
-    return json.dumps({
+    document = {
         "schema": 1, "version": "1.0.7", "commit": commit,
-        "packages": [entry(name) for name in files if name != dashboard],
+        "packages": [entry(name) for name in files if name not in (dashboard, FIRMWARE)],
         "dashboard": {**entry(dashboard), "contract": contract},
-    }).encode("utf-8")
+    }
+    if FIRMWARE in files:
+        document["firmware"] = {**entry(FIRMWARE), "version": "1.0.12", "revision": "d" * 64,
+                                "families": ["esp32", "esp32-c6"]}
+    return json.dumps(document).encode("utf-8")
 
 
 def _publish_bundle(farm, tmp_path, commits: int = 1):
@@ -182,3 +189,42 @@ def test_pruning_a_release_takes_its_files_with_it(farm, tmp_path, monkeypatch):
     assert not farm.portal.release_files_dir(older).exists(), "the files went with the record"
     with pytest.raises(LookupError):
         farm.portal.release_file_path(older, "release.json")
+
+
+def test_a_release_that_carries_the_firmware_says_so_to_a_node(farm, tmp_path):
+    """The health check firmware is a file of the release like any other: it
+    is published beside the wheels, checked by the same manifest, and named in
+    the record a node reads -- so a rig can install the firmware that release
+    was built with (docs/public-release-plan.md, step 14b)."""
+    commit = _publish_bundle(farm, tmp_path)
+    files = {**_files(commit), FIRMWARE: b"\x1f\x8b canary " + commit[:8].encode()}
+    for name, payload in files.items():
+        farm.portal.attach_release_file(commit, name, payload, "ci")
+    sealed = farm.portal.attach_release_file(
+        commit, "release.json", _manifest(commit, files, "alteriom-hil-dashboard-1.0.7.tar.gz"), "ci")
+    assert sealed["firmware"]["name"] == FIRMWARE
+    assert sealed["firmware"]["families"] == ["esp32", "esp32-c6"]
+
+    current = farm.portal.current_release()
+    assert current["firmware"]["version"] == "1.0.12"
+    assert current["firmware"]["revision"] == "d" * 64
+
+    # And a node fetches it with its key, like every other file of a release.
+    request = urllib.request.Request(
+        farm.url + f"/api/v1/releases/{commit}/files/{FIRMWARE}",
+        headers={"Authorization": f"Bearer {farm.node_key}"})
+    with urllib.request.urlopen(request, timeout=10) as answer:
+        assert answer.read() == files[FIRMWARE]
+
+
+def test_a_release_without_the_firmware_claims_none(farm, tmp_path):
+    """A build on a host with no toolchain makes wheels, and that is a
+    release. The record must not grow a firmware key out of nothing."""
+    commit = _publish_bundle(farm, tmp_path)
+    files = _files(commit)
+    for name, payload in files.items():
+        farm.portal.attach_release_file(commit, name, payload, "ci")
+    sealed = farm.portal.attach_release_file(
+        commit, "release.json", _manifest(commit, files, "alteriom-hil-dashboard-1.0.7.tar.gz"), "ci")
+    assert sealed["firmware"] is None
+    assert "firmware" not in farm.portal.current_release()

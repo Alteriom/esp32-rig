@@ -1,7 +1,8 @@
 """What a release is, as a document.
 
 `runner/ci/build-release.sh` writes it: a `release.json` naming the two
-wheels, the dashboard bundle, and for each one its digest and its size. The
+wheels, the dashboard bundle, the health check firmware when the build made
+one, and for each one its digest and its size. The
 portal checks that document against the files published to it; a rig checks
 it against the files it downloaded before installing them. One description,
 because a release that means two things to two readers is not a release
@@ -50,18 +51,46 @@ def parse_manifest(body: bytes, commit: str | None = None) -> dict:
     dashboard = manifest.get("dashboard")
     if not isinstance(packages, list) or not packages or not isinstance(dashboard, dict):
         raise ReleaseError("release.json names no packages, or no dashboard")
-    for entry in [*packages, dashboard]:
+    firmware = manifest.get("firmware")
+    if firmware is not None and not isinstance(firmware, dict):
+        raise ReleaseError("release.json's firmware is not a file it names")
+    for entry in entries(manifest):
         name = entry.get("name") if isinstance(entry, dict) else None
         if not (isinstance(name, str) and RELEASE_FILE_PATTERN.fullmatch(name)):
             raise ReleaseError(f"release.json names a file it may not: {name!r}")
         if not isinstance(entry.get("sha256"), str) or not isinstance(entry.get("bytes"), int):
             raise ReleaseError(f"release.json says nothing checkable about {name}")
+    # The firmware is a bundle, not a wheel: what a rig does with it depends
+    # on which boards it is for and which build it is, so a release that names
+    # one says both. Nothing else may claim to be firmware by leaving them out.
+    if firmware is not None:
+        families = firmware.get("families")
+        if not isinstance(firmware.get("version"), str) or not isinstance(firmware.get("revision"), str):
+            raise ReleaseError("release.json's firmware says no version or no revision")
+        if not isinstance(families, list) or not families or not all(isinstance(f, str) for f in families):
+            raise ReleaseError("release.json's firmware is for no board family")
     return manifest
 
 
 def entries(manifest: dict) -> list[dict]:
-    """Every file the manifest names, packages and dashboard alike."""
-    return [*manifest["packages"], manifest["dashboard"]]
+    """Every file the manifest names: packages, dashboard, and the health
+    check firmware when the release carries one. `check` walks this, so a
+    file that is named here is a file a rig refuses the release over."""
+    named = [*manifest["packages"], manifest["dashboard"]]
+    firmware = manifest.get("firmware")
+    if firmware:
+        named.append(firmware)
+    return named
+
+
+def firmware(manifest: dict) -> dict | None:
+    """The health check firmware this release carries, if it carries one.
+
+    A release built without it is a release: `alteriom_hil.release` describes
+    what a build made, and a build on a host with no toolchain makes wheels.
+    A rig asked to install the firmware of a release that has none is told so
+    rather than handed an empty bundle."""
+    return manifest.get("firmware") or None
 
 
 def check(manifest: dict, read) -> None:
@@ -85,12 +114,16 @@ def check(manifest: dict, read) -> None:
 def summary(manifest: dict) -> dict:
     """What a record or a person needs of a checked manifest, and no more."""
     keep = ("name", "sha256", "bytes")
-    return {
+    kept = {
         "version": manifest.get("version"),
         "commit": manifest.get("commit"),
         "packages": [{k: entry[k] for k in keep} for entry in manifest["packages"]],
         "dashboard": {k: manifest["dashboard"][k] for k in (*keep, "contract") if k in manifest["dashboard"]},
     }
+    carried = firmware(manifest)
+    if carried:
+        kept["firmware"] = {k: carried[k] for k in (*keep, "version", "revision", "families") if k in carried}
+    return kept
 
 
 def wheels(manifest: dict) -> list[str]:

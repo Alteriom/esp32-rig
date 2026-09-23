@@ -666,6 +666,14 @@ def command_upgrade(args: argparse.Namespace) -> int:
 
     print(f"installed {manifest.get('version')}. The service runs the old code until it restarts:")
     print("  sudo systemctl restart alteriom-hil-farm.service")
+    # The release carries the health check firmware and this command does not
+    # yet install it. Say so: a rig owner who reads the file list above and
+    # nothing else would reasonably think their boards had been flashed
+    # (docs/public-release-plan.md, step 13d).
+    carried = release_document.firmware(manifest)
+    if carried:
+        print(f"the health check firmware {carried['version']} came with it, for "
+              f"{', '.join(carried['families'])}, and is not installed yet.")
     return 0
 
 

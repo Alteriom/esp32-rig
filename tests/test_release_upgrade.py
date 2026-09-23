@@ -34,6 +34,7 @@ FILES = {
     "alteriom_hil-1.0.7-py3-none-any.whl": b"PK rig wheel",
     "alteriom-hil-dashboard-1.0.7.tar.gz": None,  # a real tarball, made below
 }
+FIRMWARE = "alteriom-hil-canary-1.0.12.tar.gz"
 COMMIT = "a" * 40
 
 
@@ -51,11 +52,14 @@ def _entry(name: str, body: bytes) -> dict:
     return {"name": name, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body)}
 
 
-def _built(tmp_path: Path, dashboard: dict | None = None, commit: str = COMMIT) -> Path:
+def _built(tmp_path: Path, dashboard: dict | None = None, commit: str = COMMIT,
+           firmware: bool = False) -> Path:
     """A directory shaped like `build-release.sh --out`."""
     out = tmp_path / "dist"
     out.mkdir(parents=True, exist_ok=True)
     files = dict(FILES)
+    if firmware:
+        files[FIRMWARE] = b"\x1f\x8b the health check firmware"
     files["alteriom-hil-dashboard-1.0.7.tar.gz"] = _dashboard(
         dashboard if dashboard is not None else {"web/app.js": b"// the dashboard", "web/index.html": b"<html>"})
     for name, body in files.items():
@@ -66,6 +70,9 @@ def _built(tmp_path: Path, dashboard: dict | None = None, commit: str = COMMIT) 
         "dashboard": {**_entry("alteriom-hil-dashboard-1.0.7.tar.gz",
                                files["alteriom-hil-dashboard-1.0.7.tar.gz"]), "contract": 1},
     }
+    if firmware:
+        manifest["firmware"] = {**_entry(FIRMWARE, files[FIRMWARE]), "version": "1.0.12",
+                                "revision": "d" * 64, "families": ["esp32", "esp32-c6"]}
     (out / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
     return out
 
@@ -150,6 +157,44 @@ def test_a_manifest_is_believed_only_when_it_says_something_checkable():
         release.parse_manifest(body)
 
 
+def test_a_release_may_carry_the_health_check_firmware_and_must_mean_it():
+    """A release built without a toolchain is a release: the firmware is
+    optional, and absent is not malformed. But a manifest that names one says
+    which build and which boards, or a rig cannot tell one bundle from another
+    (docs/public-release-plan.md, step 14b)."""
+    base = {"schema": 1, "version": "1.0.7", "commit": COMMIT,
+            "packages": [_entry("a-1.0.7-py3-none-any.whl", b"a")],
+            "dashboard": _entry("alteriom-hil-dashboard-1.0.7.tar.gz", b"d")}
+    # Absent: a release, and one that names no firmware.
+    plain = release.parse_manifest(json.dumps(base).encode(), COMMIT)
+    assert release.firmware(plain) is None
+    assert len(release.entries(plain)) == 2
+
+    good = {**_entry("alteriom-hil-canary-1.0.12.tar.gz", b"bundle"),
+            "version": "1.0.12", "revision": "d" * 64, "families": ["esp32", "esp32-c6"]}
+    carried = release.parse_manifest(json.dumps({**base, "firmware": good}).encode(), COMMIT)
+    assert release.firmware(carried)["version"] == "1.0.12"
+    # Named here is checked: `check` walks the firmware like any other file.
+    assert [entry["name"] for entry in release.entries(carried)][-1] == good["name"]
+    assert release.summary(carried)["firmware"]["families"] == ["esp32", "esp32-c6"]
+    with pytest.raises(release.ReleaseError, match="is not the file release.json describes"):
+        release.check(carried, {**{name: b"" for name in ("a-1.0.7-py3-none-any.whl",)},
+                                good["name"]: b"tampered"}.get)
+
+    for bad, says in (
+        ({**good, "version": None}, "no version or no revision"),
+        ({**good, "revision": None}, "no version or no revision"),
+        ({**good, "families": []}, "for no board family"),
+        ({**good, "families": "esp32"}, "for no board family"),
+        ({**good, "name": "hil-canary/flash-image.bin"}, "names a file it may not"),
+        ({**good, "sha256": None}, "nothing checkable"),
+    ):
+        with pytest.raises(release.ReleaseError, match=says):
+            release.parse_manifest(json.dumps({**base, "firmware": bad}).encode(), COMMIT)
+    with pytest.raises(release.ReleaseError, match="not a file it names"):
+        release.parse_manifest(json.dumps({**base, "firmware": "yes"}).encode(), COMMIT)
+
+
 def test_the_core_is_installed_before_the_rig_that_requires_it():
     manifest = {"packages": [{"name": "alteriom_hil-1.0.7-py3-none-any.whl"},
                              {"name": "alteriom_hil_core-1.0.7-py3-none-any.whl"}]}
@@ -178,6 +223,31 @@ def test_a_release_from_a_directory_is_checked_and_installed(tmp_path, pip, caps
     assert (tmp_path / "web" / "app.js").read_bytes() == b"// the dashboard"
     assert (tmp_path / "web" / "index.html").is_file()
     assert "restart" in said, "and the operator is told the service still runs the old code"
+
+
+def test_the_firmware_a_release_carries_is_checked_and_named_and_not_installed(
+        tmp_path, pip, capsys):
+    """The release carries the health check firmware, so `upgrade` checks it
+    with everything else and says it is there. It does not flash it, and it
+    does not quietly hand it to pip: installing and pinning it is 13d, and
+    until then the command says so rather than leaving a rig owner to guess
+    (docs/public-release-plan.md, steps 14b and 13d)."""
+    source = _built(tmp_path, firmware=True)
+    assert admin_cli.command_upgrade(_args(tmp_path, source=source)) == 0
+    said = capsys.readouterr().out
+    assert FIRMWARE in said, "a file of the release is listed with the rest"
+    assert "health check firmware 1.0.12" in said and "esp32, esp32-c6" in said
+    assert "not installed yet" in said
+    installed = [word for command in pip for word in command if word.endswith(".whl")]
+    assert len(installed) == 2 and not any(FIRMWARE in word for command in pip for word in command)
+
+    # And a release that disagrees about the firmware is refused whole, like
+    # any other file: nothing is installed.
+    (source / FIRMWARE).write_bytes(b"a different bundle")
+    pip.clear()
+    with pytest.raises(SystemExit, match="refusing to install"):
+        admin_cli.command_upgrade(_args(tmp_path, source=source))
+    assert pip == []
 
 
 def test_a_dry_run_says_what_it_would_do_and_does_none_of_it(tmp_path, pip, capsys):

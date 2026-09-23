@@ -1,7 +1,8 @@
 """What goes public says nothing about this farm in particular.
 
 `core/` and `rig/` are the two distributions that become the public rig
-repository (docs/public-release-plan.md, step 15). A rig is a thing somebody
+repository, and `canary/` is the health check firmware the release carries
+(docs/public-release-plan.md, steps 14b and 15). A rig is a thing somebody
 builds for their own project; the code that ships to them must not carry the
 names of our hosts, our people, our portal or our private consumer.
 
@@ -21,10 +22,11 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC = (ROOT / "core", ROOT / "rig")
+PUBLIC = (ROOT / "core", ROOT / "rig", ROOT / "canary")
 # What a local install or a build left behind is not code anybody wrote.
-BUILT = {"build", "__pycache__", ".venv", "node_modules"}
-SHIPPED = {".py", ".js", ".sh", ".css", ".html", ".json", ".yaml", ".yml", ".conf", ".rules", ".toml"}
+BUILT = {"build", "__pycache__", ".venv", "node_modules", ".pio"}
+SHIPPED = {".py", ".js", ".sh", ".css", ".html", ".json", ".yaml", ".yml", ".conf", ".rules", ".toml",
+           ".ini", ".cpp", ".h"}
 
 # This farm's own names, by the shape they take. A rig owner reading the
 # public repository should find none of them.

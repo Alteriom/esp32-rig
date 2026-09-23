@@ -1,8 +1,13 @@
 name: Release
 
 # A tag becomes a release people can install: the two wheels, the dashboard
-# bundle, their checksums and the release.json that names them, attached to a
-# GitHub release (docs/public-release-plan.md, step 13).
+# bundle, the health check firmware for every board family, their checksums
+# and the release.json that names them, attached to a GitHub release
+# (docs/public-release-plan.md, steps 13 and 14b).
+#
+# The firmware rides here rather than in a farm deploy because a rig is what
+# runs it: a rig installed from a release has the health check it was built
+# with, and nobody has to build firmware to bring one up.
 #
 # The channel is the GitHub release, and only that. PyPI comes later and is a
 # second publish of the same files, not a second way of building them: what is
@@ -45,11 +50,37 @@ jobs:
 
       - run: python -m pip install --quiet build
 
+      # Six PlatformIO cores, each with its own Xtensa or RISC-V toolchain,
+      # against a hosted runner's ~14 GB -- the same squeeze canary-build.yml
+      # answers the same way.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost /usr/local/lib/node_modules \
+                      /opt/hostedtoolcache/CodeQL || true
+          df -h / | tail -1
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          # One core directory per MCU family (build_artifacts.core_dir_for).
+          path: ~/.platformio-cores
+          key: canary-platformio-${{ runner.os }}-${{ hashFiles('canary/firmware/platformio.ini') }}
+
+      - name: Install the firmware tools
+        run: python -m pip install --quiet platformio esptool ./core
+
+      # The health check firmware, six families. The manifest names the commit
+      # this bundle belongs to, which the build reads from the checkout: the
+      # ref this job was given, not the branch the workflow was dispatched from.
+      - name: Build the health check firmware
+        run: python canary/build_artifacts.py --out hil-canary
+
       - name: Build the release
         id: build
         run: |
           set -euo pipefail
-          runner/ci/build-release.sh --out dist
+          runner/ci/build-release.sh --out dist --firmware hil-canary
           echo "version=$(runner/ci/build-release.sh --version-only)" >> "$GITHUB_OUTPUT"
 
       # What a tag claims and what the tree says must be the same number, or
@@ -118,6 +149,10 @@ jobs:
             echo "dependency on \`alteriom-hil-core\` without an index. An existing rig"
             echo "upgrades with \`alteriom-hil-admin upgrade --from <directory>\`, which"
             echo "checks every file against \`release.json\` before installing anything."
+            echo
+            echo "The release also carries the Rig Health Check firmware,"
+            echo "\`alteriom-hil-canary-*.tar.gz\`: one bundle, every board family,"
+            echo "with the digests \`release.json\` names it by."
             echo
             echo "### Checksums"
             echo
