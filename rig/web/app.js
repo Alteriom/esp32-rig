@@ -484,6 +484,12 @@ function showPanel(name, updateHash = true, suffix = "") {
 // per address keeps a page from loading twice for one click.
 let lastRouted = null;
 let settingsTab = "general";
+// A settings tab that was asked for and is not there yet. Which shell this
+// is only becomes known when the status arrives, so a link straight to a tab
+// the shell adds -- a portal's Workspaces -- is asked for before anything
+// knows it exists. Kept here rather than read back off the hash, which has
+// been rewritten to the tab that was shown instead.
+let settingsWanted = null;
 
 function routeFromLocation({force = false} = {}) {
   if (!force && location.hash === lastRouted) return;
@@ -4763,7 +4769,9 @@ function buildSettingsTabs() {
 
 function showSettingsTab(tab, updateHash = true) {
   buildSettingsTabs();
-  settingsTab = settingsTabs().includes(tab) ? tab : "general";
+  const known = settingsTabs().includes(tab);
+  settingsWanted = known || !tab ? null : tab;
+  settingsTab = known ? tab : "general";
   if (settingsTab === "general") { loadFarmNotify(); shell().farmWebhooksLoad(); }
   for (const name of settingsTabs()) {
     const panel = $(`settings-${name}`);
@@ -4977,6 +4985,9 @@ async function refresh(force = false) {
       currentRelease = data.release || null;
       portalUrl = data.portal_url || null;
       document.body.dataset.mode = farmMode;
+      // Which shell this is is known now, so a settings tab that was asked
+      // for before anything knew it existed can be shown.
+      if (settingsWanted) showSettingsTab(settingsWanted);
       repositories = data.repositories || repositories;
       defaultProfile = data.default_profile || defaultProfile;
       const hadProfiles = Object.keys(profiles).length > 0;
