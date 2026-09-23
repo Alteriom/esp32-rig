@@ -1,0 +1,91 @@
+name: CI
+
+# The rig's own tests, on every push and pull request.
+#
+# They need no hardware: the suites run against a simulated board, and what is
+# here is the service, the pipeline, the artifact store, the dashboard and the
+# scripts a rig is installed with. A rig is checked against real boards by its
+# own health check, which is a different thing and runs on a rig.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest Python a rig runs on, and a current one. A Raspberry Pi OS
+        # from a couple of years ago has 3.9, and refusing to run there would
+        # mean telling people to reimage a working rig.
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release build counts commits, and a shallow clone counts to one.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the rig
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          # Editable and with the venv first on PATH: the service finds
+          # `profiles/` by walking up from its own file, and the scripts a rig
+          # runs -- verify-rig.sh, the release build -- run `python3` and want
+          # the tools installed here rather than a bare system interpreter.
+          .venv/bin/pip install --quiet -e ./core -e './rig[hardware]' pytest pyyaml jsonschema build
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Tests
+        run: python -m pytest tests -q
+
+      # The suites, against a simulated board. What they prove about firmware
+      # needs hardware; what they prove here is that the fixtures, the
+      # protocol and the pipeline still agree with each other.
+      - name: The reference suite, simulated
+        env:
+          ALTERIOM_HIL_MODE: sim
+          ALTERIOM_HIL_SIM_BOARDS: "3"
+        run: python -m pytest suites/painlessmesh/tests -q
+
+      - name: The health check suite, simulated
+        env:
+          ALTERIOM_HIL_MODE: sim
+          ALTERIOM_HIL_SIM_BOARDS: "3"
+        run: python -m pytest suites/canary/tests -q
+
+  release:
+    name: The release builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet build
+      # Without the firmware: that needs six PlatformIO toolchains and belongs
+      # to a tag (release.yml). What is checked here is that a release can be
+      # built at all, which is the part a change to the tree can break.
+      - run: runner/ci/build-release.sh --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-without-firmware
+          path: dist/
