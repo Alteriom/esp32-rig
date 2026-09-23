@@ -240,6 +240,43 @@ def test_the_hardware_page_checks_a_board_with_the_canary_and_shows_its_verdict(
     assert "farm_wide" in script and "FARM FAULT" in script
 
 
+def test_a_shell_adds_its_own_settings_tabs_and_the_rig_adds_none():
+    """Settings is General, Projects and Access, and whatever the shell around
+    the dashboard adds -- a portal's Workspaces, for one. The markup is the
+    rig's bundle and what a portal adds is the portal's, so the tab and its
+    panel are built rather than written into index.html
+    (docs/public-release-plan.md, phase 4).
+
+    A rig adds none: what a workspace is, and who owns which rig, is a
+    portal's question."""
+    app = dashboard()
+    assert "settingsTabs: []," in app, "the rig's shell adds no tabs"
+    assert "settingsPanel: id => {}," in app
+
+    # The list is the three plus the shell's, with Access last: it is the
+    # admin's and reads as the end of the list.
+    tabs = app.split("function settingsTabs()", 1)[1].split("\n}", 1)[0]
+    assert '["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"]' in tabs
+
+    # Each is given a panel of its own, before the Access one so the order on
+    # the page is the order in the nav.
+    built = app.split("function buildSettingsTabs()", 1)[1].split("\n}\n", 1)[0]
+    assert "nav.insertBefore(link, access)" in built
+    assert 'panel.id = `settings-${tab.id}`' in built
+    assert "$(\"settings-access\").parentNode.insertBefore(panel" in built
+
+    # Showing one hides the others, whichever they are, and the shell fills it.
+    showing = app.split("function showSettingsTab(", 1)[1].split("\n}\n", 1)[0]
+    assert "for (const name of settingsTabs())" in showing
+    assert "panel.hidden = name !== settingsTab" in showing
+    assert "shell().settingsPanel(settingsTab)" in showing
+    # And the three built-in panels are still in the markup, because they are
+    # the dashboard's own.
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    for built_in in ("settings-general", "settings-projects", "settings-access"):
+        assert f'id="{built_in}"' in page
+
+
 def test_the_configuration_page_covers_every_parameter_the_host_can_set():
     """The page answers "what is this farm set to" so nobody needs an ssh
     session for it -- which only holds if it covers the whole configuration
