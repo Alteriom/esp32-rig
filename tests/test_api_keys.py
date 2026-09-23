@@ -36,6 +36,7 @@ from alteriom_hil.api_keys import (
     parse_keys,
     required_role,
 )
+from alteriom_hil.api_keys import allowed, half_route
 
 REPO = Path(__file__).resolve().parents[1]
 RUNNER = REPO / "runner"
@@ -679,3 +680,63 @@ def test_deleting_a_corrupt_keys_file_clears_the_read_error(tmp_path):
     # And a fresh key written after that is found, not lost behind a stale error.
     assert store.create("bob", "user")
     assert store.key_names() == {"bob"}
+
+
+# ---- a half's own routes -------------------------------------------------------
+
+def _declared(method, pattern, audience, answers="whatever"):
+    """What `BaseManager.api_routes()` hands the handler. Built here from a
+    plain tuple rather than imported: this file must not need the service, and
+    what the gate reads of a route is three fields."""
+    import collections
+    import re as _re
+
+    Route = collections.namedtuple("Route", "method pattern audience answers")
+    return Route(method, _re.compile(pattern), audience, answers)
+
+
+WORKSPACES = (_declared("GET", r"/api/v1/workspaces", "account"),
+              _declared("POST", r"/api/v1/workspaces", "account"))
+
+
+def test_a_route_a_half_declared_is_reachable_by_who_it_was_declared_for():
+    """A half is a distribution of its own, and this file is not one of them:
+    a portal that had to edit `ACCOUNT_ROUTES` to add a route would wait on a
+    release of the rig to ship it. The declaration is just as deliberate --
+    it names its audience, and it sits beside the method that answers."""
+    person = Identity("ada", "user", kind="account")
+    assert not allowed(person, "GET", "/api/v1/workspaces"), "undeclared is refused"
+    assert allowed(person, "GET", "/api/v1/workspaces", extra=WORKSPACES)
+    assert allowed(person, "POST", "/api/v1/workspaces", extra=WORKSPACES)
+    # And only what was declared: the method is part of it, and so is the path.
+    assert not allowed(person, "DELETE", "/api/v1/workspaces", extra=WORKSPACES)
+    assert not allowed(person, "GET", "/api/v1/workspaces/one", extra=WORKSPACES)
+
+
+def test_a_half_cannot_declare_a_route_to_a_node_or_a_guest():
+    """A node's routes are the worker protocol and a guest's are the sign-in
+    pages. Neither is a person with a workspace, and a half must not be able
+    to widen either by declaring a route."""
+    node = Identity("rig02", "node")
+    guest = Identity("anon", "guest")
+    for identity in (node, guest):
+        assert not allowed(identity, "GET", "/api/v1/workspaces", extra=WORKSPACES)
+
+
+def test_an_admin_reaches_a_declared_route_as_it_reaches_everything():
+    assert allowed(Identity("sparck", "admin"), "GET", "/api/v1/workspaces", extra=WORKSPACES)
+
+
+def test_a_route_declared_for_an_admin_is_not_reachable_by_an_account():
+    admin_only = (_declared("GET", r"/api/v1/workspaces/all", "admin"),)
+    assert not allowed(Identity("ada", "user", kind="account"), "GET", "/api/v1/workspaces/all",
+                       extra=admin_only)
+    assert allowed(Identity("sparck", "admin"), "GET", "/api/v1/workspaces/all", extra=admin_only)
+
+
+def test_half_route_hands_back_the_route_so_the_handler_knows_what_to_call():
+    found = half_route(WORKSPACES, "POST", "/api/v1/workspaces")
+    assert found is not None and found.answers == "whatever"
+    assert half_route(WORKSPACES, "POST", "/api/v1/nothing") is None
+    assert half_route((), "GET", "/api/v1/workspaces") is None
+    assert half_route(None, "GET", "/api/v1/workspaces") is None, "a half that declares none"

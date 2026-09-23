@@ -1,0 +1,9 @@
+[console_scripts]
+alteriom-hil-admin = alteriom_hil.admin_cli:main
+alteriom-hil-agent = alteriom_hil.farm_node:main
+alteriom-hil-flash = alteriom_hil.flash_artifacts:main
+alteriom-hil-health = alteriom_hil.health_check:main
+alteriom-hil-service = alteriom_hil.launcher:main
+
+[pytest11]
+alteriom_hil = alteriom_hil.pytest_plugin

@@ -647,7 +647,22 @@ def account_route(method: str, path: str) -> bool:
     return any(verb == method and pattern.fullmatch(path) for verb, pattern in ACCOUNT_ROUTES)
 
 
-def allowed(identity: Identity, method: str, path: str) -> bool:
+def half_route(extra, method: str, path: str):
+    """The route a half declared for this, or None.
+
+    `extra` is what `BaseManager.api_routes()` gave the handler: a half's
+    own routes, each carrying the audience it is for. They are checked here
+    rather than added to `ACCOUNT_ROUTES` because a half is a distribution
+    of its own and this file is not one of them -- but the declaration is
+    just as deliberate, and it sits beside the method that answers.
+    """
+    for route in extra or ():
+        if route.method == method and route.pattern.fullmatch(path):
+            return route
+    return None
+
+
+def allowed(identity: Identity, method: str, path: str, extra=()) -> bool:
     if identity.role == "node":
         return _node_route(method, path)
     if identity.role == "guest":
@@ -657,10 +672,13 @@ def allowed(identity: Identity, method: str, path: str) -> bool:
         return False
     if identity.is_admin:
         return True
+    declared = half_route(extra, method, path)
     # A person, not a key: their own workspace, and only where the farm knows
     # how to show them just that.
     if identity.is_account:
-        return account_route(method, path)
+        return account_route(method, path) or (declared is not None and declared.audience == "account")
+    if declared is not None:
+        return declared.audience in ("account", "user")
     return needed == "user"
 
 

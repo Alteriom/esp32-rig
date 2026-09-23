@@ -1,0 +1,12 @@
+alteriom-hil-core
+pyyaml>=6
+
+[dev]
+pytest>=7
+build>=1.0
+jsonschema>=4
+
+[hardware]
+pyserial>=3.5
+esptool>=4.7
+paho-mqtt>=2.0

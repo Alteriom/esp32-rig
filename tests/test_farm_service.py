@@ -2865,3 +2865,99 @@ def test_a_session_lookup_advances_last_seen_at_most_once_a_minute(tmp_path):
     for offset in (95, 120, 149):
         store.session_account(digest, (base + timedelta(seconds=offset)).isoformat())
     assert account_seen() == past and session_seen() == past
+
+
+def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
+    """`BaseManager.api_routes()`: what a half adds to the API.
+
+    A half is a distribution of its own now, and the service is the core's --
+    so a portal that had to edit the service to add a route would wait on a
+    release of the rig to ship it (docs/public-release-plan.md, step 16a).
+    It declares its routes instead, beside the methods that answer them.
+
+    The service has none of its own to declare: the base returns nothing, and
+    a farm with no half installed answers exactly what it always answered.
+    """
+    import re
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    manager = _store_manager(tmp_path)
+    assert farm_service.BaseManager.api_routes(manager) == (), "the base adds nothing"
+
+    asked = []
+
+    def workspaces(identity=None):
+        asked.append(("list", identity.name))
+        return {"workspaces": ["firmware"]}
+
+    def one(identity=None, name=None):
+        asked.append(("one", name))
+        if name == "gone":
+            raise LookupError("no such workspace")
+        return {"name": name}
+
+    def make(body, identity=None):
+        asked.append(("make", body.get("name")))
+        if not body.get("name"):
+            raise ValueError("a workspace needs a name")
+        return {"created": body["name"]}
+
+    manager.workspaces_list = workspaces
+    manager.workspaces_one = one
+    manager.workspaces_make = make
+    manager.api_routes = lambda: (
+        farm_service.ApiRoute("GET", re.compile(r"/api/v1/workspaces"), "account", "workspaces_list"),
+        farm_service.ApiRoute("GET", re.compile(r"/api/v1/workspaces/(?P<name>[a-z]+)"), "account", "workspaces_one"),
+        farm_service.ApiRoute("POST", re.compile(r"/api/v1/workspaces"), "account", "workspaces_make"),
+    )
+
+    token = "t" * 40
+    server = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, tmp_path))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+
+    def call(method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        headers = {"Authorization": f"Bearer {token}"}
+        if data:
+            headers["Content-Type"] = "application/json"
+        try:
+            with urlopen(Request(base + path, data=data, method=method, headers=headers), timeout=5) as answer:
+                return answer.status, json.loads(answer.read())
+        except HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    try:
+        assert call("GET", "/api/v1/workspaces") == (200, {"workspaces": ["firmware"]})
+        # A named group in the pattern is what the method is told.
+        assert call("GET", "/api/v1/workspaces/firmware") == (200, {"name": "firmware"})
+        # A write is given the body.
+        assert call("POST", "/api/v1/workspaces", {"name": "bootloader"}) == (200, {"created": "bootloader"})
+        # And what the method raises is the answer the caller gets, in the
+        # service's own terms rather than a traceback and a 500.
+        status, said = call("GET", "/api/v1/workspaces/gone")
+        assert status == 404 and said == {"error": "no such workspace"}
+        status, said = call("POST", "/api/v1/workspaces", {})
+        assert status == 400 and said == {"error": "a workspace needs a name"}
+        # A path no half declared is still not found.
+        assert call("GET", "/api/v1/nothing")[0] == 404
+        assert [kind for kind, _ in asked] == ["list", "one", "make", "one", "make"]
+
+        # The service's own routes still win: a half cannot shadow one by
+        # declaring the same path, because its routes are consulted after.
+        manager.api_routes = lambda: (
+            farm_service.ApiRoute("GET", re.compile(r"/api/v1/status"), "account", "workspaces_list"),
+        )
+        shadowing = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, tmp_path))
+        threading.Thread(target=shadowing.serve_forever, daemon=True).start()
+        try:
+            with urlopen(Request(f"http://127.0.0.1:{shadowing.server_address[1]}/api/v1/status",
+                                 headers={"Authorization": f"Bearer {token}"}), timeout=5) as answer:
+                assert "workspaces" not in json.loads(answer.read()), "the service answered its own route"
+        finally:
+            shadowing.shutdown()
+    finally:
+        server.shutdown()

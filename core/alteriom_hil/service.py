@@ -53,7 +53,10 @@ from alteriom_hil.api_keys import NAME_PATTERN as KEY_NAME_PATTERN
 from alteriom_hil.api_keys import FARM_KEY_NAME, KeyReadError, namespace_lock
 from html import escape as html_escape
 from alteriom_hil.api_keys import Identity, KeyStore, allowed, keys_path_for, public_route, required_role
+from typing import NamedTuple
+
 from alteriom_hil.api_keys import allowed as role_allows
+from alteriom_hil.api_keys import half_route
 from alteriom_hil import backup as farm_backup
 from alteriom_hil import notify as notify_module
 from alteriom_hil.notify import Notification, Notifier
@@ -1339,6 +1342,19 @@ class BaseManager:
         if spec.exclusive:
             return allocation.Demand(**{**common, "concurrent": False}, whole_rig=True)
         return allocation.Demand(**common, needs=tuple(spec.needs))
+
+    def api_routes(self) -> tuple:
+        """What this half adds to the API, beyond the service's own routes.
+
+        A tuple of `ApiRoute`. The base has none: a service with no half
+        installed answers exactly what it has always answered.
+
+        It exists because a half is a distribution of its own now, and this
+        file is the core's: a portal that had to edit the service to add a
+        route would wait on a release of the rig to ship it
+        (docs/public-release-plan.md, step 16a).
+        """
+        return ()
 
     def _dispatch(self) -> list[str]:
         """Start every queued job the rig can take now; the ids started."""
@@ -4374,6 +4390,26 @@ def _with_active(recent: list[dict], active: list[dict]) -> list[dict]:
     return recent + [job for job in active if job["id"] not in seen]
 
 
+class ApiRoute(NamedTuple):
+    """A route a half adds to the API, and who it is for.
+
+    `pattern` is matched against the whole path; any named groups in it are
+    passed to `answers`, which is the name of a method on the manager.
+    `audience` is `account` for a signed-in person, `admin` for the farm's
+    own people -- and it is the whole permission: a route declared for an
+    account is reachable by one, and `ACCOUNT_ROUTES` is not consulted.
+
+    A write is given the request body as its first argument; a read is not
+    given one. Either way the identity comes last, named, so a method can
+    scope its answer to whoever asked.
+    """
+
+    method: str
+    pattern: object
+    audience: str
+    answers: str
+
+
 def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
     # A bare token is the farm's own key and no other: what an older caller,
     # and most tests, pass.
@@ -4396,6 +4432,12 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
     # Bounded (AddressThrottle): a refused caller cannot grow them.
     signin_requests = AddressThrottle()
     signin_starts = AddressThrottle()
+
+    # What this farm's halves add to the API, asked for once. The service
+    # knows its own routes and nothing about a half's: a half is a
+    # distribution of its own now, and one that had to edit this file to
+    # add a route would wait on a release of this one to ship it.
+    extra_routes = tuple(manager.api_routes())
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
@@ -4658,13 +4700,39 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 return
             self._pending_audit = (identity, method, path)
             try:
-                if role_allows(identity, method, path):
+                if role_allows(identity, method, path, extra=extra_routes):
                     handler(path, identity)
                 else:
                     self._forbidden(identity, method, path)
             finally:
                 # A handler that raised before answering is still recorded.
                 self._record_audit(500)
+
+        def _half_answer(self, method: str, path: str, identity, body=None):
+            """A route a half declared, answered by the method it named.
+
+            Returns True when it answered. Consulted after the service's own
+            routes, so a half cannot shadow one of them by accident.
+            """
+            route = half_route(extra_routes, method, path)
+            if route is None:
+                return False
+            answer = getattr(manager, route.answers)
+            fields = (route.pattern.fullmatch(path) or {}).groupdict()
+            try:
+                result = answer(body, identity=identity, **fields) if body is not None \
+                    else answer(identity=identity, **fields)
+            except ElsewhereError as exc:
+                self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+            except PermissionError as exc:
+                self._json(HTTPStatus.FORBIDDEN, {"error": str(exc)})
+            except LookupError as exc:
+                self._json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+            except (ValueError, json.JSONDecodeError) as exc:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            else:
+                self._json(HTTPStatus.OK, result)
+            return True
 
         def _json(self, status: int, payload: object):
             body = json.dumps(payload, sort_keys=True).encode()
@@ -4780,7 +4848,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 identity = self._identity()
                 if identity is None:
                     return self._json(HTTPStatus.UNAUTHORIZED, {"error": "bearer token required"})
-                if not role_allows(identity, "GET", path):
+                if not role_allows(identity, "GET", path, extra=extra_routes):
                     return self._forbidden(identity, "GET", path)
             if path == "/api/v1/sessions":
                 # Where this account is signed in. A key has no session and no
@@ -5215,6 +5283,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     # The board did not answer. Transient by nature — a reset,
                     # a busy port, a cable — so say retryable, not broken.
                     return self._json(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(exc)})
+            if path.startswith("/api/") and self._half_answer("GET", path, identity):
+                return
             return super().do_GET()
 
         def do_POST(self):
@@ -5753,6 +5823,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 )})
             if path == "/api/v1/inventory/refresh" and manager.__dict__.get("mode") == "portal":
                 return self._json(HTTPStatus.ACCEPTED, manager.request_rediscovery())
+            if self._half_answer("POST", path, identity, body=self._request_json_limit(64 * 1024) or {}):
+                return
             kinds = {"/api/v1/inventory/refresh": "inventory", "/api/v1/suites": "suite"}
             if path not in kinds:
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
