@@ -87,3 +87,55 @@ def test_a_release_is_built_whole_and_the_tree_is_left_as_it_was(tmp_path):
     sums = (out / "SHA256SUMS").read_text(encoding="utf-8")
     for entry in [*release["packages"], release["dashboard"]]:
         assert entry["sha256"] in sums and entry["name"] in sums
+
+
+RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+
+
+@pytest.mark.skipif(not _bash(), reason="the release is built with bash")
+def test_a_tag_attaches_everything_the_build_makes(tmp_path):
+    """The workflow lists what it uploads, and the build decides what exists.
+
+    Those are two lists, so they can disagree -- and the way they disagree is
+    a release missing a file nobody notices until somebody installs it. So:
+    build one, and every file in it must match something the workflow
+    attaches (docs/public-release-plan.md, step 13).
+    """
+    pytest.importorskip("build")
+    import fnmatch
+
+    workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    attach = workflow.split("gh release create", 1)[1]
+    globs = [word for word in attach.split() if word.startswith("dist/")]
+    assert globs, "the workflow attaches nothing"
+
+    out = tmp_path / "dist"
+    done = subprocess.run([_bash(), str(SCRIPT), "--out", str(out)],
+                          capture_output=True, text=True, cwd=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    built = sorted(path.name for path in out.iterdir())
+    unattached = [name for name in built
+                  if not any(fnmatch.fnmatch(f"dist/{name}", pattern) for pattern in globs)]
+    assert not unattached, (
+        f"the build makes {unattached}, which the release does not attach. "
+        f"It attaches {globs}."
+    )
+    # And the other way: a pattern that matches nothing is a file that was
+    # renamed and a line nobody updated.
+    empty = [pattern for pattern in globs
+             if not any(fnmatch.fnmatch(f"dist/{name}", pattern) for name in built)]
+    assert not empty, f"the release attaches {empty}, which the build does not make"
+
+
+def test_the_release_notes_do_not_promise_pypi():
+    """The wheels are on the GitHub release and not on PyPI (2026-09-23), and
+    the notes are where somebody reads how to install one. `pip install
+    alteriom-hil` would send them to an index that has never heard of it."""
+    workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    notes = workflow.split("> notes.md", 1)[0].split("### Install", 1)[1]
+    assert "releases/download" in workflow, "the notes point at the release's own files"
+    assert "$base/alteriom_hil_core-" in notes and "$base/alteriom_hil-" in notes
+    assert "pip install alteriom-hil" not in notes, "that index has never heard of it"
+    readme = (ROOT / "docs" / "public" / "README.md").read_text(encoding="utf-8")
+    assert "Not PyPI yet" in readme
+    assert "pip install alteriom-hil" not in readme, "the README makes the same promise or none"

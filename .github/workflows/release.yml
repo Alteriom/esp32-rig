@@ -1,0 +1,131 @@
+name: Release
+
+# A tag becomes a release people can install: the two wheels, the dashboard
+# bundle, their checksums and the release.json that names them, attached to a
+# GitHub release (docs/public-release-plan.md, step 13).
+#
+# The channel is the GitHub release, and only that. PyPI comes later and is a
+# second publish of the same files, not a second way of building them: what is
+# attached here is exactly what runner/ci/build-release.sh made, digests and
+# all, so whatever carries it next carries the same bytes.
+#
+#   git tag v1.0.374 && git push origin v1.0.374
+#
+# Or run it by hand against a ref to see what a release of it would be, which
+# attaches nothing.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit to build a release of (attached only for a tag)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and attach the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # The version is the commit count; a shallow clone counts to one.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install --quiet build
+
+      - name: Build the release
+        id: build
+        run: |
+          set -euo pipefail
+          runner/ci/build-release.sh --out dist
+          echo "version=$(runner/ci/build-release.sh --version-only)" >> "$GITHUB_OUTPUT"
+
+      # What a tag claims and what the tree says must be the same number, or
+      # somebody downloads v1.0.9 and installs 1.0.374.
+      - name: The tag is the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tagged="${GITHUB_REF_NAME#v}"
+          built="${{ steps.build.outputs.version }}"
+          if [ "$tagged" != "$built" ]; then
+            echo "::error::the tag says $tagged and the tree builds $built."
+            echo "::error::VERSION is MAJOR.MINOR and PATCH is the commit count: tag what the tree says."
+            exit 1
+          fi
+
+      # Installed from the files alone, with no checkout on the path: what
+      # somebody who downloads this release gets, before it is offered to them.
+      - name: Install the release and start what it brings
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/release-venv
+          /tmp/release-venv/bin/pip install --quiet dist/alteriom_hil_core-*.whl dist/alteriom_hil-*.whl
+          cd /tmp
+          /tmp/release-venv/bin/alteriom-hil-service --help > /dev/null
+          /tmp/release-venv/bin/alteriom-hil-admin --help > /dev/null
+          /tmp/release-venv/bin/alteriom-hil-health --help > /dev/null
+
+      - name: Say what is in it
+        run: |
+          {
+            echo "## Release ${{ steps.build.outputs.version }}"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.build.outputs.version }}
+          path: dist/
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The notes say how to install it, because the answer is not
+          # `pip install alteriom-hil` yet -- the wheels are here and not on
+          # PyPI, and pip takes both on one command line, which is what
+          # satisfies the rig's dependency on the core without an index.
+          version="${{ steps.build.outputs.version }}"
+          base="${{ github.server_url }}/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}"
+          {
+            echo "### Install"
+            echo
+            echo '```bash'
+            echo "pip install \\"
+            echo "  $base/alteriom_hil_core-$version-py3-none-any.whl \\"
+            echo "  $base/alteriom_hil-$version-py3-none-any.whl"
+            echo '```'
+            echo
+            echo "Both on one command line: that is what satisfies \`alteriom-hil\`'s"
+            echo "dependency on \`alteriom-hil-core\` without an index. An existing rig"
+            echo "upgrades with \`alteriom-hil-admin upgrade --from <directory>\`, which"
+            echo "checks every file against \`release.json\` before installing anything."
+            echo
+            echo "### Checksums"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS
+            echo '```'
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$version" \
+            --notes-file notes.md \
+            dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/release.json

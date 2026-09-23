@@ -56,15 +56,33 @@ Then open the dashboard, register your boards, and run the health check.
 
 ## Installing it as packages
 
+A release is two wheels, the dashboard bundle and a `release.json` naming each
+with its digest, attached to a [GitHub release][releases]. Not PyPI yet.
+
 ```bash
-pip install alteriom-hil        # the rig: drivers, agent, service, CLIs
-pip install alteriom-hil-core   # what a portal holds (a dependency of the above)
+base=https://github.com/Alteriom/esp32-rig/releases/download/v1.0.0
+pip install   $base/alteriom_hil_core-1.0.0-py3-none-any.whl   $base/alteriom_hil-1.0.0-py3-none-any.whl
 ```
+
+Both on one command line: that is what satisfies `alteriom-hil`'s dependency on
+`alteriom-hil-core` without a package index.
 
 The commands it brings: `alteriom-hil-service` (the farm), `alteriom-hil-admin`
 (configuration, keys, boards, providers), `alteriom-hil-health` (is this host
 fit), `alteriom-hil-agent` (a rig that works for a portal), `alteriom-hil-flash`
 (flash an artifact by its manifest).
+
+A rig that already has them upgrades with the release rather than by hand:
+
+```bash
+alteriom-hil-admin upgrade --from ./dist          # a release you downloaded
+alteriom-hil-admin upgrade                        # or the one your portal names
+```
+
+which checks every file against `release.json` and installs nothing if one
+disagrees.
+
+[releases]: https://github.com/Alteriom/esp32-rig/releases
 
 ## Writing a suite
 
