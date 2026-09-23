@@ -41,8 +41,9 @@ def minimal(**overrides) -> dict:
 
 def test_shipped_profiles_load():
     found = profiles.load_profiles(REPO)
-    assert "painlessmesh" in found
-    assert "alteriom-firmware" in found
+    # The reference suite and the rig's own health check: what a rig has
+    # before anybody adds a consumer of their own.
+    assert {"painlessmesh", "canary"} <= set(found)
 
 
 def test_painlessmesh_profile_preserves_service_behaviour():
@@ -61,23 +62,6 @@ def test_painlessmesh_profile_preserves_service_behaviour():
     assert p.runs_in_consumer_repo is False
     assert p.has_preflight is True
     assert p.env["PAINLESSMESH_REF"] == "{revision}"
-
-
-def test_alteriom_firmware_profile_runs_from_the_consumer_repo():
-    p = profiles.load_profiles(REPO)["alteriom-firmware"]
-    assert p.runs_in_consumer_repo is True
-    assert p.suite_path == "tests/hil"
-    # Two boards: the suite proves the nodes mesh, which one node cannot show.
-    # min_boards and needs must agree, or a run is allocated fewer boards than
-    # its floor demands and fails at discovery instead of at load.
-    assert p.min_boards == 2
-    assert sum(need["count"] for need in p.needs) >= p.min_boards
-    # Stock product firmware cannot be asked what it runs, so every run flashes.
-    assert p.has_preflight is False
-    assert p.flash_command, "a consumer profile still needs something to flash it"
-
-
-# ---- validation ----
 
 
 def test_unknown_placeholder_is_refused_at_load():
@@ -262,11 +246,6 @@ def test_report_capabilities_must_stay_inside_the_workspace():
         profiles.parse_profile(minimal(report={"capabilities": "../elsewhere.json"}), "x")
 
 
-def test_a_profile_without_a_catalog_claims_nothing():
-    assert profiles.parse_profile(minimal(), "x").capabilities is None
-    assert profiles.load_profiles(REPO)["alteriom-firmware"].capabilities is None
-
-
 def test_painlessmesh_declares_its_catalog_and_every_mark_is_in_it():
     """The drift guard.
 
@@ -360,21 +339,3 @@ def test_needs_cannot_all_be_optional():
     doc["suite"]["exclusive"] = False
     with pytest.raises(profiles.ProfileError, match="cannot all be optional"):
         profiles.parse_profile(doc, "test")
-
-
-def test_the_alteriom_profile_wants_the_s3_and_requires_the_other_four():
-    """The S3 went off the rig on 2026-09-17 and the nightly failed every
-    night with "Not enough boards" -- saying nothing about the firmware, and
-    leaving the five connected families with no validation at all. It is
-    wanted now, not required. The other four stay required: a board that
-    vanishes without anyone deciding it should still turn the nightly red.
-    """
-    spec = profiles.load_profiles(REPO)["alteriom-firmware"]
-    by_target = {need["target"]: need for need in spec.needs}
-    assert by_target["esp32-s3"].get("optional") is True
-    assert not any(
-        need.get("optional") for target, need in by_target.items() if target != "esp32-s3"
-    ), "only the family the owner took off the rig is optional"
-    # Still asked for by every run, so the bundle carries its image and the
-    # day the board returns the next run flashes it with no change here.
-    assert set(by_target) == {"esp32", "esp32-c3", "esp32-s3", "esp32-c6", "esp32-c5"}

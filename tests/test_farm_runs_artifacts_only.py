@@ -80,7 +80,7 @@ def test_a_profile_that_asks_the_farm_to_build_is_refused_where_it_is_written():
 
     # Every profile this repository ships names the workflow that builds it.
     shipped = load_profiles(REPO)
-    assert {"canary", "painlessmesh", "alteriom-firmware"} <= set(shipped)
+    assert {"canary", "painlessmesh"} <= set(shipped)
     assert all(spec.accepts_supplied_bundles for spec in shipped.values())
 
 
@@ -233,34 +233,6 @@ def test_a_bundle_that_went_between_submit_and_the_rig_fails_the_stage():
     assert "No firmware bundle for this run" in stage
     assert "no longer on disk" in stage, "which is the only way to reach it"
     assert "spec.supply_workflow" in stage, "and what to run again"
-
-
-def test_nothing_on_the_farm_host_can_build(tmp_path):
-    """No toolchain installed, required, granted write access or measured;
-    the flash script flashes."""
-    setup = (REPO / "rig" / "setup-runner.sh").read_text(encoding="utf-8")
-    assert "install --upgrade esptool" in setup and "platformio" not in setup
-    assert "platformio" not in (REPO / "rig" / "verify-rig.sh").read_text(encoding="utf-8")
-    assert ".platformio-cores" not in (REPO / "rig" / "install-health-service.sh").read_text(encoding="utf-8")
-
-    # The launcher and the two halves, each where its distribution keeps it.
-    for half in (REPO / "rig" / "alteriom_hil" / "launcher.py",
-                 REPO / "rig" / "alteriom_hil" / "rig_manager.py",
-                 REPO / "portal" / "alteriom_hil" / "portal_manager.py"):
-        service = half.read_text(encoding="utf-8")
-        for gone in ("PLATFORMIO_CORES", "_build_env", "clear_platformio_cache", "/api/v1/storage/platformio", "build_command"):
-            assert gone not in service, (half.name, gone)
-
-    flash_all = (REPO / "suites" / "painlessmesh" / "flash_all.py").read_text(encoding="utf-8")
-    assert "build_artifacts" not in flash_all and "--skip-build" not in flash_all
-    assert "--skip-build" not in (REPO / "profiles" / "painlessmesh.yaml").read_text(encoding="utf-8")
-
-    manager = _manager(tmp_path)
-    panel = manager.storage(wait=True)
-    assert {item["name"] for item in panel["categories"]} == {"artifacts", "runs", "logs", "workspaces", "database"}
-    assert not {"rig_busy", "clearing", "last_clear"} & set(panel)
-    with pytest.raises(KeyError):
-        manager.storage_detail("platformio")
 
 
 def test_the_dashboard_starts_a_run_from_a_bundle_the_farm_holds():

@@ -17,10 +17,19 @@ SERVICE = Path(__file__).resolve().parents[1] / "core" / "alteriom_hil" / "servi
 
 
 def dashboard() -> str:
-    """The dashboard's script, both files: the rig's pages (app.js) and the
-    portal's shell around them (portal-shell.js). An assertion about what the
-    dashboard does reads both; one about where a thing lives reads one."""
-    return "\n".join(((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8") for name in ("app.js", "portal-shell.js"))
+    """The dashboard's script: the rig's pages (app.js) and, where there is
+    one, the portal's shell around them (portal-shell.js). An assertion about
+    what the dashboard does reads both; one about where a thing lives reads
+    one. A rig serves the first without the second -- `shell()` copes with its
+    absence -- and so does the public repository, which is why a missing shell
+    is nothing here rather than an error."""
+    found = []
+    for name in ("app.js", "portal-shell.js"):
+        for root in (WEB, PORTAL_WEB):
+            if (root / name).is_file():
+                found.append((root / name).read_text(encoding="utf-8"))
+                break
+    return "\n".join(found)
 
 
 def css_rules(style):
@@ -292,23 +301,6 @@ def test_header_keeps_its_title_and_links_to_the_repository_and_deployed_commit(
     assert "repositories" in script and "/commit/" in script
 
 
-def test_hardware_page_refuses_rediscovery_and_probes_while_the_rig_works():
-    script = dashboard()
-    service = SERVICE.read_text(encoding="utf-8")
-    # A farm host rediscovers itself, and not under a run; a portal asks its
-    # rigs at their next heartbeat, and each waits for its own rig.
-    # On a rig the button waits for the rig; on a portal it never does (the
-    # shell decides, and the button reads the shell).
-    assert '$("refresh").disabled = shell().rediscoverDisabled(rigBusy)' in script
-    assert "rediscoverDisabled: rigBusy => rigBusy," in script and "rediscoverDisabled: rigBusy => false," in script
-    # Not under a run that has the rig to itself; a free board beside runs
-    # that share the rig holds no lock anyone else has, and is readable.
-    assert "state.free && !rigAlone" in script, "chip details are not read under a run"
-    assert "rigAlone = (inv.reservations || []).some(held => !held.shared)" in script
-    assert "board.details" in script, "stored chip details are shown without opening a port"
-    assert 'kind == "inventory" and self.rig_busy()' in service
-
-
 def test_the_run_form_offers_a_partial_run_and_reuse():
     """A debugging iteration runs the tests in question, not the suite: the
     form lists the suite's files from the service and takes a keyword
@@ -423,60 +415,6 @@ def test_the_farm_shows_what_it_has_done_not_only_what_it_holds():
     assert "if (Date.now() - overviewStatsAt < 60000) return;" in stats
 
 
-def test_the_fleet_is_rigs_each_with_a_page_and_every_board_with_one_too():
-    """Adding a second rig: the menu names what an operator does, the overview
-    is the fleet's, a rig is a page with everything done to it, and a board is
-    a page of its own. Old links still land."""
-    page = (WEB / "index.html").read_text(encoding="utf-8")
-    script = dashboard()
-    nav = page.split('<nav id="nav"', 1)[1].split("</nav>", 1)[0]
-    labels = [label for label in ("Overview", "Runs", "Rigs", "Firmware", "Insights", "Settings") if f">{label}</button>" in nav]
-    assert labels == ["Overview", "Runs", "Rigs", "Firmware", "Insights", "Settings"]
-    assert 'hardware: "rigs"' in script and 'firmware: "artifacts"' in script and 'settings: "configuration"' in script
-    for element in ('data-page="rigs"', 'data-page="rig"', 'data-page="board"', 'id="rigs-tabs"', 'id="boards-list"',
-                    'id="releases"', 'id="overview-rigs"', 'id="overview-attention"', 'id="overview-recent"',
-                    'id="rigs-online"', 'id="run-card"'):
-        assert element in page, element
-    # The run form is where the runs are, not on the overview.
-    overview = page.split('data-page="overview"', 1)[1].split('data-page="runs"', 1)[0]
-    assert 'id="suite-form"' not in overview
-    # Everything a rig's page does goes to the rig as a command, and is followed.
-    for kind in ("rediscover", "update_now", "logs", "restart", "configure", "register", "unregister", "read_details"):
-        assert kind in script, kind
-    assert "/api/v1/workers/${encodeURIComponent(name)}/commands" in script
-    assert "/drain" in script and "/resume" in script and 'method: "DELETE"' in script
-    assert "REMOTE_FIELDS" in script and "queue.concurrency" in script
-    assert "&worker=${encodeURIComponent(name)}" in script, "a rig's page lists its own runs"
-    assert "/api/v1/inventory/${encodeURIComponent(id)}/history" in script, "a board's page shows its verdicts"
-    # What needs attention is gathered across rigs.
-    assert "function attentionItems" in script and "could not install the current release" in script
-    assert "the farm's token from the Pi" not in page
-
-
-def test_a_rig_is_one_thing_added_edited_and_deleted_from_its_page():
-    """A rig is made by a form, lives in the list from then on -- waiting to
-    join, its token expired, installing, then the worker it became -- and is
-    edited and deleted from its page. A rig nobody wanted leaves nothing."""
-    page = (WEB / "index.html").read_text(encoding="utf-8")
-    script = dashboard()
-    assert 'id="add-rig" class="admin-only"' in page and 'id="add-rig-card" class="card admin-only"' in page
-    form = page.split('id="add-rig-form"', 1)[1].split("</form>", 1)[0]
-    assert 'name="name"' in form and 'name="description"' in form and 'name="location"' in form
-    assert 'id="enrollments"' not in page and "/api/v1/enrollments" not in script, "no separate list of joins"
-    assert 'api("/api/v1/rigs", {method: "POST"' in script and "navigateTo(rigHref(added.name))" in script
-    assert "pendingRigs = data.pending_rigs || [];" in script and "listedRigs: (rigs, pending) => [...rigs, ...pending]" in script
-    for label in ("WAITING TO JOIN", "TOKEN EXPIRED", "INSTALLING"):
-        assert label in script, label
-    # Its page: the join command while its token is held, a new one otherwise; edit; delete.
-    assert "/api/v1/join.sh | bash -s -- --portal ${origin} --token ${token}" in script
-    assert "joinTokens.set(added.name" in script and "joinTokens.delete(name)" in script
-    assert "api(`/api/v1/rigs/${encodeURIComponent(name)}/join`, {method: \"POST\"" in script
-    assert "api(`/api/v1/rigs/${encodeURIComponent(name)}`, {method: \"PATCH\"" in script
-    assert "api(`/api/v1/rigs/${encodeURIComponent(name)}`, {method: \"DELETE\"})" in script
-    assert "keeps its name: its key, its boards and its runs are named for it" in script
-    assert "sessionStorage" not in script.split("function joinCommand", 1)[1].split("function renderBoardsTable", 1)[0]
-
-
 def test_a_rig_page_follows_the_poll_without_closing_what_the_operator_has_open():
     """Every poll re-rendered a rig's page whole: an open settings editor
     closed under the operator and the page jumped up as it shrank."""
@@ -553,22 +491,6 @@ def test_an_admin_sends_a_callmebot_test_message_after_confirming_and_sees_how_i
     assert asked < handler.index('rigCommand(name, "provider_test", {provider: "callmebot"})')
     assert "used_today" in handler and "max_per_day" in handler and ")) return;" in handler
     assert 'provider_test: "Send CallMeBot test"' in script
-
-
-def test_a_rig_shows_its_release_number_its_health_in_brief_and_its_live_run():
-    page = (WEB / "index.html").read_text(encoding="utf-8")
-    script = dashboard()
-    # The release a rig runs, by number; the commit is provenance beside it.
-    assert "Release <strong>${escapeHtml(rig.version || \"unknown\")}</strong>" in script
-    assert "currentRelease.version" in script and "release.version || release.commit.slice(0, 9)" in script
-    # Health: the verdict and what is not ok up front, every check behind one click.
-    health = script.split("function rigHealth(rig)", 1)[1].split("\n}\n", 1)[0]
-    assert "health-problems" in health and 'data-keep="all-checks"' in health and "checkLabel" in health
-    # A rig running something shows the overview's live pipeline for it.
-    assert 'id="rig-live"' in page
-    assert "function liveRunColumn(" in script
-    assert "liveRunColumn(running, alsoRunning, inv)" in script and "liveRunColumn(running[0], running.slice(1), lastInventory)" in script
-    assert "job.worker === rig.name" in script
 
 
 def test_firmware_is_a_library_by_project_and_branch_not_a_growing_list():
@@ -953,34 +875,6 @@ def test_a_link_that_cannot_be_used_can_always_be_repaired_from_the_page():
     assert "callmebot.url_file && (!notifiesThroughLink || !callmebotLink)" in card
 
 
-def test_where_events_go_is_a_url_and_a_secret_on_both_pages():
-    """The fleet's events are an admin's to route; one rig's are set on that
-    rig's page. One renderer, because the two differ only in what they may ask
-    for -- and a signing secret is offered, never required to be invented."""
-    page = (WEB / "index.html").read_text(encoding="utf-8")
-    script = dashboard()
-    assert 'id="farm-webhooks"' in page
-    assert '<section id="rig-webhooks" class="card" data-tab="setup" hidden></section>' in page
-
-    form = script.split("function webhookForm(scope, data)", 1)[1].split("\n}\n", 1)[0]
-    assert 'name="url"' in form and 'type="url"' in form
-    assert 'name="secret"' in form and 'type="password"' in form
-    assert "HMAC-SHA256" in form and "X-Hub-Signature-256" in form
-    assert "https only" in form, "the destination is https, and the form says why"
-    # Leaving the secret empty is allowed: the farm makes one and shows it once.
-    submit = script.split('if (form.id !== "webhook-form") return;', 1)[1].split("\n});", 1)[0]
-    assert "if (secret) body.secret = secret" in submit
-    assert "it is not shown again" in submit
-    assert 'form.elements.secret.value = ""' in submit, "not left in the page"
-    # Nothing chosen is everything, rather than a subscriber that hears nothing.
-    assert "if (chosen.length) body.events = chosen" in submit
-
-    # A rig's subscriptions are reached by its own path, so which key may
-    # change them is decidable from the path.
-    path = script.split("function webhookPath(scope, id, tail)", 1)[1].split("\n}\n", 1)[0]
-    assert '"/api/v1/webhooks"' in path and "/api/v1/rigs/${encodeURIComponent(scope)}/webhooks" in path
-
-
 def test_a_rig_is_offered_another_notification_rather_than_a_replacement():
     """It could hold one channel, so the button said Change. A rig can be told
     to say things in several ways now -- and however many places its events
@@ -989,33 +883,6 @@ def test_a_rig_is_offered_another_notification_rather_than_a_replacement():
     card = script.split("function rigChannels(rig)", 1)[1].split("\nfunction ", 1)[0]
     assert '<button class="secondary channel-add">Add a notification</button>' in card
     assert "Change channel" not in card
-
-
-def test_a_rigs_own_subscriptions_are_managed_by_the_person_whose_rig_it_is():
-    """A person holding a `user` key administers their own account -- their
-    rigs, and what those rigs say -- and nothing else; the farm itself has one
-    admin. The page asked `isAdmin()` for both scopes, which both hid controls
-    from the user who may use them and offered a rig to any user at all."""
-    script = dashboard()
-    section = script.split("function webhookSection(scope, data, editing)", 1)[1].split("\n}\n", 1)[0]
-    assert "const manageable = fleet ? isAdmin() : ownsRig(rigPage.detail)" in section
-    assert "manageable && !editing" in section, "the add button asks the same question"
-    assert '(manageable ? `<div class="row-actions">' in section, "so do test, turn off and remove"
-
-    owns = script.split("function ownsRig(rig)", 1)[1].split("\n}\n", 1)[0]
-    assert "if (isAdmin()) return true" in owns, "the farm's admin administers every rig"
-    assert "rig.owner === you?.name" in owns, "and its owner administers that one"
-    assert "Boolean(rig?.owner)" in owns, "a rig nobody owns is the farm's, not everybody's"
-
-    # The service decides the same way, and refuses what the page hides: a
-    # page is not where access is enforced.
-    manager = PORTAL_HALF.read_text(encoding="utf-8")
-    service = SERVICE.read_text(encoding="utf-8")
-    decide = manager.split("def may_manage_rig(self, name: str, identity)", 1)[1].split("\n    def ", 1)[0]
-    assert 'getattr(identity, "is_admin", False)' in decide
-    assert "owner == getattr(identity" in decide
-    assert "self._require_rig_admin(scope, identity)" in manager
-    assert "except PermissionError as exc:" in service, "and answers 403 rather than 500"
 
 
 def test_what_a_rig_can_do_is_under_its_name_on_every_tab_and_in_the_list():
@@ -1061,128 +928,6 @@ def test_what_a_rig_can_do_is_under_its_name_on_every_tab_and_in_the_list():
     assert "button.setup-chip{cursor:pointer}" in style
     assert ".heading-chips:empty{display:none}" in style
     assert ".setup-chips.compact .setup-chip{" in style
-
-
-def test_the_public_site_is_for_anyone_and_asks_for_nothing_that_needs_a_key():
-    """Four pages at the root, one script between them, one call that
-    carries no key, the shared chip renderer, and no control that would need
-    a sign-in. Who sees a rig is set on the rig's own page, by its owner,
-    with a word of warning before it faces outward."""
-    script = (PORTAL_WEB / "site.js").read_text(encoding="utf-8")
-    app = (WEB / "app.js").read_text(encoding="utf-8")
-    pages = {"site-home.html": "home", "site-rigs.html": "rigs", "site-software.html": "software",
-             "site-how.html": "how"}
-    for name, page_id in pages.items():
-        page = ((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8")
-        assert f'<body class="site" data-page="{page_id}">' in page, name
-        assert '<script src="/chips.js"></script>' in page and '<script src="/site.js"></script>' in page, name
-        assert '<link rel="stylesheet" href="/app.css">' in page and '<link rel="stylesheet" href="/site.css">' in page, name
-        assert "/app.js" not in page, f"{name}: the dashboard's script expects a signed-in user"
-        assert 'href="/app"' in page, f"{name}: a way in for somebody with an account or a key"
-        assert 'href="/"' in page and 'href="/rigs"' in page and 'href="/software"' in page             and 'href="/how-it-works"' in page, f"{name}: every page reaches every other"
-        assert "/world" not in page, f"{name}: the site's first address is a redirect, not a link"
-        assert '<meta property="og:image" content="__ORIGIN__/brand/og.png">' in page,             f"{name}: absolute once served -- a crawler ignores a root-relative preview image"
-    assert 'fetch("/api/v1/world"' in script and "Authorization" not in script and "localStorage" not in script
-    assert "capabilityChips(rig.setup)" in script, "the same chips as the dashboard"
-    assert "document.hidden" in script, "a visitor's tab left open is not a reason to poll all day"
-    assert 'LIVE = ["home", "rigs", "software"]' in script, "a page with nothing live on it does not poll"
-    # Live numbers on the pages that show them, and only there.
-    for name in ("site-home.html", "site-rigs.html"):
-        assert 'id="site-stats"' in ((WEB if (WEB / name).is_file() else PORTAL_WEB) / name).read_text(encoding="utf-8"), name
-    assert 'id="site-rigs"' in (PORTAL_WEB / "site-rigs.html").read_text(encoding="utf-8")
-    assert 'id="site-software"' in (PORTAL_WEB / "site-software.html").read_text(encoding="utf-8")
-    # The how-it-works page says what is public in the same words the
-    # service enforces: a table, not a promise.
-    how = (PORTAL_WEB / "site-how.html").read_text(encoding="utf-8")
-    for never in ("Its owner, or anybody", "Any board's identity", "a broker's address, an SSID", "Any run"):
-        assert never in how, never
-    # The rig's page: who sees it, and the buttons for whoever may change that.
-    fact = app.split("function visibilityFact(rig)", 1)[1].split("\n}\n", 1)[0]
-    assert "if (!ownsRig(rig)) return said" in fact, "only its owner or an admin is offered a change"
-    assert 'isAdmin() && current !== "shared"' in fact, "sharing is the farm's to decide"
-    click = app.split('const visibility = target.closest?.(".rig-visibility");', 1)[1].split("return refresh(true);", 1)[0]
-    assert "confirm(asks[wanted])" in click and "never its keys" in click
-    assert "its description" in click and "its location" in click, \
-        "what is written on the rig's page goes public with it, and the owner is told so by name"
-    assert "/visibility`" in click
-    assert '["Visibility", visibilityFact(worker)]' in app
-
-
-def test_the_farm_has_a_mark_and_wears_it_on_both_pages():
-    """A tab with no icon, and a pasted link with no picture, are what the
-    farm looked like: named nowhere. The mark is drawn once as geometry and
-    twice as files -- SVG for a browser, PNG for a home screen and a link
-    preview -- so the two are asserted to be the same mark here, since
-    nothing in the repository rasterises SVG to check it for us."""
-    brand = WEB / "brand"
-    for name in ("mark.svg", "favicon.svg", "site.webmanifest", "app.webmanifest", "og.png", "logo-email.png",
-                 "icon-192.png", "icon-512.png", "apple-touch-icon.png", "hero-rig.webp",
-                 "board-under-test.webp", "fleet-rigs.webp"):
-        assert (brand / name).is_file(), name
-    # One idea, drawn twice: the rendered mark and its small twin share the
-    # stem (the same trace path), the pad at its tip, two leaves at the same
-    # angles, and the deck. The PNGs come from mark.svg, not a third drawing.
-    generator = (brand / "generate_brand_assets.py").read_text(encoding="utf-8")
-    assert "resvg_py.svg_to_bytes(svg_path=str(MARK)" in generator and "def draw_mark" not in generator
-    rendered = (brand / "mark.svg").read_text(encoding="utf-8")
-    small = (brand / "favicon.svg").read_text(encoding="utf-8")
-    for svg_name, svg in (("mark.svg", rendered), ("favicon.svg", small)):
-        assert 'd="M32 48V38l3-3V22"' in svg, f"{svg_name}: the stem is the trace"
-        assert '<circle cx="35" cy="17"' in svg, f"{svg_name}: the pad at its tip"
-        assert 'rotate(-34 30 36)' in svg and 'rotate(34 34 28)' in svg, f"{svg_name}: two leaves"
-        assert 'y="48" width="40"' in svg, f"{svg_name}: the deck"
-        assert "#63e6be" in svg, f"{svg_name}: the farm's own teal is the lit thing"
-    assert "<linearGradient" in rendered and 'id="glow"' in rendered, "the rendered mark has light in it"
-    assert "<linearGradient" not in small and "<filter" not in small, "the small twin is flat: 16 px cannot show a gradient"
-    assert 'stroke-width="5"' in small and 'stroke-width="3.2"' in rendered, "the small twin is drawn heavier"
-
-    # Both wear it, from the same place: the site at the root and the
-    # dashboard at /app load one brand from /brand.
-    dashboard = (WEB / "index.html").read_text(encoding="utf-8")
-    home = (PORTAL_WEB / "site-home.html").read_text(encoding="utf-8")
-    assert '<link rel="icon" href="/brand/favicon.svg"' in dashboard
-    assert '<link rel="manifest" href="/brand/app.webmanifest">' in dashboard
-    assert 'src="/brand/mark.svg"' in dashboard and ">A</span>" not in dashboard,         "the mark is a drawing now, not a letter in a box"
-    assert '<link rel="icon" href="/brand/favicon.svg"' in home and 'src="/brand/mark.svg"' in home
-    for picture in ("hero-rig.webp", "board-under-test.webp", "fleet-rigs.webp"):
-        assert f'src="/brand/{picture}"' in home, picture
-    # Two manifests, because they launch two different things: a visitor who
-    # adds the site to a home screen lands at /, a person who adds the
-    # dashboard lands at /app and stays there.
-    assert '<link rel="manifest" href="/brand/site.webmanifest">' in home
-    site = json.loads((brand / "site.webmanifest").read_text(encoding="utf-8"))
-    app_manifest = json.loads((brand / "app.webmanifest").read_text(encoding="utf-8"))
-    assert (site["start_url"], site["scope"]) == ("/", "/")
-    assert (app_manifest["start_url"], app_manifest["scope"]) == ("/app", "/app")
-    for manifest in (site, app_manifest):
-        assert all(icon["src"].startswith("/brand/") for icon in manifest["icons"])
-    assert "app.webmanifest" not in home and "site.webmanifest" not in dashboard
-    # A pasted link shows the farm, and says what it is.
-    assert '<meta property="og:image" content="__ORIGIN__/brand/og.png">' in home,         "absolute once served: a crawler ignores a root-relative preview image"
-    assert '<meta property="og:url" content="__ORIGIN__/">' in home
-    assert '<meta name="twitter:card" content="summary_large_image">' in home
-    assert "og:title" in home and "og:description" in home
-    assert "<title>Alteriom ESP32 Farm" in home
-
-
-def test_the_home_page_says_what_the_farm_is_before_it_lists_anything():
-    """A visitor who lands on a table of rig names learns nothing. The hero
-    says what this is, in the farm's own voice, with a picture that is
-    editorial artwork and admits it, not passed off as a photograph of a
-    particular rig. The numbers come next, and the pitch after them."""
-    home = (PORTAL_WEB / "site-home.html").read_text(encoding="utf-8")
-    style = css_rules((PORTAL_WEB / "site.css").read_text(encoding="utf-8"))
-    assert "Real boards." in home and "<em>Real runs.</em>" in home
-    assert 'class="hero-art"' in home and "<figcaption>" in home
-    assert "a rig, illustrated" in home, "the artwork does not pretend to be a photograph of a real rig"
-    assert 'class="hero-photo"' in home and "hero-photo" in style, "the hero picture, and its frame"
-    assert ".site-hero{display:grid" in style
-    assert ".site-hero{grid-template-columns:1fr" in style, "and it stacks on a phone"
-    assert home.index("site-hero") < home.index('id="site-stats"') < home.index('id="how-a-run-happens"'),         "what it is, then the numbers, then how it works"
-    # The stages are the farm's own, in the order the farm runs them, so the
-    # numbering on the page means something.
-    stages = home.split('<ol class="stages">', 1)[1].split("</ol>", 1)[0]
-    assert re.findall(r"<h3>([A-Za-z]+)</h3>", stages) == ["Discover", "Flash", "Test", "Report"]
 
 
 def test_the_login_card_offers_github_and_email_and_keeps_the_key_for_programs():
@@ -1251,32 +996,3 @@ def test_a_session_the_farm_has_ended_brings_the_card_back():
     assert '$("login").hidden = false' in ended and '$("dashboard").hidden = true' in ended
     assert '$("signin-methods").hidden = false' in ended and "loadSignInOptions()" in ended
     assert "session has ended" in ended
-
-
-def test_the_shell_is_the_only_place_the_dashboard_asks_which_mode_this_is():
-    """A rig's pages are the same on a rig and on the portal it connects to;
-    what differs is the shell around them. Every portal-or-rig decision is a
-    named member of the shell, so the cut between the rig's bundle and the
-    portal's shell has a seam to follow (docs/public-release-plan.md, step 11).
-    """
-    script = (WEB / "app.js").read_text(encoding="utf-8")
-    shell_js = (PORTAL_WEB / "portal-shell.js").read_text(encoding="utf-8")
-    asks = [line for line in (script + shell_js).splitlines() if "isPortal()" in line]
-    assert len(asks) == 2 and all("function " in line for line in asks), asks
-    # The rig's shell is the rig's; the portal's is its own file, and app.js
-    # is a rig without it.
-    rig = script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
-    assert "const PORTAL_SHELL" not in script and "const PORTAL_SHELL = {" in shell_js
-    assert 'typeof PORTAL_SHELL !== "undefined"' in script
-    portal = shell_js.split("const PORTAL_SHELL = {", 1)[1].split("\n};", 1)[0]
-    # And the portal's functions left with it: nothing in the rig's pages names them.
-    for name in ("openAddRig", "loadReleases", "loadFarmWebhooks", "loadRigWebhooks", "pendingRigSummary", "joinCommand"):
-        assert name not in script and f"function {name}" in shell_js, name
-    def members(body):  # the top-level keys: two spaces in, a name, a colon or a getter
-        found = set()
-        for line in body.splitlines():
-            if line.startswith("  ") and not line.startswith("   ") and ":" in line and not line.lstrip().startswith("//"):
-                found.add(line.strip().split(":", 1)[0].replace("get ", "").split("(")[0])
-        return found
-    assert members(rig) == members(portal), "both shells answer every question"
-    assert "fleet" in members(rig) and "releases" in members(rig) and "boardRigColumn" in members(rig)

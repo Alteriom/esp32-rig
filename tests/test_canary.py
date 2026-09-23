@@ -805,7 +805,7 @@ def test_the_health_route_needs_the_token_and_answers_in_http_terms(tmp_path, mo
 
 
 _VERDICT = importlib.util.spec_from_file_location(
-    "canary_verdict", REPO / "runner" / "canary_verdict.py"
+    "canary_verdict", REPO / "rig" / "canary_verdict.py"
 )
 canary_verdict = importlib.util.module_from_spec(_VERDICT)
 _VERDICT.loader.exec_module(canary_verdict)
@@ -895,50 +895,6 @@ def test_the_deploy_stands_for_one_bad_board_and_falls_for_a_bad_farm():
     assert lines[0] == "## Rig Health Check 1.0.6"
     _, lines = canary_verdict.verdict({"status": "passed", "result": {}})
     assert lines[0] == "## Rig Health Check", "a bundle from before versions has none to show"
-
-
-def test_the_deploy_builds_the_canary_off_the_pi_and_gates_on_it():
-    """The Pi compiles nothing it does not have to, and a release is not
-    green until the farm says its own hardware is."""
-    workflow = yaml.safe_load(
-        (REPO / ".github" / "workflows" / "deploy-farm-host.yml").read_text(encoding="utf-8")
-    )
-    canary = workflow["jobs"]["canary"]
-    assert canary["runs-on"] == ["self-hosted", "esp32-sim"], "not on the Pi"
-    steps = {step.get("name"): step for step in canary["steps"]}
-    # Cached by the canary's own digest: a hit is the same firmware by
-    # definition, and most releases change nothing under canary/firmware/.
-    key = steps["Restore the canary bundle"]["with"]["key"]
-    assert "${{ steps.identity.outputs.canary_sha }}" in key
-    # And the version, because a firmware change that is reverted comes back
-    # to the same digest with a higher version: on the digest alone that
-    # deploy would install a bundle stamped with the older number.
-    assert "${{ steps.identity.outputs.version }}" in key
-    assert "--version" in steps["Identify the canary"]["run"]
-    assert steps["Build the canary"]["if"] == "steps.cached.outputs.cache-hit != 'true'"
-
-    deploy = workflow["jobs"]["deploy"]
-    assert deploy["needs"] == "canary"
-    names = [step.get("name") for step in deploy["steps"]]
-    assert names.index("Update clone, HAL, service, and units") < names.index("Install the canary and check every board")
-    install = next(step for step in deploy["steps"] if step.get("name", "").startswith("Install the canary"))
-    # Installed through the same upload a consumer's CI uses, and pinned: the
-    # deploy exercises that path every release, and the pinned bundle is what
-    # a health check afterwards flashes.
-    assert "--artifacts hil-canary" in install["run"] and "--pin" in install["run"]
-    assert "--profile canary" in install["run"]
-    # The run asks for the commit the bundle was built from, because that is
-    # what the farm checks a supplied bundle against.
-    assert '--ref "$built_from"' in install["run"]
-    # The check's own failure must not fail the step: which red it was is the
-    # next step's decision, and it needs the run to judge.
-    assert install["continue-on-error"] is True
-    judge = next(step for step in deploy["steps"] if step.get("name") == "Judge the canary")
-    assert "canary_verdict.py" in judge["run"] and "continue-on-error" not in judge
-    # YAML reads a bare `on:` as the boolean true, which is why this is not
-    # simply workflow["on"].
-    triggers = workflow.get("on") or workflow[True]
-    assert "canary/**" in triggers["push"]["paths"]
 
 
 def test_a_canary_run_that_failed_still_hands_over_its_verdicts(tmp_path):

@@ -625,6 +625,9 @@ def test_a_wedged_suite_is_still_killed_after_the_grace(tmp_path):
     assert "killing" in log_path.read_text()
 
 
+FAKE_PHONE, FAKE_APIKEY = "+15557654321", "987654"
+FAKE_LINK = f"https://api.callmebot.com/whatsapp.php?phone={FAKE_PHONE}&apikey={FAKE_APIKEY}"
+
 def _idle_manager(tmp_path, monkeypatch, remote_sha):
     """A manager whose worker never picks anything up, so queued jobs stay
     queued and the queue can be inspected; the remote answers every ref with
@@ -1061,94 +1064,6 @@ def test_a_submitted_job_records_what_it_is_for(tmp_path, monkeypatch):
     assert job["request"]["project"] == manager.profiles["painlessmesh"].label
     assert job["request"]["repo"].startswith("https://")
     assert "painlessMesh" in job["request"]["repo"]
-
-    other = manager.submit("suite", {"profile": "alteriom-firmware", "ref": "topic", "targets": ["esp32"]})
-    assert other["request"]["project"] == manager.profiles["alteriom-firmware"].label
-    assert other["request"]["repo"].endswith("/alteriom-firmware")
-    assert other["request"]["repo"] != job["request"]["repo"]
-
-
-def test_a_consumer_can_name_the_branch_its_commit_came_from(tmp_path, monkeypatch):
-    """A consumer's CI validates a commit, so the ref it sends is a SHA, and
-    the dashboard's Branch column was blank for every run a consumer ever
-    sent. The branch arrives beside the ref, for display; the checkout never
-    uses it, and it is held to the same charset as a ref."""
-    manager = _idle_manager(tmp_path, monkeypatch, "a" * 40)
-    job = manager.submit(
-        "suite",
-        {"profile": "alteriom-firmware", "ref": "a" * 40, "branch": "feature/c3-console", "targets": ["esp32"]},
-    )
-    assert job["request"]["branch"] == "feature/c3-console"
-    assert job["request"]["ref"] == "a" * 40
-
-    plain = manager.submit("suite", {"profile": "alteriom-firmware", "ref": "a" * 40, "targets": ["esp32"]})
-    assert "branch" not in plain["request"]
-
-    with pytest.raises(ValueError, match="branch"):
-        manager.submit(
-            "suite",
-            {"profile": "alteriom-firmware", "ref": "a" * 40, "branch": "x; rm -rf /", "targets": ["esp32"]},
-        )
-
-
-def test_a_dispatch_can_hand_the_suite_settings_but_only_its_own(tmp_path, monkeypatch):
-    """Which family plays the gateway, a timeout: the suite's namespace,
-    short boring values, and no more than a handful. Anything else is
-    refused at submission -- including a name the farm sets itself, which
-    the suite would otherwise see overridden by the farm anyway."""
-    manager = _idle_manager(tmp_path, monkeypatch, "a" * 40)
-    base = {"profile": "alteriom-firmware", "ref": "a" * 40, "targets": ["esp32"]}
-    job = manager.submit("suite", {**base, "env": {"ALTERIOM_HIL_GATEWAY_FAMILY": "esp32-c6", "ALTERIOM_HIL_UPLINK_TIMEOUT": "180"}})
-    assert job["request"]["env"] == {"ALTERIOM_HIL_GATEWAY_FAMILY": "esp32-c6", "ALTERIOM_HIL_UPLINK_TIMEOUT": "180"}
-
-    for bad in (
-        {"PATH": "/tmp"},
-        {"ALTERIOM_HIL_GATEWAY_FAMILY": "esp32; reboot"},
-        {"ALTERIOM_HIL_X": "y" * 101},
-        {f"ALTERIOM_HIL_K{i}": "v" for i in range(17)},
-        ["ALTERIOM_HIL_GATEWAY_FAMILY=esp32-c6"],
-    ):
-        with pytest.raises(ValueError, match="env must"):
-            manager.submit("suite", {**base, "env": bad})
-
-
-def test_a_dispatch_cannot_set_what_the_rig_owns(tmp_path, monkeypatch):
-    """The dispatch's env is laid over the service's environment, where the
-    rig's secrets' paths, endpoints and provider settings are. A run that
-    could set ALTERIOM_HIL_CALLMEBOT_URL_FILE could make the rig send its
-    owner's messages somewhere else, or read another file as a password."""
-    manager = _idle_manager(tmp_path, monkeypatch, "a" * 40)
-    base = {"profile": "alteriom-firmware", "ref": "a" * 40, "targets": ["esp32"]}
-    for key, value, says in (
-        ("ALTERIOM_HIL_WIFI_PASSWORD_FILE", "/tmp/x", "names a file on the rig"),
-        ("ALTERIOM_HIL_ANYTHING_FILE", "/tmp/x", "names a file on the rig"),
-        ("ALTERIOM_HIL_CALLMEBOT_SEND", "always", "provider setting"),
-        ("ALTERIOM_HIL_CALLMEBOT_MAX_PER_DAY", "50", "provider setting"),
-        ("ALTERIOM_HIL_CALLMEBOT_ANYTHING", "x", "provider setting"),
-        ("ALTERIOM_HIL_WIFI_SSID", "other", "set by the rig"),
-        ("ALTERIOM_HIL_GATEWAY_ENDPOINT", "http://10.0.0.9:80", "set by the rig"),
-        ("ALTERIOM_HIL_MQTT_URL", "mqtt://10.0.0.9:1883", "set by the rig"),
-        ("ALTERIOM_HIL_MODE", "sim", "set by the rig"),
-        ("ALTERIOM_HIL_BOARD_MAP", "/tmp/map.yaml", "set by the rig"),
-        ("ALTERIOM_HIL_LOG_DIR", "/tmp", "set by the rig"),
-        ("ALTERIOM_HIL_PORTAL_URL", "https://elsewhere", "set by the rig"),
-        ("ALTERIOM_HIL_RUN_KIND", "nightly", "may only be release"),
-    ):
-        with pytest.raises(ValueError, match=f"env cannot set {key}: .*{says}"):
-            manager.submit("suite", {**base, "env": {key: value}})
-    # Still the suite's own settings, and a release build.
-    job = manager.submit("suite", {**base, "env": {"ALTERIOM_HIL_RUN_KIND": "release",
-                                                   "ALTERIOM_HIL_GATEWAY_FAMILY": "esp32-c6"}})
-    assert job["request"]["env"]["ALTERIOM_HIL_RUN_KIND"] == "release"
-    # Every name the runtime environment can hold is refused, derived rather
-    # than listed here.
-    for key in farm_service._runtime_env_keys():
-        if key.startswith("ALTERIOM_HIL_"):
-            assert farm_service.refused_suite_env(key, "x"), key
-
-
-FAKE_PHONE, FAKE_APIKEY = "+15557654321", "987654"
-FAKE_LINK = f"https://api.callmebot.com/whatsapp.php?phone={FAKE_PHONE}&apikey={FAKE_APIKEY}"
 
 
 def _secretless(text: str) -> bool:

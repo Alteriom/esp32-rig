@@ -141,7 +141,10 @@ def test_the_release_notes_do_not_promise_pypi():
     assert "releases/download" in workflow, "the notes point at the release's own files"
     assert "$base/alteriom_hil_core-" in notes and "$base/alteriom_hil-" in notes
     assert "pip install alteriom-hil" not in notes, "that index has never heard of it"
-    readme = (ROOT / "docs" / "public" / "README.md").read_text(encoding="utf-8")
+    # Written under docs/public/ here because this repository's root has a
+    # README of its own; the lift puts it at the root of the public one.
+    written = ROOT / "docs" / "public" / "README.md"
+    readme = (written if written.is_file() else ROOT / "README.md").read_text(encoding="utf-8")
     assert "Not PyPI yet" in readme
     assert "pip install alteriom-hil" not in readme, "the README makes the same promise or none"
 

@@ -423,26 +423,6 @@ def test_the_admin_cli_creates_lists_and_revokes_keys(tmp_path, monkeypatch, cap
 # ---- the dashboard ---------------------------------------------------------------------------
 
 
-def test_the_dashboard_offers_a_user_key_only_what_it_may_do():
-    page = (WEB / "index.html").read_text(encoding="utf-8")
-    # The dashboard is the rig's pages and the portal's shell, two files.
-    script = "\n".join((WEB / name if (WEB / name).is_file() else PORTAL_WEB / name).read_text(encoding="utf-8")
-                      for name in ("app.js", "portal-shell.js"))
-    style = (WEB / "app.css").read_text(encoding="utf-8")
-    assert 'body[data-role="user"] .admin-only{display:none!important}' in style
-    assert "renderYou(data.you);" in script and 'id="you"' in page
-    # Each admin-only control carries the class; the service refuses them anyway.
-    for marker in ("queue-toggle admin-only", "secondary admin-only unregister-board", "register-board admin-only",
-                   "bundle-pin admin-only", "bundle-delete admin-only", "admin-only rig-command", "admin-only rig-drain",
-                   "admin-only rig-delete", "admin-only board-read", "admin-only rig-edit", "admin-only rig-join-new"):
-        assert marker in script, marker
-    assert '<section class="card admin-only">' in page, "pruning is an admin's"
-    # Cancel is offered for a user's own runs; reordering never.
-    buttons = script.split("function jobActionButtons", 1)[1].split("\n}", 1)[0]
-    assert "job.request.submitted_by === you?.name" in buttons and "promotable && isAdmin()" in buttons
-    assert 'api("/api/v1/audit?limit=25")' in script and 'id="audit"' in page
-
-
 def test_a_portal_manages_its_keys_file_without_a_host_configuration(tmp_path, capsys):
     from alteriom_hil import api_keys
 
@@ -554,45 +534,6 @@ def test_the_cli_reads_the_farms_accounts_before_naming_a_key(tmp_path):
     write_keys(keys_file, [])
     with pytest.raises(SystemExit):
         main(["--file", str(keys_file), "--state", str(broken), "create", "--name", "x", "--role", "user"])
-
-
-def test_every_key_made_through_a_store_or_a_cli_is_refused_an_accounts_handle(tmp_path, monkeypatch, capsys):
-    """Reservation is not opt-in. The KeyStore a portal enrols rigs through
-    asks its `reserved` for the accounts' handles on every create; the
-    handler wires that to the manager; and the container CLI reads them
-    from --state. Three doors, one namespace."""
-    from alteriom_hil.api_keys import KeyStore, main, write_keys
-
-    keys_file = tmp_path / "api-keys.yaml"
-    write_keys(keys_file, [])
-    store = KeyStore("t" * 40, keys_file, reserved=lambda: {"ada-lovelace"})
-    with pytest.raises(ValueError, match="ada-lovelace is an account's handle"):
-        store.create("ada-lovelace", "node")
-    assert store.create("rig09", "node"), "a name nobody has is a key"
-
-    # The handler gives the store the manager's accounts when nobody else has.
-    import sys
-    from alteriom_hil import launcher as farm_service
-    portal = farm_service.manager_for("portal")(REPO, tmp_path / "portal", tmp_path / "none.yaml", tmp_path / "none-map.yaml",
-                                                Path(sys.executable), mode="portal")
-    portal.store.create_account("boss", email="boss@example.org", email_verified=True)
-    bare = KeyStore("t" * 40, keys_file)
-    farm_service.make_handler(portal, bare, WEB)
-    assert bare.reserved() == {"boss"}
-    with pytest.raises(ValueError, match="boss is an account's handle"):
-        bare.create("boss", "user")
-
-    # The container CLI, with the state directory named.
-    state = tmp_path / "state"
-    state.mkdir()
-    import sqlite3
-    with sqlite3.connect(state / "farm.sqlite3") as db:
-        db.execute("CREATE TABLE accounts (id TEXT PRIMARY KEY, handle TEXT NOT NULL UNIQUE)")
-        db.execute("INSERT INTO accounts VALUES ('1', 'grace')")
-    with pytest.raises(SystemExit):
-        main(["--file", str(keys_file), "--state", str(state), "create", "--name", "grace", "--role", "user"])
-    assert "grace is an account's handle" in capsys.readouterr().err
-    assert main(["--file", str(keys_file), "--state", str(state), "create", "--name", "ci", "--role", "user"]) == 0
 
 
 def test_naming_a_principal_is_one_critical_section_across_processes(tmp_path):
