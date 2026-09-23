@@ -72,6 +72,11 @@ const RIG_SHELL = {
   rigWebhooks: name => false,
   releases: false,
   settingsPortal: false,
+  // Settings tabs this shell adds to the three the dashboard has, and
+  // what fills each. A rig adds none: what a workspace is, and who owns
+  // which rig, is a portal's question.
+  settingsTabs: [],
+  settingsPanel: id => {},
   // What the portal's shell does on these pages; a rig has nothing to do.
   farmWebhooksLoad: () => {},
   rigWebhooksLoad: name => {},
@@ -4729,20 +4734,50 @@ async function loadConfig() {
   if (portal && config) renderPortalConfig(config);
 }
 
+// The three the dashboard has, plus whatever the shell adds -- Access
+// stays last, because it is the admin's and reads as the end of the list.
+function settingsTabs() {
+  return ["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"];
+}
+
+// The shell's tabs are put in the nav and given a panel to draw in, once,
+// rather than written into index.html: the markup is the rig's bundle and
+// what a portal adds is the portal's.
+function buildSettingsTabs() {
+  const nav = $("settings-tabs");
+  const access = nav?.querySelector('[data-tab="access"]');
+  if (!nav || !access) return;
+  for (const tab of shell().settingsTabs) {
+    if (nav.querySelector(`[data-tab="${tab.id}"]`)) continue;
+    const link = document.createElement("a");
+    link.href = `#configuration/${tab.id}`;
+    link.dataset.tab = tab.id;
+    link.textContent = tab.label;
+    nav.insertBefore(link, access);
+    const panel = document.createElement("div");
+    panel.id = `settings-${tab.id}`;
+    panel.hidden = true;
+    $("settings-access").parentNode.insertBefore(panel, $("settings-access"));
+  }
+}
+
 function showSettingsTab(tab, updateHash = true) {
-  settingsTab = ["general", "projects", "access"].includes(tab) ? tab : "general";
+  buildSettingsTabs();
+  settingsTab = settingsTabs().includes(tab) ? tab : "general";
   if (settingsTab === "general") { loadFarmNotify(); shell().farmWebhooksLoad(); }
-  $("settings-general").hidden = settingsTab !== "general";
-  $("settings-projects").hidden = settingsTab !== "projects";
-  $("settings-access").hidden = settingsTab !== "access";
+  for (const name of settingsTabs()) {
+    const panel = $(`settings-${name}`);
+    if (panel) panel.hidden = name !== settingsTab;
+  }
   document.querySelectorAll("#settings-tabs a").forEach(link => link.classList.toggle("active", link.dataset.tab === settingsTab));
   if (updateHash) {
     history.replaceState(null, "", settingsTab === "general" ? "#configuration" : `#configuration/${settingsTab}`);
     lastRouted = location.hash;
   }
   if (!token) return;
-  if (settingsTab !== "access") loadConfig();
+  if (settingsTab === "general" || settingsTab === "projects") loadConfig();
   if (settingsTab === "access" && isAdmin()) { loadAudit(); loadKeys(); }
+  shell().settingsPanel(settingsTab);
 }
 
 // What a portal is set to: where its settings come from, and the worker
