@@ -2961,14 +2961,13 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
         # The service's own routes still win: a half cannot shadow one by
         # declaring the same path, because its routes are consulted after.
         manager.api_routes = lambda: (
-            farm_service.ApiRoute("GET", re.compile(r"/api/v1/status"), "account", "workspaces_list"),
+            farm_service.ApiRoute("GET", re.compile(r"/healthz"), "account", "workspaces_list"),
         )
         shadowing = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, tmp_path))
         threading.Thread(target=shadowing.serve_forever, daemon=True).start()
         try:
-            with urlopen(Request(f"http://127.0.0.1:{shadowing.server_address[1]}/api/v1/status",
-                                 headers={"Authorization": f"Bearer {token}"}), timeout=5) as answer:
-                assert "workspaces" not in json.loads(answer.read()), "the service answered its own route"
+            with urlopen(f"http://127.0.0.1:{shadowing.server_address[1]}/healthz", timeout=5) as answer:
+                assert json.loads(answer.read()) == {"status": "ok"}, "the service answered its own route"
         finally:
             shadowing.shutdown()
     finally:
