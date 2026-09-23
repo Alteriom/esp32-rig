@@ -4437,7 +4437,12 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
     # knows its own routes and nothing about a half's: a half is a
     # distribution of its own now, and one that had to edit this file to
     # add a route would wait on a release of this one to ship it.
-    extra_routes = tuple(manager.api_routes())
+    #
+    # Asked for rather than required: a manager that is not a BaseManager --
+    # a test's stand-in, most often -- adds none, which is what it means, and
+    # is served the routes the service has always had.
+    declares = getattr(manager, "api_routes", None)
+    extra_routes = tuple(declares() if callable(declares) else ())
 
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):

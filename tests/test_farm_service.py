@@ -2878,6 +2878,7 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
     The service has none of its own to declare: the base returns nothing, and
     a farm with no half installed answers exactly what it always answered.
     """
+    import json
     import re
     import threading
     from http.server import ThreadingHTTPServer
