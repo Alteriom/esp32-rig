@@ -128,7 +128,7 @@ def test_a_run_with_no_bundle_is_refused_at_submit_naming_the_workflow(tmp_path,
     message = str(refused.value)
     assert "does not build firmware" in message
     assert "holds no canary bundle for aaaaaaaaaaaa" in message
-    assert ".github/workflows/deploy-farm-host.yml" in message, "what to run instead"
+    assert ".github/workflows/release.yml" in message, "what to run instead"
     assert "esp32-c6" in message, "and for which family"
 
 

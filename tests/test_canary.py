@@ -259,10 +259,12 @@ def test_the_canary_profile_is_the_farm_checking_its_own_hardware():
     assert not spec.has_preflight, (
         "a health check must not skip the flash it is checking"
     )
-    # The deploy hands its bundle over the same upload a consumer's CI uses,
-    # so a release exercises that path every time.
+    # The firmware comes from this repository's release, handed over by the
+    # same upload a consumer's CI uses -- so a release exercises that path
+    # every time, and a rig with no portal installs it out of release.json.
     assert spec.accepts_supplied_bundles
-    assert spec.supply_workflow == ".github/workflows/deploy-farm-host.yml"
+    assert spec.supply_workflow == ".github/workflows/release.yml"
+    assert spec.supply_repo.endswith("/esp32-rig")
     catalogue = json.loads((REPO / spec.capabilities).read_text(encoding="utf-8"))
     marked = set(re.findall(r'capability\("([a-z0-9_.]+)"\)', _suite_source()))
     declared = {key for key in catalogue if not key.startswith("_")}
