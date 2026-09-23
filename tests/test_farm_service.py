@@ -2925,11 +2925,19 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
         headers = {"Authorization": f"Bearer {token}"}
         if data:
             headers["Content-Type"] = "application/json"
+        def said(raw):
+            # An unknown /api/ GET is served by the static handler, which
+            # answers in HTML: the status is the whole answer there.
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return None
+
         try:
             with urlopen(Request(base + path, data=data, method=method, headers=headers), timeout=5) as answer:
-                return answer.status, json.loads(answer.read())
+                return answer.status, said(answer.read())
         except HTTPError as error:
-            return error.code, json.loads(error.read())
+            return error.code, said(error.read())
 
     try:
         assert call("GET", "/api/v1/workspaces") == (200, {"workspaces": ["firmware"]})
@@ -2945,6 +2953,7 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
         assert status == 400 and said == {"error": "a workspace needs a name"}
         # A path no half declared is still not found.
         assert call("GET", "/api/v1/nothing")[0] == 404
+        assert call("POST", "/api/v1/nothing", {})[0] == 404
         assert [kind for kind, _ in asked] == ["list", "one", "make", "one", "make"]
 
         # The service's own routes still win: a half cannot shadow one by
