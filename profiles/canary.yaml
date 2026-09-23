@@ -74,8 +74,8 @@ flash:
 # the fallback for a canary run made by hand before the next deploy. The farm
 # accepts a canary bundle from this repository and this workflow only.
 supply:
-  repo: https://github.com/Alteriom/alteriom-esp32-farm
-  workflow: .github/workflows/deploy-farm-host.yml
+  repo: https://github.com/Alteriom/esp32-rig
+  workflow: .github/workflows/release.yml
   artifact: hil-canary
 
 suite:
