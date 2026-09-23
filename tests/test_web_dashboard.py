@@ -258,6 +258,10 @@ def test_a_shell_adds_its_own_settings_tabs_and_the_rig_adds_none():
     tabs = app.split("function settingsTabs()", 1)[1].split("\n}", 1)[0]
     assert '["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"]' in tabs
 
+    # A shell's tab may be the admin's alone, and says so the way every other
+    # admin-only control does.
+    assert 'if (tab.admin) link.classList.add("admin-only");' in app
+
     # Each is given a panel of its own, before the Access one so the order on
     # the page is the order in the nav.
     built = app.split("function buildSettingsTabs()", 1)[1].split("\n}\n", 1)[0]
