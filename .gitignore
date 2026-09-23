@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+sim-logs/
+sim-metrics/
+hil-logs/
+hil-metrics/
+hil-firmware/
+# PlatformIO build output, wherever a firmware project is built
+.pio/
