@@ -6,10 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -24,8 +27,11 @@ from alteriom_hil import farm_shared
 from alteriom_hil import providers
 from alteriom_hil.api_keys import (FARM_KEY_NAME, ROLES, account_handles, add_key, keys_document,
                                    keys_path_for, load_keys, namespace_lock)
+from alteriom_hil.artifacts import extract_bundle, load_artifacts
 from alteriom_hil.board import Board, BoardMap, TARGET_CHIPS
 from alteriom_hil.devices import load_families
+from alteriom_hil.jobstore import JobStore, utcnow
+from alteriom_hil.profiles import ProfileError, load_profiles
 from alteriom_hil.instrument import (
     KINDS,
     Instrument,
@@ -663,18 +669,96 @@ def command_upgrade(args: argparse.Namespace) -> int:
             with tarfile.open(dashboard) as archive:
                 _extract_dashboard(archive, args.web_root)
             print(f"dashboard bundle unpacked into {args.web_root}")
+        carried = release_document.firmware(manifest)
+        if carried and not args.no_firmware:
+            bundle_id = _install_firmware(payload, staged / carried["name"], manifest, carried)
+            print(f"health check firmware {carried['version']} installed as {bundle_id} and pinned, "
+                  f"for {', '.join(carried['families'])}")
 
     print(f"installed {manifest.get('version')}. The service runs the old code until it restarts:")
     print("  sudo systemctl restart alteriom-hil-farm.service")
-    # The release carries the health check firmware and this command does not
-    # yet install it. Say so: a rig owner who reads the file list above and
-    # nothing else would reasonably think their boards had been flashed
-    # (docs/public-release-plan.md, step 13d).
-    carried = release_document.firmware(manifest)
-    if carried:
-        print(f"the health check firmware {carried['version']} came with it, for "
-              f"{', '.join(carried['families'])}, and is not installed yet.")
+    if carried and not args.no_firmware:
+        # Installed and pinned, not flashed: flashing a board is a run, and a
+        # run is the service's to place. Once it is up, this is the one.
+        print("Then check the boards against it:")
+        print("  alteriom-hil-admin health check")
+    elif carried:
+        print(f"the health check firmware {carried['version']} came with it and was not installed.")
     return 0
+
+
+# ---- the health check firmware a release carries -------------------------------
+
+CANARY_PROFILE = "canary"
+# A bundle records the commit it was built from; a run asks for it by that.
+COMMIT = re.compile(r"[0-9a-f]{40}")
+
+
+def _canary_revision_key(payload: dict) -> str:
+    """What the canary profile calls the commit a bundle was built from.
+
+    The service reads a bundle's revision under the profile's own key when it
+    decides which canary is current, so a bundle installed under a different
+    one would be stored, pinned, and never chosen. Read the same profile
+    rather than assuming the key.
+    """
+    repo = Path(payload["paths"]["repo"])
+    try:
+        spec = load_profiles(repo).get(CANARY_PROFILE)
+    except (OSError, ProfileError) as exc:
+        raise SystemExit(f"cannot read the profiles at {repo}: {exc}")
+    if spec is None:
+        raise SystemExit(f"{repo} declares no {CANARY_PROFILE} profile, so nothing would flash this firmware")
+    return spec.revision_key
+
+
+def _install_firmware(payload: dict, tarball: Path, manifest: dict, carried: dict) -> str:
+    """Unpack the release's firmware into the rig's artifact store, and pin it.
+
+    Pinned is what makes a canary bundle *current*: the service flashes the
+    newest pinned one. So a rig that installs a release is checked against the
+    firmware that release was built with, which is what makes one rig's health
+    check comparable to another's (docs/public-release-plan.md, step 13d).
+
+    The release document has already been checked -- this file is the file
+    `release.json` names. What is checked here is that the bundle inside it is
+    the build the document says it is, and that it is a health check bundle at
+    all.
+    """
+    revision_key = _canary_revision_key(payload)
+    root = state_dir(payload) / "artifacts"
+    bundle_id = uuid.uuid4().hex
+    # Staged under a name the store ignores -- it lists 32-hex ids only -- so a
+    # half-unpacked bundle is never scanned, flashed or pruned.
+    staging = root / f".incoming-{bundle_id}"
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        extract_bundle(tarball.read_bytes(), staging)
+        built = load_artifacts(staging)
+        if built.get("producer") != CANARY_PROFILE:
+            raise ValueError(f"it was built by {built.get('producer') or 'nothing that says so'},"
+                             f" not the {CANARY_PROFILE}")
+        if str(built.get("version")) != carried["version"] or str(built.get("canary_sha")) != carried["revision"]:
+            raise ValueError("the bundle inside is not the build release.json describes")
+        revision = str(built.get(revision_key) or "")
+        if not COMMIT.fullmatch(revision):
+            raise ValueError(f"it records no {revision_key}, so no run could ask for it by commit")
+        (staging / "provenance.json").write_text(json.dumps({
+            "kind": "release",
+            "profile": CANARY_PROFILE,
+            "release": manifest.get("version"),
+            "commit": manifest.get("commit"),
+            "firmware_version": carried["version"],
+            "firmware_revision": carried["revision"],
+            "received_at": utcnow(),
+        }, indent=2, sort_keys=True), encoding="utf-8")
+        staging.replace(root / bundle_id)
+    except (OSError, ValueError) as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise SystemExit(f"refusing the health check firmware: {exc}")
+    JobStore(state_dir(payload) / "farm.sqlite3").pin_artifact(
+        bundle_id, f"the health check of release {manifest.get('version')}"[:200])
+    return bundle_id
 
 
 def _extract_dashboard(archive: "tarfile.TarFile", web_root: Path) -> None:
@@ -1610,6 +1694,8 @@ def parser() -> argparse.ArgumentParser:
     upgrade.add_argument("--token-file", default=None, help="the key to ask the portal with (default: farm.node_key_file)")
     upgrade.add_argument("--web-root", type=Path, default=None,
                          help="unpack the release's dashboard bundle here as well")
+    upgrade.add_argument("--no-firmware", action="store_true",
+                         help="leave the health check firmware the release carries uninstalled")
     upgrade.add_argument("--dry-run", action="store_true", help="say what would be installed, and stop")
     upgrade.set_defaults(func=command_upgrade)
 

@@ -11,6 +11,7 @@ three chances to disagree, and the rig is an expensive place to find out.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -570,6 +571,63 @@ def _canary_bundle(root: Path, bundle_id: str, revision: str, producer: str = "c
     }
     (root / bundle_id / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     return root / bundle_id
+
+
+def test_the_canary_a_release_carries_becomes_the_one_a_health_check_flashes(tmp_path, monkeypatch):
+    """The other end of `alteriom-hil-admin upgrade`. A rig installs a release,
+    and the health check it runs afterwards is against the firmware that
+    release was built with -- not one it built itself, and not the last one
+    somebody happened to pin. This is the whole point of putting the firmware
+    in the release (docs/public-release-plan.md, steps 14b and 13d), and it is
+    two programs deep: the command writes the store, the service reads it.
+    """
+    from alteriom_hil import admin_cli
+
+    manager = _health_manager(tmp_path)
+    manager.state.mkdir(parents=True, exist_ok=True)
+    commit = "a1" * 20
+    image = b"\xff" * 64
+    built = {
+        "schema": 2, "producer": "canary", "farm_sha": commit, "canary_sha": "d" * 64,
+        "version": "1.0.12",
+        "targets": {"esp32-c6": {"image": "esp32-c6/flash-image.bin",
+                                 "sha256": hashlib.sha256(image).hexdigest()}},
+    }
+    bundle = _tar({"hil-canary/manifest.json": json.dumps(built).encode(),
+                   "hil-canary/esp32-c6/flash-image.bin": image})
+
+    payload = {"paths": {"repo": str(manager.repo), "state": str(manager.state)}}
+    release = {"version": "1.0.376", "commit": commit}
+    carried = {"name": "alteriom-hil-canary-1.0.12.tar.gz", "version": "1.0.12",
+               "revision": "d" * 64, "families": ["esp32-c6"]}
+    tarball = tmp_path / carried["name"]
+    tarball.write_bytes(bundle)
+
+    assert manager.current_canary() is None, "nothing installed, nothing to flash"
+    bundle_id = admin_cli._install_firmware(payload, tarball, release, carried)
+    assert manager.current_canary() == (bundle_id, commit)
+
+    request = {}
+    monkeypatch.setattr(
+        farm_service.FarmManager, "submit",
+        lambda self, kind, req, submitted_by=None: request.update(req) or {"id": "j" * 32},
+    )
+    manager.health_check({"boards": ["esp32-c6-01"]})
+    assert request["artifact"] == bundle_id
+    assert request["ref"] == commit, "the run asks for the commit the release was built from"
+
+
+def _tar(payload: dict) -> bytes:
+    import io
+    import tarfile as _tarfile
+
+    buffer = io.BytesIO()
+    with _tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name, body in payload.items():
+            info = _tarfile.TarInfo(name)
+            info.size = len(body)
+            archive.addfile(info, io.BytesIO(body))
+    return buffer.getvalue()
 
 
 def test_each_board_keeps_the_canary_s_last_verdict_and_the_farm_owns_its_own(tmp_path, monkeypatch):

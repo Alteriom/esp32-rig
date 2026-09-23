@@ -2460,8 +2460,12 @@ def test_an_archive_that_expands_past_the_limit_is_refused(tmp_path, monkeypatch
     import io
     import tarfile
 
+    from alteriom_hil import artifacts
+
     manager = _supply_manager(tmp_path)
-    monkeypatch.setattr(core_service, "MAX_BUNDLE_BYTES", 4096)
+    # The limit lives with the extractor that enforces it -- both ends of a
+    # bundle read it now (docs/public-release-plan.md, step 13d).
+    monkeypatch.setattr(artifacts, "MAX_BUNDLE_BYTES", 4096)
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         info = tarfile.TarInfo("hil-firmware/flash-image.bin")

@@ -60,7 +60,7 @@ from alteriom_hil.notify import Notification, Notifier
 from alteriom_hil import providers as farm_providers
 from alteriom_hil import webhooks as farm_webhooks
 from alteriom_hil.providers import Redactor, budget_used, scrub_tree
-from alteriom_hil.artifacts import load_artifacts
+from alteriom_hil.artifacts import MAX_BUNDLE_BYTES, extract_bundle, load_artifacts
 from alteriom_hil.board import SUPPORTED_TARGETS, Board
 from alteriom_hil.profiles import ProfileError, load_profiles
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
@@ -277,7 +277,8 @@ STORAGE_CACHE_SECONDS = 300
 # received and again as it expands, so a small archive cannot become a full
 # disk. nginx's own client_max_body_size still applies to an upload from the
 # dashboard; the CI client posts to 127.0.0.1 and never passes it.
-MAX_BUNDLE_BYTES = 256 * 1024 * 1024
+# The size a bundle may expand to is defined with the manifest it bounds
+# (alteriom_hil.artifacts); the routes here read it.
 # What a producer says about itself when it hands a bundle over. The run id is
 # GitHub's, numeric; the URL is only ever shown.
 SUPPLY_RUN_PATTERN = re.compile(r"[0-9]{1,20}\Z")
@@ -3088,63 +3089,9 @@ class BaseManager:
         run = provenance.get("run_id")
         return f"{name} CI run {run}" if run else f"{name} CI"
 
-    @staticmethod
-    def _extract_bundle(body: bytes, destination: Path, limit: int | None = None) -> None:
-        """Unpack one directory of regular files, and nothing else.
-
-        No absolute path, no `..`, no link, no device: the rules `tarfile`'s
-        data filter applies, checked here so they hold on every Python the Pi
-        has run rather than only the ones that have the filter. The expanded
-        size is bounded too -- a small archive must not be able to fill the
-        disk -- and the archive's single top directory is dropped, so the
-        bundle lands laid out exactly as a farm build writes it.
-        """
-        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
-            members = archive.getmembers()
-            if not members:
-                raise ValueError("the bundle archive is empty")
-            tops: set[str] = set()
-            total = 0
-            for member in members:
-                name = member.name.replace("\\", "/")
-                if not (member.isfile() or member.isdir()):
-                    raise ValueError(
-                        f"a bundle holds regular files only; {name} is not one"
-                    )
-                parts = [part for part in name.split("/") if part not in ("", ".")]
-                if name.startswith("/") or ".." in parts or not parts:
-                    raise ValueError(f"the bundle archive names a path outside itself: {name}")
-                tops.add(parts[0])
-                total += max(member.size, 0)
-                if total > (MAX_BUNDLE_BYTES if limit is None else limit):
-                    raise ValueError("the bundle expands past the size a bundle may be")
-            if len(tops) != 1:
-                raise ValueError(
-                    f"a bundle archive holds exactly one directory; this holds {len(tops)}"
-                )
-            destination.mkdir(parents=True)
-            for member in members:
-                parts = [
-                    part
-                    for part in member.name.replace("\\", "/").split("/")
-                    if part not in ("", ".")
-                ]
-                if len(parts) == 1:
-                    if member.isfile():
-                        raise ValueError(
-                            f"a bundle archive holds one directory; {member.name} is beside it"
-                        )
-                    continue
-                target = destination.joinpath(*parts[1:])
-                if member.isdir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                source = archive.extractfile(member)
-                if source is None:
-                    raise ValueError(f"the bundle archive cannot read {member.name}")
-                with target.open("wb") as handle:
-                    shutil.copyfileobj(source, handle)
+    # The rules a bundle archive must obey are the manifest's business, and
+    # a rig reads them too now (alteriom_hil.artifacts.extract_bundle).
+    _extract_bundle = staticmethod(extract_bundle)
 
     def accept_bundle(self, fields: dict, body: bytes) -> dict:
         """Take a bundle a producer built, if the profile named that producer.

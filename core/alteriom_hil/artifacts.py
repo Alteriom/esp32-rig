@@ -38,9 +38,16 @@ diagnosed as a firmware bug on hardware.
 from __future__ import annotations
 
 import hashlib
+import io
+import shutil
+import tarfile
 from pathlib import Path
 
 MANIFEST_SCHEMA = 2
+
+# A bundle is firmware images; this is the room they get. It bounds what an
+# archive may expand to, so a small file cannot fill a rig's disk.
+MAX_BUNDLE_BYTES = 256 * 1024 * 1024
 
 
 def sha256(path: Path) -> str:
@@ -104,3 +111,65 @@ def manifest_revision(manifest: dict, revision_key: str) -> str:
             f"{sorted(k for k in manifest if k != 'targets')})"
         )
     return str(revision)
+
+
+def extract_bundle(body: bytes, destination: Path, limit: int | None = None) -> None:
+    """Unpack one directory of regular files, and nothing else.
+
+    No absolute path, no `..`, no link, no device: the rules `tarfile`'s data
+    filter applies, checked here so they hold on every Python the Pi has run
+    rather than only the ones that have the filter. The expanded size is
+    bounded too -- a small archive must not be able to fill the disk -- and the
+    archive's single top directory is dropped, so the bundle lands laid out
+    exactly as a farm build writes it.
+
+    It lives beside the manifest it produces, because both ends of a bundle
+    now read it: a portal taking one from a producer, and a rig unpacking the
+    health check firmware out of a release (docs/public-release-plan.md, 13d).
+    """
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+        members = archive.getmembers()
+        if not members:
+            raise ValueError("the bundle archive is empty")
+        tops: set = set()
+        total = 0
+        for member in members:
+            name = member.name.replace("\\", "/")
+            if not (member.isfile() or member.isdir()):
+                raise ValueError(
+                    f"a bundle holds regular files only; {name} is not one"
+                )
+            parts = [part for part in name.split("/") if part not in ("", ".")]
+            if name.startswith("/") or ".." in parts or not parts:
+                raise ValueError(f"the bundle archive names a path outside itself: {name}")
+            tops.add(parts[0])
+            total += max(member.size, 0)
+            if total > (MAX_BUNDLE_BYTES if limit is None else limit):
+                raise ValueError("the bundle expands past the size a bundle may be")
+        if len(tops) != 1:
+            raise ValueError(
+                f"a bundle archive holds exactly one directory; this holds {len(tops)}"
+            )
+        destination.mkdir(parents=True)
+        for member in members:
+            parts = [
+                part
+                for part in member.name.replace("\\", "/").split("/")
+                if part not in ("", ".")
+            ]
+            if len(parts) == 1:
+                if member.isfile():
+                    raise ValueError(
+                        f"a bundle archive holds one directory; {member.name} is beside it"
+                    )
+                continue
+            target = destination.joinpath(*parts[1:])
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError(f"the bundle archive cannot read {member.name}")
+            with target.open("wb") as handle:
+                shutil.copyfileobj(source, handle)

@@ -69,9 +69,11 @@ Both on one command line: that is what satisfies `alteriom-hil`'s dependency on
 `alteriom-hil-core` without a package index.
 
 The firmware comes with it, one bundle for every board family the rig supports,
-so bringing a rig up needs no compiler and no toolchain. It is the same build
-for everyone who installs that release, which is what makes one rig's health
-check comparable to another's.
+so bringing a rig up needs no compiler and no toolchain. `alteriom-hil-admin
+upgrade` installs and pins it, and the health check flashes what is pinned: the
+same build for everyone who installs that release, which is what makes one
+rig's health check comparable to another's. `--no-firmware` leaves a canary you
+pinned yourself alone.
 
 The commands it brings: `alteriom-hil-service` (the farm), `alteriom-hil-admin`
 (configuration, keys, boards, providers), `alteriom-hil-health` (is this host

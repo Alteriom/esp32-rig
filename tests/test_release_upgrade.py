@@ -25,6 +25,7 @@ import pytest
 import yaml
 
 from alteriom_hil import admin_cli, release
+from alteriom_hil.jobstore import JobStore
 
 
 # ---- a release, as a fixture makes one ---------------------------------------
@@ -35,6 +36,7 @@ FILES = {
     "alteriom-hil-dashboard-1.0.7.tar.gz": None,  # a real tarball, made below
 }
 FIRMWARE = "alteriom-hil-canary-1.0.12.tar.gz"
+FIRMWARE_REVISION = "d" * 64
 COMMIT = "a" * 40
 
 
@@ -48,6 +50,21 @@ def _dashboard(payload: dict) -> bytes:
     return buffer.getvalue()
 
 
+def _canary_bundle(version: str = "1.0.12", revision: str = FIRMWARE_REVISION,
+                   commit: str = COMMIT, producer: str = "canary") -> bytes:
+    """The bundle a canary build writes, as `build-release.sh --firmware` packs
+    it: one top directory, a schema-2 manifest, one image per family."""
+    image = b"\xff" * 64
+    manifest = {
+        "schema": 2, "producer": producer, "farm_sha": commit, "canary_sha": revision,
+        "version": version,
+        "targets": {"esp32-c6": {"image": "esp32-c6/flash-image.bin",
+                                 "sha256": hashlib.sha256(image).hexdigest()}},
+    }
+    return _dashboard({"hil-canary/manifest.json": json.dumps(manifest).encode(),
+                       "hil-canary/esp32-c6/flash-image.bin": image})
+
+
 def _entry(name: str, body: bytes) -> dict:
     return {"name": name, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body)}
 
@@ -59,7 +76,7 @@ def _built(tmp_path: Path, dashboard: dict | None = None, commit: str = COMMIT,
     out.mkdir(parents=True, exist_ok=True)
     files = dict(FILES)
     if firmware:
-        files[FIRMWARE] = b"\x1f\x8b the health check firmware"
+        files[FIRMWARE] = _canary_bundle()
     files["alteriom-hil-dashboard-1.0.7.tar.gz"] = _dashboard(
         dashboard if dashboard is not None else {"web/app.js": b"// the dashboard", "web/index.html": b"<html>"})
     for name, body in files.items():
@@ -104,6 +121,13 @@ def _config(tmp_path: Path) -> Path:
     (venv / "bin").mkdir(parents=True, exist_ok=True)
     (venv / "bin" / "python").write_text("#!/bin/sh", encoding="utf-8")  # only its existence is read
     document["paths"]["venv"] = str(venv)
+    # The canary profile, because the install reads the revision key the
+    # service will look this bundle up under.
+    repo = tmp_path / "repo"
+    (repo / "profiles").mkdir(parents=True, exist_ok=True)
+    for document_path in (Path(__file__).resolve().parents[1] / "profiles").glob("*.yaml"):
+        (repo / "profiles" / document_path.name).write_bytes(document_path.read_bytes())
+    document["paths"]["repo"] = str(repo)
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document), encoding="utf-8")
     return path
@@ -112,7 +136,7 @@ def _config(tmp_path: Path) -> Path:
 def _args(tmp_path: Path, **over) -> argparse.Namespace:
     return argparse.Namespace(**{
         "config": _config(tmp_path), "source": None, "portal": None, "commit": None,
-        "token_file": None, "web_root": None, "dry_run": False, **over})
+        "token_file": None, "web_root": None, "dry_run": False, "no_firmware": False, **over})
 
 
 @pytest.fixture
@@ -225,29 +249,70 @@ def test_a_release_from_a_directory_is_checked_and_installed(tmp_path, pip, caps
     assert "restart" in said, "and the operator is told the service still runs the old code"
 
 
-def test_the_firmware_a_release_carries_is_checked_and_named_and_not_installed(
-        tmp_path, pip, capsys):
-    """The release carries the health check firmware, so `upgrade` checks it
-    with everything else and says it is there. It does not flash it, and it
-    does not quietly hand it to pip: installing and pinning it is 13d, and
-    until then the command says so rather than leaving a rig owner to guess
-    (docs/public-release-plan.md, steps 14b and 13d)."""
+def test_the_firmware_a_release_carries_is_installed_and_pinned(tmp_path, pip, capsys):
+    """Pinned is what makes a canary bundle the one a health check flashes, so
+    a rig that installs a release is checked against the firmware that release
+    was built with. The release document was checked before anything was
+    unpacked; what is checked here is that the bundle inside is the build the
+    document describes (docs/public-release-plan.md, step 13d)."""
     source = _built(tmp_path, firmware=True)
     assert admin_cli.command_upgrade(_args(tmp_path, source=source)) == 0
     said = capsys.readouterr().out
-    assert FIRMWARE in said, "a file of the release is listed with the rest"
-    assert "health check firmware 1.0.12" in said and "esp32, esp32-c6" in said
-    assert "not installed yet" in said
-    installed = [word for command in pip for word in command if word.endswith(".whl")]
-    assert len(installed) == 2 and not any(FIRMWARE in word for command in pip for word in command)
+    assert FIRMWARE in said, "a file of the release, listed with the rest"
+    assert "health check firmware 1.0.12 installed as" in said and "and pinned" in said
 
-    # And a release that disagrees about the firmware is refused whole, like
-    # any other file: nothing is installed.
-    (source / FIRMWARE).write_bytes(b"a different bundle")
-    pip.clear()
-    with pytest.raises(SystemExit, match="refusing to install"):
+    # It is not a wheel, and pip is never given it.
+    assert not any(FIRMWARE in word for command in pip for word in command)
+
+    # In the store, laid out the way the loader reads it, with the three things
+    # the service needs to choose it: a canary manifest, a 40-hex revision, and
+    # a pin.
+    state = Path(yaml.safe_load(_config(tmp_path).read_text(encoding="utf-8"))["paths"]["state"])
+    bundles = [path for path in (state / "artifacts").iterdir() if len(path.name) == 32]
+    assert len(bundles) == 1
+    built = json.loads((bundles[0] / "manifest.json").read_text(encoding="utf-8"))
+    assert built["producer"] == "canary" and built["farm_sha"] == COMMIT
+    assert (bundles[0] / "esp32-c6" / "flash-image.bin").is_file()
+    provenance = json.loads((bundles[0] / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["kind"] == "release" and provenance["release"] == "1.0.7"
+    assert provenance["firmware_revision"] == FIRMWARE_REVISION
+    record = JobStore(state / "farm.sqlite3").artifact_records()[bundles[0].name]
+    assert record["pinned_at"] and "release 1.0.7" in record["pin_note"]
+
+
+@pytest.mark.parametrize("bundle, says", [
+    (_canary_bundle(producer="painlessmesh"), "not the canary"),
+    (_canary_bundle(version="9.9.9"), "not the build release.json describes"),
+    (_canary_bundle(commit="not a commit"), "records no farm_sha"),
+])
+def test_a_bundle_that_is_not_the_firmware_the_release_describes_is_refused(
+        tmp_path, pip, bundle, says):
+    """The digest says these bytes are the file release.json named; it does not
+    say the bundle inside is the build it described. Each of these is stored,
+    pinned and silently never chosen if it is not caught here, so it is caught
+    here -- and nothing is left in the store."""
+    source = _built(tmp_path, firmware=True)
+    manifest = json.loads((source / "release.json").read_text(encoding="utf-8"))
+    manifest["firmware"] = {**_entry(FIRMWARE, bundle), "version": "1.0.12",
+                            "revision": FIRMWARE_REVISION, "families": ["esp32-c6"]}
+    (source / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (source / FIRMWARE).write_bytes(bundle)
+    with pytest.raises(SystemExit, match="refusing the health check firmware"):
         admin_cli.command_upgrade(_args(tmp_path, source=source))
-    assert pip == []
+    state = Path(yaml.safe_load(_config(tmp_path).read_text(encoding="utf-8"))["paths"]["state"])
+    assert not [path for path in (state / "artifacts").iterdir() if len(path.name) == 32]
+
+
+def test_the_firmware_can_be_left_alone(tmp_path, pip, capsys):
+    """A rig that pins its own canary -- one it built, or an older release's --
+    should be able to take the packages without the release replacing it."""
+    source = _built(tmp_path, firmware=True)
+    assert admin_cli.command_upgrade(_args(tmp_path, source=source, no_firmware=True)) == 0
+    said = capsys.readouterr().out
+    assert "came with it and was not installed" in said
+    state = Path(yaml.safe_load(_config(tmp_path).read_text(encoding="utf-8"))["paths"]["state"])
+    assert not (state / "artifacts").exists() or not [
+        path for path in (state / "artifacts").iterdir() if len(path.name) == 32]
 
 
 def test_a_dry_run_says_what_it_would_do_and_does_none_of_it(tmp_path, pip, capsys):
