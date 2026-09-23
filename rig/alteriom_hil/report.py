@@ -185,9 +185,9 @@ def load_images(path: str | os.PathLike | None) -> dict[str, dict]:
 
     A consumer choosing a part -- a cheaper 4 MB module for one product
     tier -- needs to know how much of the app slot each family's image
-    takes, per commit, before the choice is made: alteriom-firmware's core-3
-    C5 image turned out to be 100.9% of a 4 MB slot and its C6's 96.7%, one
-    feature from not fitting. The manifest carries the size of every image
+    takes, per commit, before the choice is made. One consumer's C5 image
+    turned out to be 100.9% of a 4 MB slot and its C6's 96.7%, one feature
+    from not fitting. The manifest carries the size of every image
     the run flashed; a consumer's build script may add ``app`` (``size``,
     ``slot``) for the number that answers the question. Absent manifest,
     absent section.

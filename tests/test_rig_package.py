@@ -393,9 +393,9 @@ NAMES_PAINLESSMESH = {
     "rig/alteriom_hil/report.py": 3,
     "core/alteriom_hil/run_record.py": 1,
     "runner/ci_farm_client.py": 5,
-    "core/alteriom_hil/service.py": 9,
+    "core/alteriom_hil/service.py": 8,
     "portal/alteriom_hil/portal_manager.py": 1,
-    "rig/alteriom_hil/rig_manager.py": 4,
+    "rig/alteriom_hil/rig_manager.py": 3,
     "rig/alteriom_hil/flash_artifacts.py": 1,
     "core/alteriom_hil/hil_config.py": 1,
     # The two installers name suites/painlessmesh/ because the gateway probe
@@ -406,6 +406,10 @@ NAMES_PAINLESSMESH = {
     "rig/setup-gateway-network.sh": 2,
     "rig/verify-rig.sh": 2,
     "rig/web/app.js": 3,
+    # The lift names profiles/painlessmesh.yaml because it carries it: the
+    # reference suite goes public with the rig. That is the one place naming
+    # it is the point rather than the work left.
+    "runner/ci/lift-rig.sh": 1,
 }
 
 

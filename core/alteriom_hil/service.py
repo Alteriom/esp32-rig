@@ -3236,7 +3236,7 @@ class BaseManager:
         -- it is named at upload -- and until this read its provenance, every
         one of them was listed as project "unknown", with no repository and
         no branch. Once nothing built on the rig that was every new bundle:
-        the canary, painlessMesh and alteriom-firmware alike.
+        the canary, the reference suite and every consumer's alike.
         """
         request = (job or {}).get("request") or {}
         profile = request.get("profile", DEFAULT_PROFILE) if job else None

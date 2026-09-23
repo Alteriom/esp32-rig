@@ -99,9 +99,9 @@ def _pump_output(stream, log) -> None:
 def _plural(count: int, noun: str) -> str:
     """`3 boards`, but `1 board`.
 
-    A one-board profile is now ordinary -- alteriom-firmware's console suite
-    asks for exactly one -- so "Validated 1 boards" is on the dashboard and in
-    the run report for a large share of runs.
+    A one-board profile is ordinary -- a console suite asks for exactly one --
+    so "Validated 1 boards" is on the dashboard and in the run report for a
+    large share of runs.
     """
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
@@ -519,10 +519,10 @@ class RigMixin:
     def _clone_credentials(self, spec, log) -> tuple[str, dict | None]:
         """The URL and environment to clone this profile's repository with.
 
-        painlessMesh is public, so the farm needed no credential and had none.
-        A first-party consumer usually is *not* public -- alteriom-firmware is
-        an internal repository -- and a clone without one fails at the first
-        stage of an already-scheduled run with "could not read Username for
+        The reference suite is public, so a rig needed no credential and had
+        none. A first-party consumer's repository usually is *not* public, and
+        a clone without a credential fails at the first stage of an
+        already-scheduled run with "could not read Username for
         'https://github.com'".
 
         The token is passed through GIT_ASKPASS rather than embedded in the

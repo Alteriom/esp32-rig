@@ -48,15 +48,11 @@ OURS = {
 #   harden-pi.sh   the sshd drop-in is named for the project, not the host:
 #                  /etc/ssh/sshd_config.d/00-esp32-hil-hardening.conf. Renaming
 #                  it on a rig that has the old one would leave both.
-#   the consumer   named in four comments that explain why a shape exists --
-#                  a one-board profile, a private repository, a core-3 build.
-#                  Each is rewritten about a consumer in general before the
-#                  lift; the plan says so and this count is the work left.
+#
+# The four comments that named our private consumer are rewritten about a
+# consumer in general (step 14c); nothing names it now.
 KNOWN = {
     ("rig/harden-pi.sh", "a host of ours"): 1,
-    ("core/alteriom_hil/service.py", "our private consumer"): 1,
-    ("rig/alteriom_hil/report.py", "our private consumer"): 1,
-    ("rig/alteriom_hil/rig_manager.py", "our private consumer"): 2,
 }
 
 
