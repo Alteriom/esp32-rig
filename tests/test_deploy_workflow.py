@@ -16,12 +16,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-farm-host.yml"
 HIL = ROOT / ".github" / "workflows" / "hil-painlessmesh.yml"
 PORTAL_IMAGE = ROOT / ".github" / "workflows" / "portal-image.yml"
-# The rig's own scripts are under rig/ now; update-runner.sh is the one still
-# under runner/, because a node in the field runs that path
-# (docs/public-release-plan.md, step 12f).
-UPDATE = ROOT / "runner" / "update-runner.sh"
+# The rig's own scripts are under rig/, update-runner.sh with them; what is
+# left at runner/update-runner.sh is a hand-over to it, for a node whose
+# node-update.sh still names that path (docs/public-release-plan.md, 12g).
+UPDATE = ROOT / "rig" / "update-runner.sh"
+HANDOVER = ROOT / "runner" / "update-runner.sh"
 INSTALL = ROOT / "rig" / "install-health-service.sh"
-LIB = ROOT / "runner" / "deploy-lib.sh"
+LIB = ROOT / "rig" / "deploy-lib.sh"
 
 
 def _load(path):
@@ -146,8 +147,39 @@ def test_update_script_takes_the_rig_lock_and_verifies():
         "an unhealthy snapshot is a report, not an install failure"
 
 
+def test_the_last_path_out_of_runner_hands_over_to_the_real_script(tmp_path):
+    """A node in the field installs a release by running the update script at
+    `runner/update-runner.sh`, because that is the path in the node-update.sh
+    it already has. The script lives at `rig/update-runner.sh` now, so what is
+    left behind must hand over to it -- with its arguments, and by exec, so the
+    exit status is the real script's. And when a release arrives without `rig/`
+    it must say which script it wanted and where, not `no such file`."""
+    real = tmp_path / "rig" / "update-runner.sh"
+    real.parent.mkdir()
+    real.write_text('#!/usr/bin/env bash\necho "real $*"\nexit 3\n')
+    real.chmod(0o755)
+    handover = tmp_path / "runner" / "update-runner.sh"
+    handover.parent.mkdir()
+    handover.write_text(HANDOVER.read_text(encoding="utf-8"))
+    handover.chmod(0o755)
+
+    done = subprocess.run(["bash", str(handover), "--unattended", "--ref", "abc"],
+                          capture_output=True, text=True)
+    assert done.stdout.strip() == "real --unattended --ref abc"
+    assert done.returncode == 3, "the hand-over must carry the real script's exit status back"
+
+    real.unlink()
+    refused = subprocess.run(["bash", str(handover)], capture_output=True, text=True)
+    assert refused.returncode == 1
+    assert "rig/update-runner.sh" in refused.stderr, "say which script it wanted"
+    # The directory it looked in, by name: bash on Windows prints its own
+    # spelling of a temporary path, so the whole path is not comparable.
+    assert f"{tmp_path.name}/rig" in refused.stderr.replace("\\", "/"), "and where it looked for it"
+
+
 def test_shell_scripts_parse():
-    for script in (UPDATE, INSTALL, LIB, ROOT / "rig" / "setup-runner.sh", ROOT / "rig" / "node-update.sh",
+    for script in (UPDATE, HANDOVER, INSTALL, LIB, ROOT / "rig" / "setup-runner.sh",
+                   ROOT / "rig" / "node-update.sh",
                    ROOT / "rig" / "node-control.sh", ROOT / "rig" / "join-rig.sh"):
         subprocess.run(["bash", "-n", str(script)], check=True)
         assert script.stat().st_mode & 0o111, f"{script.name} must be executable"

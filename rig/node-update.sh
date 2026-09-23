@@ -76,7 +76,12 @@ PY
   # (docs/public-release-plan.md, step 12f).
   git -C "$repo" archive FETCH_HEAD | tar -x -C "$WORK"
 
-  if HIL_DEPLOY_SOURCE="$bundle" "$WORK/runner/update-runner.sh" --unattended --ref "$commit" > "$log" 2>&1; then
+  # The release's own update script. `runner/update-runner.sh` is a hand-over
+  # to this one for now, and a node whose node-update.sh predates the move
+  # runs that; this runs the real one directly (step 12g).
+  update="$WORK/rig/update-runner.sh"
+  [ -x "$update" ] || update="$WORK/runner/update-runner.sh"
+  if HIL_DEPLOY_SOURCE="$bundle" "$update" --unattended --ref "$commit" > "$log" 2>&1; then
     status installed "$(tail -n 1 "$log")"
     rm -f "$taken"
     # The one just installed is in the clone now; older staged ones are litter.

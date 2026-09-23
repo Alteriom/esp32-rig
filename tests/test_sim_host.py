@@ -16,7 +16,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 RUNNER = ROOT / "runner"
-LIB = RUNNER / "deploy-lib.sh"
+# The deploy helpers the sim host shares with the rig are the rig's
+# (docs/public-release-plan.md, step 12g).
+LIB = ROOT / "rig" / "deploy-lib.sh"
 UPDATE = RUNNER / "update-sim-host.sh"
 VERIFY = RUNNER / "verify-sim-host.sh"
 SETUP = RUNNER / "setup-sim-host.sh"

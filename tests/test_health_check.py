@@ -841,7 +841,7 @@ def test_a_power_supply_fault_does_not_say_the_release_failed_to_install(monkeyp
 
 
 def test_the_deploy_takes_the_supply_exception_and_nothing_else_does():
-    update = (MODULE_PATH.parents[2] / "runner" / "update-runner.sh").read_text(encoding="utf-8")
+    update = (MODULE_PATH.parents[2] / "rig" / "update-runner.sh").read_text(encoding="utf-8")
     assert "--fail-unhealthy --except-supply" in update
     assert health_check.HOST_SUPPLY_CHECKS == frozenset({"pi_power"}), (
         "widening this is widening what a deploy may not conclude from"

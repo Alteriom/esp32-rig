@@ -39,8 +39,8 @@ def _git(repo: Path, *args: str) -> str:
 def _staged(tmp_path: Path, update_script: str) -> dict:
     """A release whose update-runner.sh is `update_script`, staged as the agent stages one."""
     source = tmp_path / "source"
-    (source / "runner").mkdir(parents=True)
-    script = source / "runner" / "update-runner.sh"
+    (source / "rig").mkdir(parents=True)
+    script = source / "rig" / "update-runner.sh"
     script.write_text(update_script)
     script.chmod(0o755)
     _git(source, "init", "-q")

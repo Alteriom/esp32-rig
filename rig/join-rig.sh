@@ -158,7 +158,7 @@ main() {
   say "installing $name as a node of $portal"
   ALTERIOM_HIL_REPO="$repo" HIL_DEPLOY_SOURCE="$bundle" \
     HIL_JOIN_PORTAL_URL="$portal" HIL_JOIN_WORKER_NAME="$name" \
-    "$repo/runner/update-runner.sh" --skip-verify --ref "$commit" < /dev/null
+    "$repo/rig/update-runner.sh" --skip-verify --ref "$commit" < /dev/null
 
   sudo rm -f "$JOIN_ENV"
   cat <<EOF
