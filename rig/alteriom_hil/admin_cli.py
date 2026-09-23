@@ -8,6 +8,8 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -17,6 +19,7 @@ import yaml
 
 from alteriom_hil import health_check
 from alteriom_hil import hil_config
+from alteriom_hil import release as release_document
 from alteriom_hil import farm_shared
 from alteriom_hil import providers
 from alteriom_hil.api_keys import (FARM_KEY_NAME, ROLES, account_handles, add_key, keys_document,
@@ -535,6 +538,164 @@ def command_notify_test(args: argparse.Namespace) -> int:
 
 def _backup_settings(payload: dict) -> dict:
     return {**hil_config.DEFAULT_BACKUP, **(payload.get("backup") or {})}
+
+
+# ---- upgrade ---------------------------------------------------------------
+#
+# A release is packages (docs/public-release-plan.md, step 13):
+# runner/ci/build-release.sh makes two wheels, a dashboard bundle and a
+# release.json naming each with its digest. A rig installs one from a
+# directory, or from the portal it belongs to.
+#
+# This is not how the farm's own nodes update -- they take a git bundle and
+# alteriom-hil-update installs it -- and it is not meant to be yet. It is
+# what a rig with no portal does, and what a rig with one will do when 13d
+# turns the node's update path round.
+
+
+def _believed(body: bytes, commit: str | None = None) -> dict:
+    """The manifest, or a reason rather than a traceback. A person running a
+    command gets told what is wrong with the release, not where it was
+    noticed."""
+    try:
+        return release_document.parse_manifest(body, commit)
+    except release_document.ReleaseError as exc:
+        raise SystemExit(f"refusing to install: {exc}") from None
+
+
+def _release_from_directory(source: Path) -> tuple[dict, dict]:
+    """A release built into a directory: the manifest, and its files."""
+    manifest_path = source / "release.json"
+    if not manifest_path.is_file():
+        raise SystemExit(f"{source} holds no release.json; build one with runner/ci/build-release.sh --out {source}")
+    manifest = _believed(manifest_path.read_bytes())
+    files = {}
+    for entry in release_document.entries(manifest):
+        path = source / entry["name"]
+        if not path.is_file():
+            raise SystemExit(f"release.json names {entry['name']}, which is not in {source}")
+        files[entry["name"]] = path.read_bytes()
+    return manifest, files
+
+
+def _release_from_portal(base_url: str, token: str, commit: str | None) -> tuple[dict, dict]:
+    """The release a portal says its rigs should run, and its files."""
+    def get(path: str) -> bytes:
+        request = Request(base_url.rstrip("/") + path, headers={"Authorization": f"Bearer {token}"})
+        with urlopen(request, timeout=300) as response:
+            return response.read()
+
+    if commit is None:
+        try:
+            current = json.loads(get("/api/v1/releases/current") or b"{}")
+        except HTTPError as exc:
+            raise SystemExit(f"the portal has no current release ({exc.code})") from None
+        commit = current.get("commit")
+        if not commit:
+            raise SystemExit("the portal named no current release")
+    try:
+        manifest = _believed(get(f"/api/v1/releases/{commit}/files/release.json"), commit)
+    except HTTPError as exc:
+        if exc.code == 404:
+            raise SystemExit(
+                f"the portal holds no packages for release {commit[:12]}: it was published as a bundle only, "
+                f"or by a portal older than the packages (docs/public-release-plan.md, step 13)"
+            ) from None
+        raise SystemExit(f"the portal answered {exc.code} for release {commit[:12]}") from None
+    files = {entry["name"]: get(f"/api/v1/releases/{commit}/files/{entry['name']}")
+             for entry in release_document.entries(manifest)}
+    return manifest, files
+
+
+def command_upgrade(args: argparse.Namespace) -> int:
+    payload = hil_config.require_valid(hil_config.load_config(args.config))
+    venv = Path(payload["paths"]["venv"])
+    python = venv / "bin" / "python"
+    if not python.exists():  # a Windows checkout, or a venv that was moved
+        python = venv / "Scripts" / "python.exe"
+    if args.source is not None:
+        manifest, files = _release_from_directory(args.source)
+        where = str(args.source)
+    else:
+        base_url = args.portal or ((payload.get("farm") or {}).get("portal_url") or "")
+        if not base_url:
+            raise SystemExit("no --from directory and no portal: set farm.portal_url, or pass --portal")
+        key_file = (payload.get("farm") or {}).get("node_key_file")
+        if args.token_file:
+            token = Path(args.token_file).read_text(encoding="utf-8").strip()
+        elif key_file and Path(key_file).is_file():
+            token = Path(key_file).read_text(encoding="utf-8").strip()
+        else:
+            raise SystemExit("no key to ask the portal with: set farm.node_key_file, or pass --token-file")
+        manifest, files = _release_from_portal(base_url, token, args.commit)
+        where = base_url
+
+    # Nothing is installed until every file is what the release says it is.
+    try:
+        release_document.check(manifest, files.__getitem__)
+    except release_document.ReleaseError as exc:
+        raise SystemExit(f"refusing to install: {exc}")
+
+    running = _installed_version()
+    print(f"release {manifest.get('version')} ({str(manifest.get('commit'))[:12]}) from {where}")
+    print(f"  this host runs {running}")
+    for entry in release_document.entries(manifest):
+        print(f"  {entry['name']}: {entry['bytes']} bytes, sha256 {entry['sha256'][:12]}")
+    if args.dry_run:
+        print("--dry-run: nothing installed")
+        return 0
+
+    with tempfile.TemporaryDirectory(prefix="alteriom-hil-release-") as scratch:
+        staged = Path(scratch)
+        for name, body in files.items():
+            (staged / name).write_bytes(body)
+        wheels = [str(staged / name) for name in release_document.wheels(manifest)]
+        print(f"installing into {venv}")
+        done = subprocess.run([str(python), "-m", "pip", "install", "--quiet", "--upgrade", *wheels],
+                              capture_output=True, text=True)
+        if done.returncode != 0:
+            print(done.stdout[-4000:] or "", file=sys.stderr)
+            print(done.stderr[-4000:] or "", file=sys.stderr)
+            raise SystemExit(f"pip refused the release's wheels (exit {done.returncode}); nothing else was changed")
+        if args.web_root:
+            dashboard = staged / manifest["dashboard"]["name"]
+            args.web_root.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(dashboard) as archive:
+                _extract_dashboard(archive, args.web_root)
+            print(f"dashboard bundle unpacked into {args.web_root}")
+
+    print(f"installed {manifest.get('version')}. The service runs the old code until it restarts:")
+    print("  sudo systemctl restart alteriom-hil-farm.service")
+    return 0
+
+
+def _extract_dashboard(archive: "tarfile.TarFile", web_root: Path) -> None:
+    """The bundle's `web/` directory, into the web root, and nothing else.
+
+    A tar may name any path it likes, including one outside where it is being
+    unpacked; a release is ours and still gets no say in where it lands.
+    """
+    for member in archive.getmembers():
+        if not member.isfile():
+            continue
+        parts = Path(member.name).parts
+        if not parts or parts[0] != "web" or ".." in parts or Path(member.name).is_absolute():
+            raise SystemExit(f"the dashboard bundle names {member.name!r}, which is not inside web/")
+        target = web_root.joinpath(*parts[1:])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = archive.extractfile(member)
+        if source is not None:
+            target.write_bytes(source.read())
+
+
+def _installed_version() -> str:
+    try:
+        stamped = json.loads(Path(
+            os.environ.get("ALTERIOM_HIL_VERSION_FILE", "/usr/local/lib/alteriom-hil/version.json")
+        ).read_text(encoding="utf-8"))
+        return str(stamped.get("version") or "an unknown version")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return "an unknown version"
 
 
 def command_backup_create(args: argparse.Namespace) -> int:
@@ -1430,6 +1591,19 @@ def parser() -> argparse.ArgumentParser:
     notify_remove = notify_commands.add_parser("remove", help="stop sending down one channel")
     notify_remove.add_argument("--id", help="which channel, when this host has several")
     notify_remove.set_defaults(func=command_notify_remove)
+
+    upgrade = commands.add_parser(
+        "upgrade", help="install a release's packages (docs/public-release-plan.md, step 13)")
+    source = upgrade.add_mutually_exclusive_group()
+    source.add_argument("--from", dest="source", type=Path, default=None,
+                        help="a directory holding release.json and its files (runner/ci/build-release.sh --out)")
+    source.add_argument("--portal", default=None, help="the portal to take the release from (default: farm.portal_url)")
+    upgrade.add_argument("--commit", default=None, help="a particular release (default: the portal's current one)")
+    upgrade.add_argument("--token-file", default=None, help="the key to ask the portal with (default: farm.node_key_file)")
+    upgrade.add_argument("--web-root", type=Path, default=None,
+                         help="unpack the release's dashboard bundle here as well")
+    upgrade.add_argument("--dry-run", action="store_true", help="say what would be installed, and stop")
+    upgrade.set_defaults(func=command_upgrade)
 
     backup = commands.add_parser("backup", help="back the farm up, and restore it")
     backup_commands = backup.add_subparsers(dest="backup_command", required=True)

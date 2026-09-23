@@ -91,7 +91,7 @@ def test_the_manifest_is_checked_against_the_files_and_refuses_what_disagrees(fa
     dashboard = "alteriom-hil-dashboard-1.0.7.tar.gz"
 
     # Before any file: the manifest names files that are not there.
-    with pytest.raises(ValueError, match="has not been published"):
+    with pytest.raises(ValueError, match="files first, the manifest last"):
         farm.portal.attach_release_file(commit, "release.json", _manifest(commit, files, dashboard), "ci")
     for name, payload in files.items():
         farm.portal.attach_release_file(commit, name, payload, "ci")

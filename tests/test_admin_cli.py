@@ -49,7 +49,11 @@ def test_admin_cli_has_structured_commands():
     )
     assert result.returncode == 0
     assert "alteriom-hil-admin" in result.stdout
-    assert "{status,config,health,service,keys,notify,backup,providers,boards,instruments}" in result.stdout
+    # Every command, by name: a list rather than one string, so that adding
+    # one is a line here and not a puzzle about where argparse wrapped.
+    for command in ("status", "config", "health", "service", "keys", "notify",
+                    "upgrade", "backup", "providers", "boards", "instruments"):
+        assert command in result.stdout, command
 
 
 def test_board_add_default_tag_does_not_duplicate_explicit_mesh():

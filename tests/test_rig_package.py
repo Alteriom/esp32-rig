@@ -87,6 +87,11 @@ CORE = {
     # an agent is known by. A portal times a rig out by these and a rig
     # heartbeats by them, so neither half can own them.
     "wire",
+    # What a release is, as a document: the portal checks a manifest against
+    # the files published to it and a rig checks one against the files it
+    # downloaded, from this one description. A release that means two things
+    # to two readers is not a release.
+    "release",
     # The service itself: the queue and its dispatcher, health and quarantine,
     # retention, statistics, storage, and the HTTP surface over them. It
     # imports neither half -- what composes a mode's class from the base and
