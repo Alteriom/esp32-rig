@@ -1,2 +1,0 @@
-[console_scripts]
-alteriom-farm-mcp = alteriom_hil.mcp_server:main
