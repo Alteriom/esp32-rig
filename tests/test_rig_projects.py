@@ -957,12 +957,13 @@ def test_a_repository_the_token_does_not_reach_is_refused_naming_what_it_reaches
         rig.create_project({**MINE, "repo": "https://github.com/acme/elsewhere"})
     words = str(refused.value)
     assert "cannot read https://github.com/acme/elsewhere" in words and "(404)" in words
-    assert "fine-grained token that reaches 2 repositories: example/builds, example/my-sensor" in words
+    assert "fine-grained token given 1 private repository: example/my-sensor" in words, words
+    assert "example/builds" not in words, "a public repository says nothing about what the token was given"
     assert "add acme/elsewhere to the token's repository access" in words and "Settings → Rig → GitHub" in words
-    with pytest.raises(ValueError, match="fine-grained token that reaches"):
+    with pytest.raises(ValueError, match="fine-grained token given"):
         rig.inspect_repository({"repo": "https://github.com/acme/elsewhere"})
     # The supply repository is held to the same.
-    with pytest.raises(ValueError, match="cannot read the supply repository https://github.com/acme/builds: .*fine-grained token that reaches"):
+    with pytest.raises(ValueError, match="cannot read the supply repository https://github.com/acme/builds: .*fine-grained token given"):
         rig.create_project({**MINE, "supply_repo": "https://github.com/acme/builds"})
     # A classic token is refused plainly: it reaches whatever its user can.
     classic = _rig(_sub(tmp_path, "classic"))

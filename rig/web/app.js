@@ -4995,9 +4995,14 @@ function githubAccessMarkup(github) {
   const repos = access.repositories || [];
   let reach = "";
   if (github.kind === "fine-grained") {
-    reach = repos.length
-      ? `<p>It reaches <strong>${repos.length}${access.more ? "+" : ""} repositor${repos.length === 1 ? "y" : "ies"}</strong>: ${repos.map(row => `<code title="${row.private ? "private" : "public"}">${escapeHtml(row.name)}</code>`).join(", ")}${access.more ? ", …" : ""}. A project's repository has to be among them: on GitHub, add it to the token's repository access, or replace the token below.</p>`
-      : `<p><span class="state warn">reaches nothing</span> GitHub lists no repository for this token${access.error ? ` (${escapeHtml(access.error)})` : ""}: on GitHub, give it access to the project repositories.</p>`;
+    // GitHub lists every public repository the user can see for any token;
+    // the private ones are what this token was given.
+    const given = repos.filter(row => row.private);
+    const publicCount = repos.length - given.length;
+    const publicNote = publicCount ? `, and sees ${publicCount}${access.more ? "+" : ""} public one${publicCount === 1 ? "" : "s"} as any token does` : "";
+    reach = given.length
+      ? `<p>It was given <strong>${given.length} private repositor${given.length === 1 ? "y" : "ies"}</strong>: ${given.map(row => `<code>${escapeHtml(row.name)}</code>`).join(", ")}${publicNote}. A private project's repository has to be among them: on GitHub, add it to the token's repository access, or replace the token below.</p>`
+      : `<p><span class="state warn">no private repository</span> This token was given no private repository${publicNote}${access.error ? ` (${escapeHtml(access.error)})` : ""}: a private project cannot be added with it until GitHub gives it one — on GitHub, add it to the token's repository access, or replace the token below.</p>`;
   } else if (repos.length) {
     reach = `<p>It reaches every repository <strong>${escapeHtml(github.login)}</strong> can see${(github.scopes || []).length ? ` (scopes: ${github.scopes.map(scope => `<code>${escapeHtml(scope)}</code>`).join(", ")})` : ""}; ${repos.length}${access.more ? "+" : ""} listed.</p>`;
   }

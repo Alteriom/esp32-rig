@@ -58,7 +58,7 @@ read** on the repositories the rig will test.
 ## Adding a project is refused
 
 The message is GitHub's answer, and for a fine-grained token it names the
-repositories the token reaches: the new one is not among them (not selected
+private repositories the token was given: the new one is not among them (not selected
 when the token was made, or an organisation that has not approved it).
 Add it to the token's *Repository access* on GitHub, press **Check again**
 on Settings → Rig → GitHub, and add the project again. Or the URL is not a
