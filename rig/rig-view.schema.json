@@ -5,48 +5,186 @@
   "description": "One rig, as the dashboard draws it. A rig serves this about itself at GET /api/v1/view; a portal serves it about each connected rig at GET /api/v1/rigs/<name>/view, from what the rig reported. The same page reads either. Keys are never removed within a version; a key that changes meaning bumps `contract`.",
   "type": "object",
   "required": [
-    "contract", "name", "kind", "online", "boards", "missing", "running", "max_runs",
-    "profiles", "health", "setup", "commands", "inventory"
+    "contract",
+    "name",
+    "kind",
+    "online",
+    "boards",
+    "missing",
+    "running",
+    "max_runs",
+    "profiles",
+    "health",
+    "setup",
+    "commands",
+    "inventory"
   ],
   "properties": {
-    "contract": {"const": 1},
-    "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$",
-             "description": "The worker name a node reports to its portal; `local` on a farm that is nobody's node."},
-    "kind": {"enum": ["hardware", "simulation"]},
-    "version": {"type": ["string", "null"], "description": "The rig software's version as the rig reports it, e.g. 1.0.336."},
-    "commit": {"type": ["string", "null"]},
-    "online": {"type": "boolean"},
-    "seen_at": {"type": ["string", "null"], "description": "ISO 8601. When the rig was last heard from; now, when it is answering for itself."},
-    "hello_at": {"type": ["string", "null"]},
-    "boards": {"type": "integer", "minimum": 0},
-    "missing": {"type": "integer", "minimum": 0},
-    "running": {"type": "integer", "minimum": 0},
-    "max_runs": {"type": "integer", "minimum": 1},
-    "profiles": {"type": "array", "items": {"type": "string"}},
+    "contract": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,31}$",
+      "description": "The worker name a node reports to its portal; `local` on a farm that is nobody's node."
+    },
+    "kind": {
+      "enum": [
+        "hardware",
+        "simulation"
+      ]
+    },
+    "version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The rig software's version as the rig reports it, e.g. 1.0.336."
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "online": {
+      "type": "boolean"
+    },
+    "seen_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ISO 8601. When the rig was last heard from; now, when it is answering for itself."
+    },
+    "hello_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "boards": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "missing": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "running": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_runs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "health": {
       "description": "The host health snapshot (an object with `status` and its checks), the one-word status alone on a rig lent to the caller, or null when the rig has not reported one.",
-      "type": ["object", "string", "null"]
+      "type": [
+        "object",
+        "string",
+        "null"
+      ]
     },
-    "update": {"type": ["object", "null"]},
-    "drained": {"type": ["object", "null"]},
-    "description": {"type": ["string", "null"]},
-    "location": {"type": ["string", "null"]},
-    "owner": {"type": ["string", "null"]},
-    "visibility": {"type": ["string", "null"], "enum": ["private", "public", "shared", null]},
-    "config": {"type": ["object", "null"], "description": "The host configuration as the rig reports it; withheld (null) from a caller the rig is only lent to."},
-    "setup": {"type": "array", "items": {"type": "object"}, "description": "rig_setup.capabilities: what the rig is set up to do, as rows."},
-    "commands": {"type": "array", "items": {"type": "object"}},
+    "update": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "drained": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "visibility": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "private",
+        "public",
+        "shared",
+        null
+      ]
+    },
+    "config": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The host configuration as the rig reports it; withheld (null) from a caller the rig is only lent to."
+    },
+    "setup": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "rig_setup.capabilities: what the rig is set up to do, as rows."
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "inventory": {
       "type": "object",
       "properties": {
-        "missing": {"type": "array"},
-        "unregistered": {"type": "array"},
-        "probe_errors": {"type": "array"},
-        "instruments": {"type": "array"},
-        "missing_instruments": {"type": "array"}
+        "missing": {
+          "type": "array"
+        },
+        "unregistered": {
+          "type": "array"
+        },
+        "probe_errors": {
+          "type": "array"
+        },
+        "instruments": {
+          "type": "array"
+        },
+        "missing_instruments": {
+          "type": "array"
+        }
       }
     },
-    "lent": {"type": "boolean"}
+    "lent": {
+      "type": "boolean"
+    },
+    "github": {
+      "description": "The rig's GitHub token, as a farm may know it: configured, connected, login, kind, expires_at, expires_in_days. Never the token or its path. Null from a rig that predates it.",
+      "type": [
+        "object",
+        "null"
+      ]
+    }
   },
   "additionalProperties": true
 }

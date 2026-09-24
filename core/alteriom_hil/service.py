@@ -1585,6 +1585,9 @@ class BaseManager:
         "contract", "name", "kind", "version", "commit", "online", "seen_at", "hello_at",
         "boards", "missing", "running", "max_runs", "profiles", "health", "update", "drained",
         "description", "location", "owner", "visibility", "config", "setup", "commands", "inventory",
+        # What a farm may know about the rig's GitHub: connected, as whom,
+        # what kind, when it expires -- never the token, never its path.
+        "github",
     })
 
     def _own_name(self) -> str:
