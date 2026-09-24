@@ -650,6 +650,97 @@ def test_github_access_reads_the_repository_and_the_artifact_listing(monkeypatch
         github_access.parse_repo("https://example.org/x/y")
 
 
+# ---- adding a project starts from the URL; a rig has a name of its own ------------------
+
+def test_a_project_starts_from_its_repository_url(tmp_path, monkeypatch):
+    """The person pastes the repository; the rig asks GitHub what it holds
+    and answers a form already filled in -- the project's own
+    .alteriom-hil.yaml when it has one, else what looks like the suite and
+    the HIL workflow, said as found or as guessed -- and the families of the
+    boards connected right now when nothing says. Nothing is written."""
+    rig = _rig(tmp_path)
+    monkeypatch.setattr(rig, "_connected_families", lambda: ["esp32", "esp32-c3"])
+    monkeypatch.setattr(rig, "_github_look_around", lambda token, url: {
+        "repo": "https://github.com/example/my-sensor", "default_ref": "develop", "private": True,
+        "found": [], "guessed": ["suite_path: hil/tests (has test_*.py)", "supply_workflow: hil-build.yml"],
+        "suite_path": "hil/tests", "supply_workflow": ".github/workflows/hil-build.yml", "workflows": ["ci.yml", "hil-build.yml"]})
+    seen = rig.inspect_repository({"repo": "https://github.com/example/my-sensor.git"})
+    assert seen["repo"] == "https://github.com/example/my-sensor" and seen["default_ref"] == "develop"
+    assert seen["suggested"] == {
+        "name": "my-sensor", "label": "my-sensor", "repo": "https://github.com/example/my-sensor", "default_ref": "develop",
+        "suite_path": "hil/tests", "families": ["esp32", "esp32-c3"], "supply_repo": "https://github.com/example/my-sensor",
+        "supply_workflow": ".github/workflows/hil-build.yml", "supply_artifact": "hil-artifacts"}
+    assert seen["guessed"] and seen["found"] == [] and seen["taken"] is False and seen["workflows"] == ["ci.yml", "hil-build.yml"]
+    assert not (tmp_path / "state" / "profiles").exists(), "looking is not adding"
+    # A project that describes itself is taken at its word.
+    monkeypatch.setattr(rig, "_github_look_around", lambda token, url: {
+        "repo": "https://github.com/example/my-sensor", "default_ref": "main", "private": False,
+        "found": [".alteriom-hil.yaml"], "guessed": [], "label": "Sensor HIL", "suite_path": "tests/hil",
+        "supply_workflow": ".github/workflows/hil.yml", "supply_artifact": "bundle", "families": ["esp32-c6"]})
+    seen = rig.inspect_repository({"repo": "https://github.com/example/my-sensor"})
+    assert seen["found"] == [".alteriom-hil.yaml"] and seen["suggested"]["label"] == "Sensor HIL"
+    assert seen["suggested"]["families"] == ["esp32-c6"] and seen["suggested"]["supply_artifact"] == "bundle"
+    rig.create_project(seen["suggested"])
+    assert rig.inspect_repository({"repo": "https://github.com/example/my-sensor"})["taken"] is True
+    # Without GitHub there is nothing to look with.
+    bare = _rig(tmp_path, github="none")
+    with pytest.raises(PermissionError, match="GitHub is not connected"):
+        bare.inspect_repository({"repo": "https://github.com/example/my-sensor"})
+
+
+def test_github_access_reads_what_a_repository_holds(monkeypatch):
+    """The look-around against a stand-in for GitHub: a described project is
+    read from its document; an undescribed one is guessed from what is there."""
+    import base64
+    answers = {
+        "/repos/example/described": {"full_name": "example/described", "default_branch": "main", "private": False},
+        "/repos/example/described/contents/.alteriom-hil.yaml?ref=main": {
+            "type": "file", "encoding": "base64",
+            "content": base64.b64encode(b"label: Described\nsuite:\n  path: hil/tests\nsupply:\n  workflow: .github/workflows/hil.yml\n  artifact: hil-artifacts\nneeds:\n  - target: esp32\n").decode()},
+        "/repos/example/bare": {"full_name": "example/bare", "default_branch": "trunk", "private": True},
+        "/repos/example/bare/contents/tests?ref=trunk": [{"name": "test_blink.py", "type": "file"}],
+        "/repos/example/bare/contents/.github/workflows?ref=trunk": [{"name": "ci.yml"}, {"name": "hil-build.yml"}],
+    }
+
+    class NotFound(Exception):
+        pass
+
+    def fake_http_json(url, *, method="GET", body=None, headers=None, timeout=15.0):
+        key = url.replace(github_access.GITHUB_API, "")
+        if key not in answers:
+            import io
+            import urllib.error
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, io.BytesIO(b""))
+        return answers[key]
+
+    monkeypatch.setattr(github_access, "http_json", fake_http_json)
+    described = github_access.look_around("tok", "https://github.com/example/described")
+    assert described["found"] == [".alteriom-hil.yaml"] and described["label"] == "Described"
+    assert described["suite_path"] == "hil/tests" and described["supply_workflow"] == ".github/workflows/hil.yml"
+    assert described["families"] == ["esp32"] and described["guessed"] == []
+    bare = github_access.look_around("tok", "https://github.com/example/bare")
+    assert bare["default_ref"] == "trunk" and bare["private"] is True and bare["found"] == []
+    assert bare["suite_path"] == "tests" and bare["supply_workflow"] == ".github/workflows/hil-build.yml"
+    assert any(g.startswith("suite_path: tests") for g in bare["guessed"]) and any("hil-build.yml" in g for g in bare["guessed"])
+
+
+def test_a_rig_has_a_name_a_description_and_a_place_of_its_own(tmp_path):
+    """Until told, a rig is its host; told, it is what it was named -- on its
+    own page and in the view a portal shows for it. Kept on the rig."""
+    rig = _rig(tmp_path)
+    before = rig.rig_details_view()
+    assert before["name"] is None and before["host"] and rig.rig_view()["name"] == before["host"]
+    saved = rig.set_rig_details({"name": "bench-2", "description": "the bench under the window", "location": "Quebec"})
+    assert saved["name"] == "bench-2" and saved["description"] == "the bench under the window" and saved["location"] == "Quebec"
+    view = rig.rig_view()
+    assert view["name"] == "bench-2" and view["description"] == "the bench under the window" and view["location"] == "Quebec"
+    assert (tmp_path / "state" / "rig.json").is_file()
+    with pytest.raises(ValueError, match="1-32 lowercase letters"):
+        rig.set_rig_details({"name": "Bench 2"})
+    cleared = rig.set_rig_details({"name": "", "description": "", "location": ""})
+    assert cleared["name"] is None and rig.rig_view()["name"] == before["host"]
+
+
 # ---- the farm a rig shows ------------------------------------------------------------
 
 WORLD = {"rigs": [{"name": "esp32-hil", "description": "the painlessMesh rig", "location": "Quebec",

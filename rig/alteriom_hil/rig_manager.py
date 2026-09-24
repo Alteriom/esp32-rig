@@ -134,6 +134,11 @@ class RigMixin:
         # Who this rig is to GitHub (never the token), and whether it can add
         # a project at all.
         ("GET", r"/api/v1/github", "user", "github_view"),
+        # The repository looked up on GitHub, so the form starts filled in.
+        ("POST", r"/api/v1/projects/inspect", "admin", "inspect_repository"),
+        # What this rig calls itself: a name, a description, a location.
+        ("GET", r"/api/v1/rig/details", "user", "rig_details_view"),
+        ("POST", r"/api/v1/rig/details", "admin", "set_rig_details"),
         ("GET", r"/api/v1/farm/public", "user", "farm_public_view"),
     )
 
@@ -230,6 +235,82 @@ class RigMixin:
         """The repository as GitHub shows it to this rig's token. Its own
         method so a test can stand in for GitHub."""
         return github_access.repository(token, url)
+
+    def _github_look_around(self, token: str, url: str) -> dict:
+        return github_access.look_around(token, url)
+
+    def _connected_families(self) -> list:
+        """The families of the boards connected right now: what a project
+        added here most likely wants, when nothing says otherwise."""
+        try:
+            boards = (self.inventory_snapshot() or {}).get("boards") or []
+        except Exception:  # noqa: BLE001 -- a suggestion, never a refusal
+            return []
+        return sorted({str(board.get("target")) for board in boards if isinstance(board, dict) and board.get("target")})
+
+    def inspect_repository(self, body, identity=None) -> dict:
+        """The repository as GitHub shows it to this rig's token, and what a
+        project made of it would look like: the default branch, a suite
+        directory, a supply workflow, families -- found in the project's own
+        `.alteriom-hil.yaml` when it has one, guessed and said so otherwise,
+        and the families of the boards connected right now when nothing
+        says. The person confirms; the rig writes nothing here."""
+        token = self._require_github()
+        repo = github_access.normalise_repo(str((body or {}).get("repo") or ""))
+        try:
+            found = self._github_look_around(token, repo)
+        except github_access.GitHubError as error:
+            raise ValueError(f"this rig's GitHub token cannot read {repo}: {error}") from None
+        owner, name = github_access.parse_repo(found["repo"])
+        suggested = {
+            "name": re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-")[:64] or "project",
+            "label": found.get("label") or name,
+            "repo": found["repo"],
+            "default_ref": found.get("default_ref") or "main",
+            "suite_path": found.get("suite_path") or "tests",
+            "families": found.get("families") or self._connected_families(),
+            "supply_repo": found["repo"],
+            "supply_workflow": found.get("supply_workflow") or ".github/workflows/hil.yml",
+            "supply_artifact": found.get("supply_artifact") or "hil-artifacts",
+        }
+        return {"repo": found["repo"], "private": found.get("private"), "default_ref": found.get("default_ref"),
+                "found": found.get("found", []), "guessed": found.get("guessed", []),
+                "workflows": found.get("workflows", []), "suggested": suggested,
+                "taken": suggested["name"] in self.profiles}
+
+    # ---- the rig's own details: what it calls itself ---------------------------------
+
+    def _rig_details_path(self) -> Path:
+        return Path(self.state) / "rig.json"
+
+    def rig_details(self) -> dict:
+        try:
+            saved = json.loads(self._rig_details_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            saved = {}
+        return {key: (str(saved.get(key)).strip() or None) if saved.get(key) is not None else None
+                for key in ("name", "description", "location")}
+
+    def rig_details_view(self, identity=None) -> dict:
+        return {**self.rig_details(), "host": self._own_name()}
+
+    def set_rig_details(self, body, identity=None) -> dict:
+        """A name of its own (else the host's), a description, a location:
+        what the rig's page and, once connected, a portal's page for it
+        show. Kept in the state directory; a portal never overwrites it."""
+        fields = body or {}
+        name = str(fields.get("name") or "").strip()
+        if name and not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,31}", name):
+            raise ValueError("a rig's name is 1-32 lowercase letters, digits, dots, underscores or hyphens (or empty for the host's)")
+        description = str(fields.get("description") or "").strip()[:200]
+        location = str(fields.get("location") or "").strip()[:120]
+        path = self._rig_details_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"name": name or None, "description": description or None,
+                                   "location": location or None}, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+        return self.rig_details_view()
 
     # ---- projects: what this rig runs -----------------------------------------------
 

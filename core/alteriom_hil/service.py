@@ -1591,6 +1591,15 @@ class BaseManager:
         import socket
         return (socket.gethostname() or "local").split(".")[0] or "local"
 
+    def _own_details(self) -> dict:
+        """What the rig calls itself, when the rig half keeps that (Settings
+        -> Rig); a base without it has nothing to say."""
+        told = getattr(self, "rig_details", None)
+        try:
+            return told() if callable(told) else {}
+        except Exception:  # noqa: BLE001 -- a broken details file must not take the view down
+            return {}
+
     def rig_view(self) -> dict:
         """This rig, as a portal would describe it: what `worker_detail` says
         of a connected rig, from this host's own configuration, health
@@ -1612,7 +1621,7 @@ class BaseManager:
             "contract": self.RIG_VIEW_CONTRACT,
             # A node is the name its portal knows it by; a rig on its own is
             # its host, until Settings gives it a name of its own.
-            "name": os.environ.get("ALTERIOM_HIL_WORKER_NAME") or self._own_name(),
+            "name": os.environ.get("ALTERIOM_HIL_WORKER_NAME") or self._own_details().get("name") or self._own_name(),
             "kind": "hardware",
             "version": version.get("version"),
             "commit": version.get("commit"),
@@ -1627,8 +1636,8 @@ class BaseManager:
             "health": health,
             "update": None,
             "drained": None,
-            "description": None,
-            "location": None,
+            "description": self._own_details().get("description"),
+            "location": self._own_details().get("location"),
             "owner": None,
             "visibility": None,
             "config": config,

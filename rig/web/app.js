@@ -68,6 +68,8 @@ const RIG_SHELL = {
   // Overview is this rig's own page: the same sections the portal shows for
   // a rig, from the same renderer. The fleet overview is the portal's.
   overviewIsRigPage: true,
+  // Settings on a rig: the rig itself, its projects, the host, access.
+  settingsOrder: ["rig", "projects", "host", "access"],
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -1996,7 +1998,7 @@ function rigSubtitle(rig) {
   }
   const state = workerState(rig);
   const release = rigRelease(rig);
-  return [`<span class="state ${state.tone}">${state.label}</span>`, `Release <strong>${escapeHtml(rig.version || "unknown")}</strong>`,
+  return [`<span class="state ${state.tone}">${state.label}</span>`, `${rig.local ? "Version" : "Release"} <strong>${escapeHtml(rig.version || "unknown")}</strong>`,
     rig.local ? "" : `<span class="state ${release.tone}">${escapeHtml(release.label)}</span>`,
     // On the world page, and for anyone: worth saying beside its name.
     rig.visibility && rig.visibility !== "private" ? `<span class="state good">${escapeHtml(rig.visibility)}</span>` : "",
@@ -4876,6 +4878,8 @@ let rigProjectsView = null;
 let projectEditing = null;   // null, "new", or the name of the project being changed
 let projectOpen = null;      // the name whose page is open below the table
 let projectNotice = null;    // {tone, text} after a fetch, shown once
+let projectDraft = null;     // what the rig found on GitHub for a project being added
+let projectByHand = false;   // the person chose the long form over the look-up
 
 async function loadRigProjects() {
   const card = $("config-projects");
@@ -4884,6 +4888,57 @@ async function loadRigProjects() {
   catch (error) { card.innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
   renderRigProjects(rigProjectsView);
   renderGitHubCard(rigProjectsView.github);
+}
+
+// What this rig calls itself: a name (else its host's), a description, a
+// location -- what its own page shows and, once connected, what a portal's
+// page for it shows. Kept on the rig.
+let rigDetailsEditing = false;
+async function loadRigDetailsCard() {
+  const card = $("rig-details-card");
+  if (!card) return;
+  let view;
+  try { view = await api("/api/v1/rig/details"); }
+  catch (error) { card.innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
+  renderRigDetailsCard(view);
+}
+
+function renderRigDetailsCard(view) {
+  const card = $("rig-details-card");
+  if (!card) return;
+  const shown = view.name || view.host;
+  const body = rigDetailsEditing && isAdmin()
+    ? `<form id="rig-details-own" class="settings-form" autocomplete="off">
+        <label>Name <small class="muted">lowercase letters, digits, dots, underscores or hyphens; empty for the host's, <code>${escapeHtml(view.host)}</code></small><input name="name" value="${escapeHtml(view.name || "")}" pattern="[a-z0-9][a-z0-9._-]{0,31}" placeholder="${escapeHtml(view.host)}"></label>
+        <label>Description <small class="muted">what this rig is for, in a line</small><input name="description" value="${escapeHtml(view.description || "")}" maxlength="200" placeholder="the bench under the window, alteriom firmware"></label>
+        <label>Location <input name="location" value="${escapeHtml(view.location || "")}" maxlength="120" placeholder="Quebec, home lab"></label>
+        <p id="rig-details-error" class="failure-summary" hidden></p>
+        <div class="settings-footer"><button type="submit">Save</button><button type="button" class="secondary rig-details-cancel">Cancel</button></div>
+      </form>`
+    : `<div class="detail-grid">
+        <div><small>Name</small><span><strong>${escapeHtml(shown)}</strong>${view.name ? "" : ' <small class="muted">the host\'s</small>'}</span></div>
+        <div><small>Description</small><span>${view.description ? escapeHtml(view.description) : '<span class="muted">not set</span>'}</span></div>
+        <div><small>Location</small><span>${view.location ? escapeHtml(view.location) : '<span class="muted">not set</span>'}</span></div>
+      </div>`;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">THIS RIG</p><h2>Name and place</h2></div>${!rigDetailsEditing && isAdmin() ? '<button type="button" class="secondary rig-details-edit">Change</button>' : ""}</div>
+    <p class="muted">How this rig is called and where it is: on its own page, and on a farm's page for it once it is connected.</p>${body}`;
+  card.querySelector(".rig-details-edit")?.addEventListener("click", () => { rigDetailsEditing = true; renderRigDetailsCard(view); });
+  card.querySelector(".rig-details-cancel")?.addEventListener("click", () => { rigDetailsEditing = false; renderRigDetailsCard(view); });
+  card.querySelector("#rig-details-own")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const body = Object.fromEntries(new FormData(form).entries());
+    try {
+      const saved = await api("/api/v1/rig/details", {method: "POST", body: JSON.stringify(body)});
+      rigDetailsEditing = false;
+      renderRigDetailsCard(saved);
+      if (rigPage.name === "local") showRig("local");
+    } catch (error) {
+      const note = form.querySelector("#rig-details-error");
+      note.hidden = false;
+      note.textContent = error.message;
+    }
+  });
 }
 
 async function loadGitHubCard() {
@@ -4996,7 +5051,7 @@ function renderRigProjects(view) {
   card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${canAdd && !projectEditing ? '<button type="button" class="secondary project-add">Add project</button>' : ""}${github && github.connected ? `<span class="muted" title="GitHub accepts this rig's token">GitHub · ${escapeHtml(github.login)}</span>` : ""}</div></div>
     <p class="muted">A project is a GitHub repository whose firmware this rig flashes and whose test suite it runs. This rig runs the projects listed here and no other: change or remove any of them, the reference the release ships included, and add your own. The rig does not build firmware: your project's CI builds a bundle, and this rig fetches it from GitHub or takes it when the CI hands it over; a run flashes it.</p>
     ${gate}${notice}
-    ${projectEditing ? projectForm(current) : ""}
+    ${projectEditing === "new" && !projectDraft && !projectByHand ? projectStartForm() : projectEditing ? projectForm(current) : ""}
     ${projects.length ? `<div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">No project on this rig yet.</p>'}
     ${removed}${health}
     ${projectOpen ? projectPage(projectOf(projectOpen), github) : ""}
@@ -5098,11 +5153,29 @@ function runProject(name) {
   bringIntoView($("run-card"));
 }
 
+// A new project starts with the repository URL and nothing else: the rig
+// looks it up on GitHub -- the default branch, the project's own
+// .alteriom-hil.yaml when it has one, else the directory that looks like the
+// suite and the workflow that looks like the HIL build -- and the form comes
+// back filled in, with what was found and what was guessed said.
+function projectStartForm() {
+  return `<form id="project-start" class="settings-form" autocomplete="off">
+    <div class="title-row"><div><p class="eyebrow">NEW PROJECT</p><h3>Start with the repository</h3></div></div>
+    <label>Repository <small class="muted">on GitHub; this rig's token must be able to read it</small><input name="repo" type="url" required placeholder="https://github.com/you/my-sensor" autofocus></label>
+    <p id="project-start-error" class="failure-summary" hidden></p>
+    <div class="settings-footer"><button type="submit">Look it up</button><button type="button" class="secondary project-by-hand">Fill it in by hand</button><button type="button" class="secondary project-cancel">Cancel</button></div>
+  </form>`;
+}
+
 function projectForm(current) {
-  const value = (key, fallback = "") => escapeHtml(current && current[key] != null ? current[key] : fallback);
-  const families = (current?.needs || []).map(need => need.target);
+  const draft = !current && projectDraft ? projectDraft : null;
+  const source = current || (draft ? draft.suggested : null);
+  const value = (key, fallback = "") => escapeHtml(source && source[key] != null ? source[key] : fallback);
+  const families = current ? (current.needs || []).map(need => need.target) : (draft ? draft.suggested.families || [] : []);
+  const found = draft ? `<p class="muted">${draft.found.length ? `Found in the repository: ${escapeHtml(draft.found.join(", "))}. ` : ""}${draft.guessed.length ? `Guessed: ${escapeHtml(draft.guessed.join("; "))}. ` : ""}${draft.private ? "The repository is private; this rig's token reads it. " : ""}${draft.taken ? `<span class="warn">A project named ${escapeHtml(draft.suggested.name)} exists here already; choose another name.</span> ` : ""}Check what follows and add.</p>` : "";
   return `<form id="project-form" class="settings-form" autocomplete="off" data-name="${current ? escapeHtml(current.name) : ""}">
-    <div class="title-row"><div><p class="eyebrow">${current ? "CHANGE PROJECT" : "NEW PROJECT"}</p><h3>${current ? escapeHtml(current.label || current.name) : "Your repository, its suite, its boards"}</h3></div></div>
+    <div class="title-row"><div><p class="eyebrow">${current ? "CHANGE PROJECT" : "NEW PROJECT"}</p><h3>${current ? escapeHtml(current.label || current.name) : draft ? escapeHtml(draft.repo.replace(/^https:\/\/github\.com\//, "")) : "Your repository, its suite, its boards"}</h3></div></div>
+    ${found}
     <label>Name <small class="muted">lowercase letters, digits and dashes; what a run names</small><input name="name" value="${value("name")}"${current ? " readonly" : ""} required pattern="[a-z0-9][a-z0-9-]{0,63}" placeholder="my-sensor"></label>
     <label>Label <small class="muted">how it reads on this page and in reports</small><input name="label" value="${value("label")}" placeholder="My sensor firmware"></label>
     <label>Repository <small class="muted">on GitHub, read with this rig's token; checked out fresh for every run</small><input name="repo" type="url" value="${value("repo")}" required pattern="https://github\\.com/.+" placeholder="https://github.com/you/my-sensor"></label>
@@ -5127,8 +5200,29 @@ function wireRigProjects(card) {
   const redraw = () => renderRigProjects(rigProjectsView);
   card.querySelector(".project-add")?.addEventListener("click", () => {
     projectEditing = "new";
+    projectDraft = null;
+    projectByHand = false;
     redraw();
-    $("project-form")?.querySelector("input[name=name]")?.focus();
+    ($("project-start") || $("project-form"))?.querySelector("input")?.focus();
+  });
+  card.querySelector(".project-by-hand")?.addEventListener("click", () => { projectByHand = true; redraw(); $("project-form")?.querySelector("input[name=name]")?.focus(); });
+  card.querySelector("#project-start")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector("button[type=submit]");
+    const note = form.querySelector("#project-start-error");
+    button.disabled = true;
+    button.textContent = "Looking…";
+    try {
+      projectDraft = await api("/api/v1/projects/inspect", {method: "POST", body: JSON.stringify({repo: form.elements.repo.value.trim()})});
+      redraw();
+      $("project-form")?.querySelector("input[name=label]")?.focus();
+    } catch (error) {
+      note.hidden = false;
+      note.textContent = error.message;
+      button.disabled = false;
+      button.textContent = "Look it up";
+    }
   });
   card.querySelectorAll(".project-open").forEach(element => element.addEventListener("click", event => {
     event.preventDefault();
@@ -5149,7 +5243,7 @@ function wireRigProjects(card) {
   wireGitHubCard(card);
   card.querySelectorAll(".project-fetch").forEach(button => button.addEventListener("click", () => fetchProjectBundle(button.dataset.name, button)));
   card.querySelectorAll(".project-edit").forEach(button => button.addEventListener("click", () => { projectEditing = button.dataset.name; redraw(); }));
-  card.querySelector(".project-cancel")?.addEventListener("click", () => { projectEditing = null; redraw(); });
+  card.querySelectorAll(".project-cancel").forEach(button => button.addEventListener("click", () => { projectEditing = null; projectDraft = null; projectByHand = false; redraw(); }));
   card.querySelectorAll(".project-remove").forEach(button => button.addEventListener("click", async () => {
     const name = button.dataset.name;
     const row = projectOf(name);
@@ -5184,6 +5278,8 @@ function wireRigProjects(card) {
       const answer = await api(path, {method: "POST", body: JSON.stringify(body)});
       rigProjectsView = {...rigProjectsView, projects: answer.projects, removed: answer.removed_shipped || rigProjectsView.removed || []};
       projectEditing = null;
+      projectDraft = null;
+      projectByHand = false;
       projectOpen = answer.project?.name || projectOpen;
       redraw();
     } catch (error) {
@@ -5344,7 +5440,7 @@ async function loadConfig() {
 // The three the dashboard has, plus whatever the shell adds -- Access
 // stays last, because it is the admin's and reads as the end of the list.
 function settingsTabs() {
-  const tabs = ["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"];
+  const tabs = shell().settingsOrder || ["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"];
   // A person's Settings are their own: Workspaces, Projects, and whatever
   // else the shell adds for them. General is the farm's configuration and
   // Access its keys and audit -- farm-wide reads the service refuses an
@@ -5383,18 +5479,20 @@ function showSettingsTab(tab, updateHash = true) {
   // The first tab this caller is offered: General for an operator, and for a
   // person the first of their own.
   settingsTab = known ? tab : settingsTabs()[0];
-  if (settingsTab === "general") { loadFarmNotify(); shell().farmWebhooksLoad(); }
+  if (settingsTab === "general" || settingsTab === "host") { loadFarmNotify(); shell().farmWebhooksLoad(); }
   for (const name of settingsTabs()) {
     const panel = $(`settings-${name}`);
     if (panel) panel.hidden = name !== settingsTab;
   }
   document.querySelectorAll("#settings-tabs a").forEach(link => link.classList.toggle("active", link.dataset.tab === settingsTab));
   if (updateHash) {
-    history.replaceState(null, "", settingsTab === "general" ? "#configuration" : `#configuration/${settingsTab}`);
+    history.replaceState(null, "", settingsTab === settingsTabs()[0] ? "#configuration" : `#configuration/${settingsTab}`);
     lastRouted = location.hash;
   }
   if (!token) return;
   if (settingsTab === "general") { loadConfig(); loadGitHubCard(); }
+  if (settingsTab === "rig") { loadRigDetailsCard(); loadGitHubCard(); loadConfig(); }
+  if (settingsTab === "host") loadConfig();
   if (settingsTab === "projects") loadProjects();
   if (settingsTab === "access" && isAdmin()) { loadAudit(); loadKeys(); }
   shell().settingsPanel(settingsTab);

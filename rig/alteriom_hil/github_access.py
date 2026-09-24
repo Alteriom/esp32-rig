@@ -117,6 +117,85 @@ def repository(token: str, url: str) -> dict:
     }
 
 
+def contents(token: str, repo_url: str, path: str, ref: str | None = None):
+    """A file or a directory listing from the repository, as the contents
+    API gives it: a dict for a file (base64 body), a list for a directory,
+    None when there is no such path. Anything else is a GitHubError."""
+    import base64
+    owner, repo = parse_repo(repo_url)
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/contents/{urllib.parse.quote(path.strip('/'))}"
+    if ref:
+        url += f"?ref={urllib.parse.quote(ref)}"
+    try:
+        answer = http_json(url, headers=_headers(token), timeout=15)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        raise GitHubError(_refusal(error, url)) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise GitHubError(f"GitHub could not be reached: {error.__class__.__name__}: {error}"[:200]) from None
+    if isinstance(answer, dict) and answer.get("type") == "file" and answer.get("encoding") == "base64":
+        try:
+            answer["text"] = base64.b64decode(answer.get("content") or "").decode("utf-8", "replace")
+        except (ValueError, TypeError):
+            answer["text"] = ""
+    return answer
+
+
+SUITE_CANDIDATES = ("hil/tests", "tests/hil", "test/hil", "hil", "tests", "test")
+
+
+def look_around(token: str, repo_url: str) -> dict:
+    """What the repository tells about itself, for a form to be filled in:
+    its default branch; its `.alteriom-hil.yaml` when it has one (then the
+    project is described there); else the directory that looks like the
+    suite and the workflow that looks like the HIL build. Guesses are
+    marked as guesses."""
+    seen = repository(token, repo_url)
+    ref = seen["default_branch"]
+    found: dict = {"repo": seen["url"], "default_ref": ref, "private": seen["private"], "found": [], "guessed": []}
+    described = contents(token, seen["url"], ".alteriom-hil.yaml", ref)
+    if isinstance(described, dict) and described.get("text"):
+        found["declared"] = described["text"]
+        found["found"].append(".alteriom-hil.yaml")
+        try:
+            import yaml
+            doc = yaml.safe_load(described["text"]) or {}
+        except Exception:  # noqa: BLE001 -- a document the project wrote; say it, do not crash
+            doc = {}
+        if isinstance(doc, dict):
+            suite = doc.get("suite") or {}
+            supply = doc.get("supply") or {}
+            if isinstance(suite, dict) and suite.get("path"):
+                found["suite_path"] = str(suite["path"])
+            if doc.get("label"):
+                found["label"] = str(doc["label"])
+            if isinstance(supply, dict):
+                if supply.get("workflow"):
+                    found["supply_workflow"] = str(supply["workflow"])
+                if supply.get("artifact"):
+                    found["supply_artifact"] = str(supply["artifact"])
+            needs = doc.get("needs")
+            if isinstance(needs, list):
+                found["families"] = [str(n.get("target")) for n in needs if isinstance(n, dict) and n.get("target")]
+    if "suite_path" not in found:
+        for candidate in SUITE_CANDIDATES:
+            listing = contents(token, seen["url"], candidate, ref)
+            if isinstance(listing, list) and any(isinstance(e, dict) and str(e.get("name", "")).startswith("test_") for e in listing):
+                found["suite_path"] = candidate
+                found["guessed"].append(f"suite_path: {candidate} (has test_*.py)")
+                break
+    if "supply_workflow" not in found:
+        listing = contents(token, seen["url"], ".github/workflows", ref)
+        names = [str(e.get("name")) for e in listing if isinstance(e, dict)] if isinstance(listing, list) else []
+        found["workflows"] = sorted(names)
+        pick = next((n for n in sorted(names) if "hil" in n.lower()), None) or next((n for n in sorted(names) if "firmware" in n.lower() or "build" in n.lower()), None)
+        if pick:
+            found["supply_workflow"] = f".github/workflows/{pick}"
+            found["guessed"].append(f"supply_workflow: {pick}")
+    return found
+
+
 class Status:
     """Who this rig is to GitHub, asked rarely and never guessed.
 
