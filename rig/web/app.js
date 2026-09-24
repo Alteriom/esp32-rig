@@ -65,6 +65,9 @@ const RIG_SHELL = {
   // Settings -> Projects, for a key: on a rig the projects are its own to keep.
   keyProjects: () => loadRigProjects(),
   projectsAreOwn: true,
+  // Overview is this rig's own page: the same sections the portal shows for
+  // a rig, from the same renderer. The fleet overview is the portal's.
+  overviewIsRigPage: true,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -493,23 +496,20 @@ function workspaceOnly() {
   return document.body.dataset.caller === "account" && document.body.dataset.role !== "admin";
 }
 
-function showPanel(name, updateHash = true, suffix = "") {
+function showPanel(name, updateHash = true, suffix = "", {as = null} = {}) {
   const wanted = document.querySelector(`.page[data-page="${CSS.escape(name)}"]`);
-  // A page whose every read the farm would refuse is not a place this caller
-  // can be sent. Their nav items are hidden by CSS, but an address can be
-  // typed, bookmarked, or followed from a link somebody pasted, and the nav
-  // covers none of those -- so the rule lives here as well, and an account
-  // asking for one lands on the overview rather than a blank panel.
+  // A document without a fleet overview (a rig's) lands on its rig page.
+  const fallback = document.querySelector('.page[data-page="overview"]') ? "overview" : "rig";
   const target = wanted && !(workspaceOnly()
-    && wanted.classList.contains("farm-wide")) ? name : "overview";
+    && wanted.classList.contains("farm-wide")) ? name : fallback;
   document.querySelectorAll(".page").forEach(page => { const active = page.dataset.page === target; page.hidden = !active; page.classList.toggle("active", active); });
-  // A run is its own page and has no nav item; the list it belongs to stays
-  // lit, so an operator reading a run can see where they are.
-  const lit = target === "run" ? "runs" : ["artifact", "storage"].includes(target) ? "artifacts" : ["rig", "board"].includes(target) ? "rigs" : target;
+  // `as` is the address and the nav item this page stands for: on a rig the
+  // rig page is #overview, and Overview is lit.
+  const shown = as || (target === "rig" && fallback === "rig" && !suffix ? "overview" : target);
+  const lit = shown === "run" ? "runs" : ["artifact", "storage"].includes(shown) ? "artifacts" : ["rig", "board"].includes(shown) ? "rigs" : shown;
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.panel === lit));
   if (updateHash) {
-    history.replaceState(null, "", `#${target}${suffix}`);
-    // Rewritten without an event, so the router must know it is already here.
+    history.replaceState(null, "", `#${shown}${suffix}`);
     lastRouted = location.hash;
   }
 }
@@ -557,6 +557,12 @@ function parseRoute(hash) {
 // is false when the browser already changed the URL for us -- a reload, or
 // the back button -- so the router does not fight it.
 function openRoute(route, {updateHash = true} = {}) {
+  if (route.name === "overview" && shell().overviewIsRigPage) {
+    // The rig's own page, kept at #overview: the address a rig opens on.
+    showPanel("rig", updateHash, "", {as: "overview"});
+    if (token) showRig("local");
+    return;
+  }
   if (route.name === "account") {
     showPanel("account", updateHash);
     if (token) loadAccount();
@@ -1494,14 +1500,26 @@ function workerHeading(worker) {
 function workerFacts(worker, {long = false} = {}) {
   const release = releaseState(worker);
   const health = workerHealth(worker);
+  // A rig on its own page says what it has. A release, when it was last
+  // heard, whose it is and who may see it are a portal's facts about one of
+  // its rigs; here they would be "unknown", "just now", "the farm" and
+  // "private" -- true of nothing.
+  const local = Boolean(worker.local);
   const facts = [
-    ["Release", `<strong>${escapeHtml(worker.version || "unknown")}</strong> <small class="state ${release.tone}">${escapeHtml(release.label)}</small>`],
+    local
+      ? ["Version", `<strong>${escapeHtml(worker.version || "unknown")}</strong>`]
+      : ["Release", `<strong>${escapeHtml(worker.version || "unknown")}</strong> <small class="state ${release.tone}">${escapeHtml(release.label)}</small>`],
     ["Runs", `${escapeHtml(worker.running)} of ${escapeHtml(worker.max_runs)}`],
     ["Boards", `${escapeHtml(worker.boards)}${worker.missing ? ` <small class="warn">${escapeHtml(worker.missing)} missing</small>` : ""}`],
     ["Host health", `<span class="${health === "ok" ? "good" : health === "unknown" ? "muted" : "warn"}">${escapeHtml(health)}</span>`],
-    ["Last heard", whenSpan(worker.seen_at)],
+    ...(local ? [] : [["Last heard", whenSpan(worker.seen_at)]]),
   ];
-  if (long) {
+  if (long && local) {
+    facts.push(
+      ["Location", worker.location ? escapeHtml(worker.location) : '<span class="muted">not set</span>'],
+      ["Commit", farmCommitLink(worker.commit)],
+      ["Projects", escapeHtml((worker.profiles || []).filter(name => name !== "canary").join(", ") || "none yet")]);
+  } else if (long) {
     facts.push(
       // Whose rig it is: the person who administers it, and what its own
       // settings and its events belong to.
@@ -1584,7 +1602,7 @@ function localRig() {
 }
 function fleetRigs() { return shell().fleet(); }
 function rigLabel(rig) { return rig.local ? rig.label : rig.name; }
-function rigHref(name) { return `#rig/${encodeURIComponent(name)}`; }
+function rigHref(name) { return name === "local" && shell().overviewIsRigPage ? "#overview" : `#rig/${encodeURIComponent(name)}`; }
 function boardHref(id) { return `#board/${encodeURIComponent(id)}`; }
 function boardsOf(rig) {
   const boards = (lastInventory || {}).boards || [];
@@ -1639,6 +1657,7 @@ function shortDetail(text, length = 160) {
 
 // ---- Overview ------------------------------------------------------------------
 function renderOverview(data) {
+  if (!$("rigs-online")) { renderRecentRuns(data.jobs || []); return; }   // a rig's document has no fleet overview
   const rigs = fleetRigs();
   const inv = lastInventory || {};
   const counts = boardCounts(inv.boards || []);
@@ -1747,6 +1766,7 @@ function renderAttention(rigs) {
 }
 
 function renderRecentRuns(jobs) {
+  if (!$("overview-recent")) return;
   const finished = jobs.filter(job => !["queued", "running"].includes(job.status)).slice(0, 8);
   $("overview-recent").innerHTML = `<div class="title-row"><div><p class="eyebrow">HISTORY</p><h2>Recent runs</h2></div><a class="button secondary" href="#runs">All runs</a></div>${
     finished.length
@@ -1858,6 +1878,8 @@ async function showRig(name) {
     try {
       const view = await api("/api/v1/view");
       rigPage.detail = {...view, ...localRig(), health: view.health, config: view.config,
+        // The rig's name is the view's: its host, or what Settings gave it.
+        label: view.name && view.name !== "local" ? view.name : shell().localRigLabel,
         setup: view.setup || [], commands: view.commands || [], inventory: view.inventory || {}};
     } catch {
       // A key that may not read the host's configuration (an account on a
@@ -5524,6 +5546,7 @@ function liveRunColumn(running, alsoRunning, inv) {
 }
 
 function renderActive(jobs, queue, inv) {
+  if (!$("active-run")) return;   // on a rig the live run is the rig page's (renderRigLive)
   const byId = new Map(jobs.map(job => [job.id, job]));
   const runningJobs = (queue?.running_jobs || jobs.filter(job => job.status === "running").map(job => job.id)).map(id => byId.get(id)).filter(Boolean);
   const running = runningJobs[0];
@@ -5601,7 +5624,8 @@ async function refresh(force = false) {
       // portal, which node is offline, behind or failing its install.
       $("overall").title = (data.health?.checks || []).filter(check => check.status !== "ok").map(check => `${check.name}: ${check.message}`).join("\n");
       renderNodeBanner();
-      renderProfiles(); renderVersion(data.version, repositories); renderOverview(data); renderFleet(); renderFamilies(data.targets || [], inv); renderSuiteTests(data.suite_tests || []); renderActive(jobs, lastQueue, inv); loadJobs();
+      renderProfiles(); renderVersion(data.version, repositories); renderOverview(data); renderFleet();
+      if (shell().overviewIsRigPage && rigPage.name === "local" && document.querySelector('.page[data-page="rig"].active')) showRig("local"); renderFamilies(data.targets || [], inv); renderSuiteTests(data.suite_tests || []); renderActive(jobs, lastQueue, inv); loadJobs();
       // An open rig or board page follows the poll too.
       if (!document.querySelector('.page[data-page="rig"]').hidden && rigPage.name && !rigPage.busy.size) showRig(rigPage.name);
       if (!document.querySelector('.page[data-page="board"]').hidden && boardPage.id) renderBoard();
@@ -5645,7 +5669,8 @@ $("token-form").addEventListener("submit", event => {
 $("close-rig").addEventListener("click", () => navigateTo("#rigs"));
 $("close-board").addEventListener("click", () => navigateTo(boardPage.rig ? rigHref(boardPage.rig) : "#boards"));
 installRigPageHandlers();
-$("overview-new-run").addEventListener("click", () => { navigateTo("#runs"); $("run-card").open = true; bringIntoView($("run-card")); });
+// The fleet overview's button; a rig's document, whose overview is its rig page, has none.
+$("overview-new-run")?.addEventListener("click", () => { navigateTo("#runs"); $("run-card").open = true; bringIntoView($("run-card")); });
 $("board-search").addEventListener("input", event => { boardFilter.q = event.target.value; renderBoardsTable(); });
 $("board-rig").addEventListener("change", event => { boardFilter.rig = event.target.value; renderBoardsTable(); });
 $("board-family").addEventListener("change", event => { boardFilter.family = event.target.value; renderBoardsTable(); });
