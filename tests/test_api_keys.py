@@ -740,3 +740,21 @@ def test_half_route_hands_back_the_route_so_the_handler_knows_what_to_call():
     assert half_route(WORKSPACES, "POST", "/api/v1/nothing") is None
     assert half_route((), "GET", "/api/v1/workspaces") is None
     assert half_route(None, "GET", "/api/v1/workspaces") is None, "a half that declares none"
+
+
+def test_an_account_adds_a_rig_and_reaches_the_life_of_its_own():
+    """People bring their own rigs: that is the premise, and for a long time
+    only an admin could act on it, because every host this farm had was the
+    farm's own. Adding one, and the life of one they own -- its details while
+    it joins, a new join command, deleting it -- are an account's routes; the
+    handler asks who owns the rig before the last three. The host controls
+    are not: draining or restarting a rig is an operator's."""
+    from alteriom_hil.api_keys import account_route
+
+    assert account_route("POST", "/api/v1/rigs")
+    assert account_route("PATCH", "/api/v1/rigs/bench-01")
+    assert account_route("POST", "/api/v1/rigs/bench-01/join")
+    assert account_route("DELETE", "/api/v1/rigs/bench-01")
+    assert not account_route("POST", "/api/v1/workers/bench-01/drain")
+    assert not account_route("POST", "/api/v1/workers/bench-01/commands")
+    assert not account_route("POST", "/api/v1/rigs/bench-01/owner"), "giving a rig away is the platform's"

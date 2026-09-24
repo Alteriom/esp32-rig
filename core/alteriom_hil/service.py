@@ -4477,6 +4477,21 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             scope = getattr(manager, "run_scope", None)
             return scope(identity) if scope is not None else (None, None)
 
+        def _theirs(self, name: str, identity) -> bool:
+            """Whether an account may act on this rig: it owns it.
+
+            A key is not asked -- an admin key manages every rig and a user
+            key's reach is decided by its role, as ever. An account is
+            asked of the manager, which knows who owns what; a manager with
+            no such notion (a standalone rig, which has no accounts either)
+            answers no, and the account is told what the reads tell it
+            about a rig that is not its own: there is no such rig.
+            """
+            if not getattr(identity, "is_account", False):
+                return True
+            may = getattr(manager, "may_manage_rig", None)
+            return bool(may is not None and may(name, identity))
+
         def _visible(self, identity) -> set[str] | None:
             """Which rigs this caller may see: None for every rig.
 
@@ -5397,8 +5412,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
 
         def _patch(self, path: str, identity: Identity):
             rig = re.fullmatch(r"/api/v1/rigs/([a-z0-9][a-z0-9._-]{0,31})", path)
-            if not rig:
-                return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+            if not rig or not self._theirs(rig.group(1), identity):
+                return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig" if rig else "not found"})
             return self._worker_call(lambda: manager.update_rig(rig.group(1), self._request_json(), identity.name, keys))
 
         def _read_body(self, limit: int) -> bytes | None:
@@ -5569,6 +5584,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             join = re.fullmatch(r"/api/v1/rigs/([a-z0-9][a-z0-9._-]{0,31})/join", path)
             if join:
+                if not self._theirs(join.group(1), identity):
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig"})
                 return self._worker_call(lambda: manager.new_join_token(join.group(1), identity.name, keys))
             control = re.fullmatch(r"/api/v1/workers/([a-z0-9][a-z0-9._-]{0,31})/(commands|drain|resume)", path)
             if control:
@@ -5863,6 +5880,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             rig = re.fullmatch(r"/api/v1/(?:rigs|workers)/([a-z0-9][a-z0-9._-]{0,31})", path)
             if rig:
                 name = rig.group(1)
+                if not self._theirs(name, identity):
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig"})
                 # Its key goes with it: a removed worker that comes back is
                 # refused, not re-registered. /api/v1/workers/<name> is the
                 # older spelling of the same deletion.
