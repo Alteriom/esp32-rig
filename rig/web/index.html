@@ -189,15 +189,17 @@
       </section>
       <section class="page" data-page="configuration" hidden>
         <div class="page-heading"><div><p class="eyebrow">THIS HOST</p><h1>Settings</h1></div></div>
-        <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="general" class="active farm-wide">General</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
-        <div id="settings-general">
-          <section class="card"><div class="title-row"><div><p class="eyebrow">THIS RIG</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div></section>
-          <section id="farm-link" class="card"><div class="title-row"><div><p class="eyebrow">FARM</p><h2>Connection to a farm</h2></div></div><p class="muted">Loading…</p></section>
+        <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="rig" class="active">Rig</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/host" data-tab="host">Host</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
+        <!-- Rig: what this rig is and who it talks to. -->
+        <div id="settings-rig">
+          <section id="rig-details-card" class="card"><div class="title-row"><div><p class="eyebrow">THIS RIG</p><h2>Name and place</h2></div></div><p class="muted">Loading…</p></section>
           <section id="github-card" class="card" hidden></section>
+          <section id="farm-link" class="card"><div class="title-row"><div><p class="eyebrow">FARM</p><h2>Connection to a farm</h2></div></div><p class="muted">Loading…</p></section>
+          <section class="card"><div class="title-row"><div><p class="eyebrow">THIS RIG</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div></section>
+        </div>
+        <!-- Host: what the host is configured with, and what it does on its own. -->
+        <div id="settings-host" hidden>
           <section class="card"><div class="title-row"><div><p class="eyebrow">DECISIONS</p><h2 id="config-title">What this rig decides with</h2></div></div><p id="config-source" class="muted"></p><div id="config"><p class="muted">Loading…</p></div><p class="muted">A rig's own settings -- runs at once, retention, host health -- are on its page under Rigs, and changed there.</p></section>
-          <!-- What the farm tells whoever looks after it: the fleet's own
-               facts, which no single rig is in a position to report. A rig's
-               own channel is on its page (docs/notifications.md). -->
           <section id="farm-notify" class="card"></section>
           <section id="planned-card" class="card"><div class="title-row"><div><p class="eyebrow">NOT YET CONTROLLABLE</p><h2>Planned controls</h2></div><span class="muted">Read-only today</span></div><div id="planned-controls"></div></section>
         </div>

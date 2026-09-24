@@ -284,7 +284,7 @@ def test_a_shell_adds_its_own_settings_tabs_and_the_rig_adds_none():
     # And the three built-in panels are still in the markup, because they are
     # the dashboard's own.
     page = (WEB / "index.html").read_text(encoding="utf-8")
-    for built_in in ("settings-general", "settings-projects", "settings-access"):
+    for built_in in ("settings-rig", "settings-projects", "settings-host", "settings-access"):
         assert f'id="{built_in}"' in page
 
 
@@ -1118,7 +1118,7 @@ def test_settings_is_a_persons_page_too_and_only_the_farm_wide_tabs_are_an_opera
     script = dashboard()
     assert '<button class="nav-item" data-panel="configuration">Settings</button>' in page
     assert '<section class="page" data-page="configuration" hidden>' in page
-    assert '<a href="#configuration" data-tab="general" class="active farm-wide">General</a>' in page
+    assert '<a href="#configuration" data-tab="rig" class="active">Rig</a>' in page, "on a rig the first page is the rig itself"
     assert 'data-tab="access" class="admin-only"' in page
     tabs = script.split("function settingsTabs()", 1)[1].split("\n}", 1)[0]
     assert 'workspaceOnly() ? tabs.filter(name => name !== "general" && name !== "access") : tabs' in tabs
@@ -1139,11 +1139,19 @@ PORTAL_ONLY_IDS = {
     "signin-code", "signin-code-again", "signin-code-form", "signin-code-to", "signin-email",
     "signin-email-form", "signin-github", "signin-methods", "signin-none",
     "settings-fleet", "settings-people", "settings-workspaces", "workspace-form", "you",
+    # The portal's General tab; a rig's Settings are Rig / Projects / Host / Access.
+    "settings-general",
 }
 
 # What the library builds into the page as it goes, rather than finds there.
 BUILT_AT_RUNTIME = {"rig-details-form", "settings-changes", "storage-next", "storage-prev", "join-command",
-                    "project-form", "project-error"}
+                    "project-form", "project-error",
+                    "github-token-form",
+                    "github-token-error",
+                    "project-start",
+                    "project-start-error",
+                    "rig-details-own",
+                    "rig-details-error"}
 
 
 def _ids_touched(script: str) -> set[str]:
