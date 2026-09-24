@@ -712,7 +712,9 @@ def test_this_repository_pins_a_firmware_release_and_says_which():
     spec = load_profiles(REPO)["canary"]
     assert spec.revision_key == "farm_sha", "the key the firmware's manifest writes its commit under"
     # Nothing here compiles it: no build script, no source, no firmware workflow.
-    assert not (CANARY / "build_artifacts.py").exists() and not (CANARY / "firmware").exists()
+    # The source, not the directory: a clone that once built it keeps an
+    # ignored .pio/ under canary/firmware/.
+    assert not (CANARY / "build_artifacts.py").exists() and not (CANARY / "firmware" / "src").exists()
     assert not (REPO / ".github" / "workflows" / "canary-build.yml").exists()
     workflow = (REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     assert "Fetch the pinned firmware" in workflow and "platformio" not in workflow
