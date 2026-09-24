@@ -77,6 +77,10 @@ const RIG_SHELL = {
   // which rig, is a portal's question.
   settingsTabs: [],
   settingsPanel: id => {},
+  // Settings -> Projects for a signed-in person: their workspaces and the
+  // projects in each. A rig has no people and no workspaces; it shows what
+  // it runs. A portal's shell answers with /api/v1/workspaces.
+  workspaceProjects: null,
   // What the portal's shell does on these pages; a rig has nothing to do.
   farmWebhooksLoad: () => {},
   rigWebhooksLoad: name => {},
@@ -4677,12 +4681,76 @@ function renderConfig(config) {
   }
   const hostSections = portal ? "" : renderConfigSections(config);
   $("config").innerHTML = `<div class="setting-groups">${groups.join("")}</div>${hostSections ? `<details class="host-config" data-keep="host-config"><summary>Everything this host is configured with <small class="muted">service, paths, rig network, broker, farm role</small></summary>${hostSections}</details>` : ""}`;
-  const build = config.build || {};
+  // A person's Projects tab is drawn from their workspaces (loadProjects);
+  // this is the farm's own view, for a rig and for a key.
+  if (!(you?.account && shell().workspaceProjects)) renderFarmProjects(config.build || {});
+}
+
+// Who the projects panel was last drawn for. The first route can run before
+// the status says who is looking, and would draw the farm's view for a
+// person; the status handler redraws once it knows.
+let projectsShownAs;
+
+function farmProjectsMarkup(build) {
   const families = (build.targets || []).map(target => `<span class="artifact">${escapeHtml(target)}</span>`).join("");
-  $("config-projects").innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What the farm runs</h2></div><span class="muted">${escapeHtml(Object.keys(build.profile_details || {}).length)} profiles</span></div>
+  return `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What the farm runs</h2></div><span class="muted">${escapeHtml(Object.keys(build.profile_details || {}).length)} profiles</span></div>
     <p class="muted">The farm does not build firmware: each project's bundles come from the workflow named here, and a run flashes one of them.</p>
     ${renderProfileTable(build.profile_details)}
     <h3>Chip families</h3><div class="artifacts">${families || '<span class="muted">none</span>'}</div>`;
+}
+
+function renderFarmProjects(build) {
+  projectsShownAs = you?.name || "";
+  $("config-projects").innerHTML = farmProjectsMarkup(build);
+}
+
+// Settings -> Projects. A signed-in person sees their own workspaces and the
+// projects in each -- the repositories they test and what the farm runs for
+// them -- not the farm's build configuration, which an account is handed as
+// {} anyway. A rig, or a key, sees what this farm runs; so does whoever
+// administers the platform, below their own, because the registry is theirs
+// to keep.
+async function loadProjects() {
+  // Not before the first status: who is looking decides what this draws,
+  // and drawing the farm's view first and swapping it a moment later is a
+  // flash for a person and a wasted read for everybody.
+  if (!document.body.dataset.mode) return;
+  projectsShownAs = you?.name || "";
+  if (!(you?.account && shell().workspaceProjects)) return loadConfig();
+  let page;
+  try { page = await shell().workspaceProjects(); }
+  catch (error) { $("config-projects").innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
+  renderWorkspaceProjects(page.workspaces || []);
+  if (isAdmin()) {
+    try {
+      const config = await api("/api/v1/config");
+      $("config-projects").insertAdjacentHTML("beforeend", `<section class="card">${farmProjectsMarkup(config.build || {})}</section>`);
+    } catch (error) { /* the farm's registry is not this page's reason to exist */ }
+  }
+}
+
+function renderWorkspaceProjects(workspaces) {
+  const projectRows = workspace => (workspace.projects || []).map(project => `<tr>
+      <td><strong>${escapeHtml(project.label || project.name)}</strong>${project.label && project.label !== project.name ? `<small class="muted">${escapeHtml(project.name)}</small>` : ""}</td>
+      <td>${project.repo ? `<a href="${escapeHtml(project.repo)}" rel="noreferrer">${escapeHtml(String(project.repo).replace(/^https:\/\//, ""))}</a>` : '<span class="muted">—</span>'}</td>
+      <td>${project.suite_path ? `<code>${escapeHtml(project.suite_path)}</code>` : '<span class="muted">—</span>'}</td>
+    </tr>`).join("");
+  const card = workspace => {
+    const repo = workspace.repo_url
+      ? `<a href="${escapeHtml(workspace.repo_url)}" rel="noreferrer">${escapeHtml(workspace.repo_url.replace(/^https:\/\//, ""))}</a> <span class="state ${workspace.repo_visibility === "public" ? "good" : ""}">${escapeHtml(workspace.repo_visibility || "private")}</span>`
+      : '<span class="muted">no repository set</span>';
+    const rows = projectRows(workspace);
+    return `<section class="card">
+      <div class="title-row"><div><p class="eyebrow">WORKSPACE</p><h2>${escapeHtml(workspace.name)}</h2></div><span class="muted">${repo}</span></div>
+      ${rows
+        ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Project</th><th>Repository</th><th>Suite</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<p class="muted">No project yet. A project is the recipe for running your suite on your rigs: which repository, which ref, where the suite lives and how a bundle is flashed. For now a project is attached to a workspace by the platform; proving that a repository is yours, so you can attach one yourself, is what comes next.</p>`}
+    </section>`;
+  };
+  $("config-projects").innerHTML = workspaces.length
+    ? `<div class="title-row"><div><p class="eyebrow">YOUR PROJECTS</p><h2>What runs for you</h2></div><a class="secondary" href="#configuration/workspaces">Workspaces</a></div>${workspaces.map(card).join("")}`
+    : `<div class="title-row"><div><p class="eyebrow">YOUR PROJECTS</p><h2>What runs for you</h2></div></div>
+       <p class="muted">You have no workspace yet, so nothing runs for you. A workspace is a repository you test; one is made for you when a rig is given to you, and you can <a href="#configuration/workspaces">make one now</a>.</p>`;
 }
 
 // What a profile asks the bank for, by family. "3 board(s)" said how many and
@@ -4758,7 +4826,12 @@ async function loadConfig() {
 // The three the dashboard has, plus whatever the shell adds -- Access
 // stays last, because it is the admin's and reads as the end of the list.
 function settingsTabs() {
-  return ["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"];
+  const tabs = ["general", "projects", ...shell().settingsTabs.map(tab => tab.id), "access"];
+  // A person's Settings are their own: Workspaces, Projects, and whatever
+  // else the shell adds for them. General is the farm's configuration and
+  // Access its keys and audit -- farm-wide reads the service refuses an
+  // account -- so they are not offered, the same way the nav hides them.
+  return workspaceOnly() ? tabs.filter(name => name !== "general" && name !== "access") : tabs;
 }
 
 // The shell's tabs are put in the nav and given a panel to draw in, once,
@@ -4789,7 +4862,9 @@ function showSettingsTab(tab, updateHash = true) {
   buildSettingsTabs();
   const known = settingsTabs().includes(tab);
   settingsWanted = known || !tab ? null : tab;
-  settingsTab = known ? tab : "general";
+  // The first tab this caller is offered: General for an operator, and for a
+  // person the first of their own.
+  settingsTab = known ? tab : settingsTabs()[0];
   if (settingsTab === "general") { loadFarmNotify(); shell().farmWebhooksLoad(); }
   for (const name of settingsTabs()) {
     const panel = $(`settings-${name}`);
@@ -4801,7 +4876,8 @@ function showSettingsTab(tab, updateHash = true) {
     lastRouted = location.hash;
   }
   if (!token) return;
-  if (settingsTab === "general" || settingsTab === "projects") loadConfig();
+  if (settingsTab === "general") loadConfig();
+  if (settingsTab === "projects") loadProjects();
   if (settingsTab === "access" && isAdmin()) { loadAudit(); loadKeys(); }
   shell().settingsPanel(settingsTab);
 }
@@ -5006,6 +5082,12 @@ async function refresh(force = false) {
       // Which shell this is is known now, so a settings tab that was asked
       // for before anything knew it existed can be shown.
       if (settingsWanted) showSettingsTab(settingsWanted);
+      // The shell's own tabs, which the first route built for a rig (none):
+      // idempotent, so asking again once the shell is known costs nothing.
+      buildSettingsTabs();
+      // And the Projects panel, if it was drawn before anybody knew whose
+      // page this is (a deep link runs its first route before the status).
+      if (settingsTab === "projects" && projectsShownAs !== (you?.name || "")) loadProjects();
       repositories = data.repositories || repositories;
       defaultProfile = data.default_profile || defaultProfile;
       const hadProfiles = Object.keys(profiles).length > 0;

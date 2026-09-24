@@ -1044,3 +1044,60 @@ def test_a_session_the_farm_has_ended_brings_the_card_back():
     assert '$("login").hidden = false' in ended and '$("dashboard").hidden = true' in ended
     assert '$("signin-methods").hidden = false' in ended and "loadSignInOptions()" in ended
     assert "session has ended" in ended
+
+
+def test_settings_projects_is_a_persons_workspaces_and_the_farms_build_for_a_rig():
+    """Settings -> Projects showed the farm's build configuration to
+    everybody -- which an account is handed as {} -- while a person's own
+    projects were only on the Workspaces tab (docs/public-release-plan.md,
+    phase 4: workspaces and projects). A signed-in person now sees their
+    workspaces and the projects in each, drawn by the rig's bundle from
+    whatever the shell answers; a rig, or a key, sees what this farm runs."""
+    script = dashboard()
+    assert 'if (settingsTab === "general") loadConfig();' in script
+    assert 'if (settingsTab === "projects") loadProjects();' in script
+    loader = script.split("async function loadProjects()", 1)[1].split("\n}", 1)[0]
+    assert "if (!(you?.account && shell().workspaceProjects)) return loadConfig();" in loader
+    assert "renderWorkspaceProjects(page.workspaces || [])" in loader
+    # A rig has no people: it says so and shows what it runs.
+    rig_shell = script.split("const RIG_SHELL", 1)[1].split("};", 1)[0]
+    assert "workspaceProjects: null" in rig_shell
+    assert "function renderFarmProjects(build)" in script and "What the farm runs" in script
+    # The first route can run before the status knows who is looking.
+    assert 'if (settingsTab === "projects" && projectsShownAs !== (you?.name || "")) loadProjects();' in script
+    # Whom the panel was drawn for is remembered on every path, including the
+    # one where the farm's view could not be read (an account is refused it).
+    # Not drawn before the first status says who is looking: no flash of the
+    # farm's view for a person, no wasted read for anybody.
+    assert 'if (!document.body.dataset.mode) return;' in loader
+    assert 'projectsShownAs = you?.name || "";' in loader
+    # Whoever administers the platform keeps sight of what the farm runs,
+    # below their own projects.
+    assert "if (isAdmin()) {" in loader and 'api("/api/v1/config")' in loader and "farmProjectsMarkup(config.build || {})" in loader
+    # The shell's tabs are built once the shell is known, not only on the
+    # first route, which a rig's shell answered with none.
+    status = script.split("if (settingsWanted) showSettingsTab(settingsWanted);", 1)[1][:400]
+    assert "buildSettingsTabs();" in status
+    panel = script.split("function renderWorkspaceProjects(workspaces)", 1)[1].split("\n}", 1)[0]
+    assert "No project yet" in panel and "no workspace yet" in panel
+    assert 'href="#configuration/workspaces"' in panel
+
+
+def test_settings_is_a_persons_page_too_and_only_the_farm_wide_tabs_are_an_operators():
+    """The Settings page and its nav item were `farm-wide` from when everything
+    under them was the farm's, so a signed-in person had no Settings at all --
+    and with it no Workspaces, no Projects, no visibility. Found opening
+    #configuration/projects as a plain user and landing on the overview. The
+    page is everybody's now; General (the farm's configuration) and Access
+    (its keys and audit) carry the mark themselves, and a person's first tab
+    is the first of their own."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = dashboard()
+    assert '<button class="nav-item" data-panel="configuration">Settings</button>' in page
+    assert '<section class="page" data-page="configuration" hidden>' in page
+    assert '<a href="#configuration" data-tab="general" class="active farm-wide">General</a>' in page
+    assert 'data-tab="access" class="admin-only"' in page
+    tabs = script.split("function settingsTabs()", 1)[1].split("\n}", 1)[0]
+    assert 'workspaceOnly() ? tabs.filter(name => name !== "general" && name !== "access") : tabs' in tabs
+    assert "settingsTab = known ? tab : settingsTabs()[0];" in script
+    assert 'settingsTab = known ? tab : "general"' not in script
