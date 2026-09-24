@@ -134,8 +134,9 @@ class Status:
     def token(self) -> str | None:
         return read_token(self.path)
 
-    def view(self, ask=whoami) -> dict:
+    def view(self, ask=None) -> dict:
         """{configured, connected, login, path, error, checked_at, how}."""
+        ask = ask or whoami   # looked up now, so a test's stand-in for GitHub is the one asked
         try:
             token = self.token()
         except OSError as error:

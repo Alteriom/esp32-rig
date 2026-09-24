@@ -65,7 +65,7 @@ from alteriom_hil import webhooks as farm_webhooks
 from alteriom_hil.providers import Redactor, budget_used, scrub_tree
 from alteriom_hil.artifacts import MAX_BUNDLE_BYTES, extract_bundle, load_artifacts
 from alteriom_hil.board import SUPPORTED_TARGETS, Board
-from alteriom_hil.profiles import ProfileError, load_local_profiles, load_profiles
+from alteriom_hil.profiles import ProfileError, load_local_profiles, load_profiles, removed_profiles
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
 from alteriom_hil.board_registry import (
     load_inventory_snapshot,
@@ -150,6 +150,9 @@ DEFAULT_PROFILE_ENV = "ALTERIOM_HIL_DEFAULT_PROFILE"
 # only to find `profiles/` when a manager was built without __init__ and has
 # no repo of its own. A farm that was started properly reads its own.
 FARM_REPO_ROOT = Path(__file__).resolve().parents[2]
+# The rig's own firmware and its profile: run from Boards, installed with a
+# release, never listed among the projects a rig is for.
+HEALTH_CHECK_PROFILE = "canary"
 # Sign-in codes one caller may ask for, and in how long; the session
 # cookie's name, and how long a session lasts.
 SIGNIN_REQUESTS_ALLOWED = 5
@@ -528,13 +531,19 @@ class BaseManager:
         because a run names a profile and nothing else."""
         shipped = load_profiles(self.repo)
         local = load_local_profiles(self.state)
-        clash = sorted(set(shipped) & set(local))
-        if clash:
-            raise ProfileError(
-                f"{Path(self.state) / 'profiles'}: {', '.join(clash)} "
-                f"{'is' if len(clash) == 1 else 'are'} shipped with the rig; a project of your own needs another name")
+        removed = removed_profiles(self.state)
+        # A local document with a shipped name replaces the shipped one: the
+        # operator changed a reference project into theirs. A tombstone hides
+        # a shipped one the rig is not for. The health check is neither: it
+        # is the rig's own firmware and stays.
         self.__dict__["_shipped_profiles"] = frozenset(shipped)
-        return {**shipped, **local}
+        self.__dict__["_overridden_profiles"] = frozenset(set(shipped) & set(local))
+        self.__dict__["_removed_profiles"] = frozenset(
+            name for name in removed if name in shipped and name not in local and name != HEALTH_CHECK_PROFILE)
+        found = {**shipped, **local}
+        for name in self.__dict__["_removed_profiles"]:
+            found.pop(name, None)
+        return found
 
     def reload_profiles(self) -> dict:
         """Read the profiles again, after a project was added or removed."""
@@ -550,6 +559,16 @@ class BaseManager:
         return self.__dict__.get("_shipped_profiles") or frozenset(self.profiles)
 
     @property
+    def overridden_profiles(self) -> frozenset:
+        """Shipped names the operator replaced with a document of their own."""
+        return self.__dict__.get("_overridden_profiles") or frozenset()
+
+    @property
+    def removed_profile_names(self) -> frozenset:
+        """Shipped names the operator removed from this rig (restorable)."""
+        return self.__dict__.get("_removed_profiles") or frozenset()
+
+    @property
     def default_profile(self) -> str:
         """The profile a run is for when it names none, and the one the
         dashboard's run form opens on: this farm's to say
@@ -562,7 +581,18 @@ class BaseManager:
         DEFAULT_PROFILE.
         """
         named = os.environ.get(DEFAULT_PROFILE_ENV, "").strip()
-        return named if named and named in self.profiles else DEFAULT_PROFILE
+        if named and named in self.profiles:
+            return named
+        # What this rig is for: the operator's own project first, then the
+        # reference the release shipped, then the health check -- which is
+        # the rig's own firmware and a run of last resort, not a project.
+        # A farm with the reference suite keeps it (DEFAULT_PROFILE).
+        if DEFAULT_PROFILE in self.profiles:
+            own = [name for name in sorted(self.profiles) if name not in self.shipped_profiles]
+            return own[0] if own else DEFAULT_PROFILE
+        projects = [name for name in sorted(self.profiles) if name != HEALTH_CHECK_PROFILE]
+        own = [name for name in projects if name not in self.shipped_profiles]
+        return (own or projects or sorted(self.profiles))[0]
 
     def __init__(self, repo: Path, state: Path, registry: Path, board_map: Path, python: Path,
                  mode: str = "standalone"):

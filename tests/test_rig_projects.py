@@ -90,13 +90,18 @@ MINE = {"name": "my-sensor", "label": "My sensor firmware",
 # ---- what a rig has, and what it can be given -----------------------------------------
 
 def test_a_fresh_rig_lists_what_it_ships_and_owns_nothing_yet(tmp_path):
+    """The projects a fresh rig has are the release's; the health check is
+    not among them -- it is the rig's own firmware, run from Boards -- and
+    the page is told so."""
     rig = _rig(tmp_path)
     view = rig.projects_view()
     names = {row["name"]: row for row in view["projects"]}
-    assert {"canary", "painlessmesh"} <= set(names)
-    assert all(row["shipped"] for row in view["projects"]), "the release's, all of them"
+    assert "painlessmesh" in names and "canary" not in names
+    assert all(row["shipped"] and row["origin"] == "shipped" for row in view["projects"]), "the release's, all of them"
+    assert view["health_check"] == {"name": "canary", "label": "Rig Health Check"}
+    assert view["removed"] == []
     assert view["directory"] == str(tmp_path / "state" / "profiles"), "where the operator's own will be"
-    assert view["default_profile"] in names
+    assert view["default_profile"] in names or view["default_profile"] == "canary"
 
 
 def test_the_operators_projects_are_read_beside_the_shipped_ones(tmp_path):
@@ -119,9 +124,14 @@ def test_the_operators_projects_are_read_beside_the_shipped_ones(tmp_path):
     assert "mine" not in rig.shipped_profiles
     assert rig.configuration()["build"]["profile_details"]["mine"]["label"] == "Mine"
 
-    (local / "canary.yaml").write_text(yaml.safe_dump({**doc, "name": "canary"}), encoding="utf-8")
-    with pytest.raises(profiles.ProfileError, match="canary is shipped with the rig"):
-        _rig(tmp_path)
+    # A document with a shipped name stands in for the shipped one: the
+    # operator changed the reference into theirs.
+    (local / "painlessmesh.yaml").write_text(yaml.safe_dump({**doc, "name": "painlessmesh", "label": "Mesh, mine"}), encoding="utf-8")
+    rig = _rig(tmp_path)
+    assert rig.profiles["painlessmesh"].label == "Mesh, mine"
+    assert "painlessmesh" in rig.overridden_profiles and "painlessmesh" in rig.shipped_profiles
+    row = next(r for r in rig.projects_view()["projects"] if r["name"] == "painlessmesh")
+    assert row["origin"] == "changed" and row["shipped"] is False
 
 
 def test_a_project_is_added_from_a_few_facts_and_is_a_whole_profile(tmp_path):
@@ -208,8 +218,10 @@ def test_what_is_refused_and_why(tmp_path):
         rig.create_project({**MINE, "name": "My Sensor"})
     with pytest.raises(ValueError, match="not a chip family this rig knows"):
         rig.create_project({**MINE, "families": ["esp32", "stm32"]})
-    with pytest.raises(ValueError, match="canary is already a project on this rig, shipped with it"):
+    with pytest.raises(ValueError, match="canary is the rig's own health check; choose another name"):
         rig.create_project({**MINE, "name": "canary"})
+    with pytest.raises(ValueError, match="painlessmesh is already a project on this rig, shipped with it"):
+        rig.create_project({**MINE, "name": "painlessmesh"})
     # What the profile schema refuses is refused here, by its own words.
     with pytest.raises(ValueError, match="supply.workflow must be a workflow path"):
         rig.create_project({**MINE, "supply_workflow": "hil.yml"})
@@ -222,9 +234,9 @@ def test_what_is_refused_and_why(tmp_path):
         rig.create_project(MINE)
     with pytest.raises(LookupError, match="no project named nope"):
         rig.update_project({"label": "x"}, "nope")
-    with pytest.raises(ValueError, match="painlessmesh is shipped with the rig; it is not changed from here"):
-        rig.delete_project(None, "painlessmesh")
-    with pytest.raises(ValueError, match="shipped with the rig"):
+    with pytest.raises(ValueError, match="canary is the rig's own health check, not a project"):
+        rig.delete_project(None, "canary")
+    with pytest.raises(ValueError, match="canary is the rig's own health check, not a project"):
         rig.update_project({**MINE}, "canary")
     assert "painlessmesh" in rig.profiles and "canary" in rig.profiles
 
@@ -241,7 +253,7 @@ def test_a_project_is_changed_and_removed_in_place(tmp_path):
     assert gone["removed"] == "my-sensor"
     assert "my-sensor" not in rig.profiles
     assert not (tmp_path / "state" / "profiles" / "my-sensor.yaml").exists()
-    assert {row["name"] for row in gone["projects"]} == set(profiles.load_profiles(REPO))
+    assert {row["name"] for row in gone["projects"]} == set(profiles.load_profiles(REPO)) - {"canary"}, "the release's, less the health check"
 
 
 def test_a_document_the_service_could_not_start_on_is_taken_back(tmp_path, monkeypatch):
@@ -272,7 +284,7 @@ def test_the_projects_routes_are_the_rigs_and_an_admin_key_manages_them(tmp_path
     server, call = _serve(rig, tmp_path)
     try:
         status, body = call("GET", "/api/v1/projects")
-        assert status == 200 and {"canary", "painlessmesh"} <= {r["name"] for r in body["projects"]}
+        assert status == 200 and "painlessmesh" in {r["name"] for r in body["projects"]} and "canary" not in {r["name"] for r in body["projects"]}
         status, body = call("POST", "/api/v1/projects", MINE)
         assert status == 200 and body["project"]["name"] == "my-sensor", body
         # The run form's picker reads the status: the new project is there.
@@ -283,7 +295,7 @@ def test_the_projects_routes_are_the_rigs_and_an_admin_key_manages_them(tmp_path
         status, body = call("POST", "/api/v1/projects", {**MINE, "name": "Bad Name"})
         assert status == 400 and "lowercase" in body["error"]
         status, body = call("POST", "/api/v1/projects/canary/delete", {})
-        assert status == 400 and "shipped with the rig" in body["error"]
+        assert status == 400 and "rig's own health check" in body["error"]
         status, body = call("POST", "/api/v1/projects/nope/delete", {})
         assert status == 404
         status, body = call("POST", "/api/v1/projects/my-sensor/delete", {})
@@ -324,6 +336,139 @@ def test_the_farm_and_the_portal_do_not_lose_each_others_routes(tmp_path):
         assert ("GET", r"/api/v1/fleet") in paths, "the portal's routes, after the rig's"
     node = _rig(tmp_path, mode="node")
     assert ("POST", r"/api/v1/projects") in {(r.method, r.pattern.pattern) for r in node.api_routes()}
+
+
+# ---- every project is the operator's to change or remove ---------------------------------
+
+def test_a_shipped_project_is_changed_by_an_override_and_removed_by_a_tombstone(tmp_path):
+    """A rig runs the projects it lists and no other. The reference project
+    the release ships is changed by writing the operator's document over
+    it, removed by a tombstone that hides it (its runs stay what they were),
+    and restored by deleting both -- the release's copy is never touched,
+    so an upgrade cannot undo the operator and the operator cannot break
+    the release."""
+    rig = _rig(tmp_path)
+    changed = rig.update_project({**MINE, "label": "Mesh, ours", "default_ref": "v2"}, "painlessmesh")
+    assert changed["project"]["origin"] == "changed" and changed["project"]["label"] == "Mesh, ours"
+    assert (tmp_path / "state" / "profiles" / "painlessmesh.yaml").is_file()
+    assert "label: painlessMesh reference validation" in (REPO / "profiles" / "painlessmesh.yaml").read_text(encoding="utf-8"), "the release's copy, untouched"
+    assert rig.profiles["painlessmesh"].default_ref == "v2"
+
+    gone = rig.delete_project(None, "painlessmesh")
+    assert gone["removed"] == "painlessmesh" and gone["removed_shipped"] == ["painlessmesh"]
+    assert "painlessmesh" not in rig.profiles and "painlessmesh" not in {r["name"] for r in gone["projects"]}
+    assert (tmp_path / "state" / "profiles" / "painlessmesh.removed").is_file()
+    assert not (tmp_path / "state" / "profiles" / "painlessmesh.yaml").exists(), "the override went with it"
+    assert rig.projects_view()["removed"] == ["painlessmesh"]
+    # Its name can be taken for a project of one's own; the tombstone goes.
+    own = rig.create_project({**MINE, "name": "painlessmesh", "label": "Mine now"})
+    assert own["project"]["origin"] == "changed" and rig.projects_view()["removed"] == []
+    rig.delete_project(None, "painlessmesh")
+
+    back = rig.restore_project(None, "painlessmesh")
+    assert back["restored"] == "painlessmesh" and back["project"]["origin"] == "shipped"
+    assert rig.profiles["painlessmesh"].label == "painlessMesh reference validation"
+    assert back["removed_shipped"] == []
+    with pytest.raises(LookupError, match="not a project the release ships"):
+        rig.restore_project(None, "my-sensor")
+    # The health check is not removable: it comes with the release.
+    with pytest.raises(ValueError, match="rig's own health check"):
+        rig.delete_project(None, "canary")
+
+
+def test_the_default_profile_is_what_the_rig_is_for(tmp_path, monkeypatch):
+    """A rig opens its run form on its own project: the operator's first,
+    the shipped reference when that is all there is, and the health check
+    only when nothing else remains. ALTERIOM_HIL_DEFAULT_PROFILE still
+    names one outright."""
+    monkeypatch.delenv("ALTERIOM_HIL_DEFAULT_PROFILE", raising=False)
+    rig = _rig(tmp_path)
+    assert rig.default_profile == "painlessmesh", "the reference, until the rig has a project of its own"
+    rig.create_project(MINE)
+    assert rig.default_profile == "my-sensor"
+    rig.delete_project(None, "my-sensor")
+    rig.delete_project(None, "painlessmesh")
+    left = [name for name in rig.profiles if name not in ("canary",)]
+    assert rig.default_profile == (sorted(left)[0] if left else "canary")
+    rig.restore_project(None, "painlessmesh")
+    monkeypatch.setenv("ALTERIOM_HIL_DEFAULT_PROFILE", "canary")
+    assert rig.default_profile == "canary"
+
+
+def test_the_token_can_be_given_from_the_page(tmp_path, monkeypatch):
+    """The page sends the token once; the rig checks it with GitHub, keeps
+    it under its own state directory (which is why the service can write
+    it), answers who it is, and uses it from then on -- for the check, for
+    a clone, for a fetch. Forgetting it is the page's too; the host's own
+    file, if any, stays the administrator's."""
+    rig = _rig(tmp_path, github="none")
+    seen = []
+    monkeypatch.setattr(github_access, "whoami", lambda token: seen.append(token) or {"login": "octocat", "type": "User"})
+    with pytest.raises(ValueError, match="one line, without spaces"):
+        rig.set_github_token({"token": "two words"})
+    monkeypatch.setattr(github_access, "whoami", lambda token: (_ for _ in ()).throw(github_access.GitHubError("GitHub refused the token (401): it is wrong, expired or revoked")))
+    with pytest.raises(ValueError, match="not stored: GitHub refused the token"):
+        rig.set_github_token({"token": "github_pat_bad"})
+    assert not (tmp_path / "state" / "github-token").exists()
+    monkeypatch.setattr(github_access, "whoami", lambda token: seen.append(token) or {"login": "octocat", "type": "User"})
+    stored = rig.set_github_token({"token": "github_pat_good"})
+    path = tmp_path / "state" / "github-token"
+    assert stored["stored"] and stored["login"] == "octocat" and Path(stored["path"]) == path
+    assert path.read_text(encoding="utf-8") == "github_pat_good\n" and (path.stat().st_mode & 0o777) == 0o600
+    assert rig.github_token_path() == path, "the page's token wins over the host's file"
+    assert stored["github"]["connected"] and stored["github"]["login"] == "octocat"
+    assert "github_pat_good" not in json.dumps(stored["github"])
+    # And git clones with it.
+    import io
+    log = io.StringIO()
+    url, env = rig._clone_credentials(rig.profiles["painlessmesh"], log)
+    assert url.startswith("https://x-access-token@") and env["GIT_ASKPASS"].endswith("git-askpass.sh")
+    assert str(path) in Path(env["GIT_ASKPASS"]).read_text(encoding="utf-8")
+    forgotten = rig.remove_github_token({})
+    assert forgotten["removed"] is True and not path.exists() and forgotten["github"]["configured"] is False
+
+
+def test_a_finished_run_and_a_projects_runs_can_be_deleted(tmp_path):
+    """What a run left is the operator's to keep or not: deleting a run takes
+    its evidence, its log, the link that was its firmware and its record;
+    a queued or running one is refused. A project's finished runs go
+    together, and the ones in flight are named and left."""
+    rig = _rig(tmp_path)
+    rig.create_project(MINE)
+    store = rig.store
+
+    def run(profile, status):
+        job_id = store.create("suite", {"profile": profile, "ref": "main", "targets": ["esp32"]}, rig.state / "x.log")["id"]
+        if status != "queued":
+            store.update(job_id, "running")
+        if status in ("passed", "failed", "cancelled"):
+            store.update(job_id, status, {})
+        (rig.state / "runs" / job_id / "serial").mkdir(parents=True, exist_ok=True)
+        (rig.state / "runs" / job_id / "serial" / "board.log").write_text("captured\n", encoding="utf-8")
+        (rig.state / "logs").mkdir(parents=True, exist_ok=True)
+        (rig.state / "logs" / f"{job_id}.log").write_text("log\n", encoding="utf-8")
+        return job_id
+
+    done = run("my-sensor", "passed")
+    queued = run("my-sensor", "queued")
+    other = run("painlessmesh", "failed")
+    assert store.get(done)["status"] == "passed"
+    with pytest.raises(ValueError, match="is queued; cancel it before deleting it"):
+        rig.delete_run(None, queued)
+    with pytest.raises(LookupError, match="no such run"):
+        rig.delete_run(None, "f" * 32)
+    answer = rig.delete_run(None, done)
+    assert answer["deleted"] == done and answer["bytes"] > 0 and answer["profile"] == "my-sensor"
+    assert store.get(done) is None
+    assert not (rig.state / "runs" / done).exists() and not (rig.state / "logs" / f"{done}.log").exists()
+    assert store.get(other) is not None, "another project's run is untouched"
+
+    swept = rig.delete_project_runs(None, "my-sensor")
+    assert swept["deleted"] == [] and swept["kept"] == [queued], "the queued one is named and left"
+    swept = rig.delete_project_runs(None, "painlessmesh")
+    assert swept["deleted"] == [other] and store.get(other) is None
+    with pytest.raises(LookupError, match="no project named nope"):
+        rig.delete_project_runs(None, "nope")
 
 
 # ---- the newest bundle a project's CI built, fetched by the rig ----------------------

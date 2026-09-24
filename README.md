@@ -111,10 +111,14 @@ reproducible and a second project does not mean a second rig.
 ## Your project on the rig
 
 A *project* is a GitHub repository whose firmware the rig flashes and whose
-test suite it runs. Two come with the rig -- the Rig Health Check and the
-painlessMesh reference -- and yours needs GitHub first: the rig checks a
-project's repository out for every run and fetches the firmware its CI
-built, and it can do neither without a token. On the rig:
+test suite it runs. A rig runs the projects it lists and no other. One comes
+with the rig, the painlessMesh reference, and it is yours to change or to
+remove from the rig (and restore later); the Rig Health Check is not a
+project but the rig's own firmware, installed with each release and run from
+Boards. Your project needs GitHub first: the rig checks a project's
+repository out for every run and fetches the firmware its CI built, and it
+can do neither without a token. Give it one from the dashboard's GitHub card
+(Settings → General, or the Projects page while it is missing), or on the rig:
 
 ```bash
 sudo alteriom-hil-admin github set     # a fine-grained token: Contents read, Actions read
@@ -130,9 +134,10 @@ bundle. The rig writes the profile document under its state directory
 (`/var/lib/alteriom-hil/profiles/` on a standard install), reads it back at
 once, and an upgrade leaves it alone. Each project has a page there: its
 configuration, the bundles the rig holds for it, its recent runs, and
-**Fetch newest bundle**, which takes the newest artifact the supply workflow
-uploaded to GitHub -- how a rig on a LAN, which no CI can reach, gets its
-firmware. The same is done over the API (`GET`/`POST /api/v1/projects`,
+**Get firmware from GitHub**, which takes the newest artifact the supply
+workflow uploaded -- how a rig on a LAN, which no CI can reach, gets the
+firmware its CI built. A finished run can be deleted from its page, and a
+project's runs from the project's; what a run left is yours to keep or not. The same is done over the API (`GET`/`POST /api/v1/projects`,
 `POST /api/v1/projects/<name>/fetch`) with an admin key. The rig does not
 build firmware: your CI builds a bundle, the rig fetches it or takes it when
 the CI hands it over (`POST /api/v1/artifacts`), and a run flashes it.
