@@ -65,10 +65,23 @@ class CanaryClient:
         # A blocking all-channel scan is seconds on every family and thirteen
         # on the C5, so the budget is generous by default: a scan the host
         # gave up on looks like a radio that cannot see, which is the one
-        # answer this check must not get wrong.
+        # answer this check must not get wrong. Measured on a seven-board rig
+        # (farm runs 51fc3bed and be46491e): 2.2 s on the ESP8266, 2.8 s on the C3
+        # and C6, 6.3 s on the ESP32, 12.3 s on the C5 -- the budget is not
+        # what a scan runs out of.
+        # A scan is safe to repeat, so a reply that reached the rig unreadable
+        # is asked for again rather than waited out: esp32-fde4's did, once,
+        # its first 32 characters arriving as 64 undecodable bytes with the
+        # tail intact (be46491e), and the board was blamed for 45 s of silence
+        # it never kept.
         kwargs = {"ssid": ssid} if ssid else {}
         return self.board.send_cmd_awaiting(
-            "wifi_scan", lambda e: e["evt"] == "wifi_scan", "scan reply", timeout, **kwargs
+            "wifi_scan",
+            lambda e: e["evt"] == "wifi_scan",
+            "scan reply",
+            timeout,
+            idempotent=True,
+            **kwargs,
         )
 
     def wifi_join(self, ssid: str, password: str, budget_ms: int = 20000,

@@ -192,11 +192,41 @@ class SerialCapture:
                 continue
             self._raw_log.append(self._bounded(line))
             events = self._extract_events(line)
+            # What is judged below: the line, or the carried head and this
+            # tail together once they have been tried as one.
+            seen = line
             if not events and carry:
-                events = self._extract_events(carry + line)
+                seen = carry + line
+                events = self._extract_events(seen)
             carry = ""
             if not events and not complete and line.startswith("{"):
+                # A frame head still waiting for its tail is not judged yet:
+                # an undecodable byte inside one of its strings is a valid
+                # event once the tail arrives, and saying "unreadable" now
+                # would have a repeatable command resent for a reply that
+                # completes moments later.
                 carry = line
+            elif not events and "\ufffd" in seen:
+                # Bytes that were not valid UTF-8 and no event among them:
+                # boot ROM noise, or a frame whose head was damaged on the
+                # wire. esp32-fde4's scan reply arrived as 64 undecodable
+                # bytes where its first 32 characters should have been, the
+                # tail (`unt":5,"ok":true,…,"seen":true}`) intact, the board
+                # neither reset nor slow -- and the check waited 45 s for an
+                # answer that was in this log (farm run be46491e). The
+                # capture cannot tell noise from a damaged reply, so it says
+                # what it saw, as its own event and not the board's, and a
+                # command that is safe to repeat may act on it
+                # (BoardClient.send_cmd_awaiting). The line itself is in
+                # the raw log above, U+FFFD and all.
+                self._events.put(
+                    {
+                        "evt": "unreadable",
+                        "source": "rig",
+                        "undecodable": seen.count("\ufffd"),
+                        "chars": len(seen),
+                    }
+                )
             for evt in events:
                 if evt["evt"] in DIAGNOSTIC_EVENTS:
                     # Framed for the serial log, not for a waiting test: a

@@ -18,6 +18,10 @@ class FakeStream:
     def feed(self, line: str):
         self._q.put(line.encode() + b"\n")
 
+    def feed_bytes(self, data: bytes):
+        """What the wire carried, which need not be text."""
+        self._q.put(data)
+
     def readline(self):
         try:
             return self._q.get(timeout=0.05)
@@ -406,6 +410,77 @@ def test_a_command_that_ran_but_whose_reply_was_lost_is_never_resent():
             assert exc.board_id == "esp32-02"
         else:
             raise AssertionError("a missing reply must not be treated as success")
+        assert len(stream.written) - before == 1, "sent exactly once"
+    finally:
+        cap.stop()
+
+
+def test_a_safe_to_repeat_command_whose_reply_arrived_unreadable_is_resent():
+    # esp32-fde4 answered a scan in 6 s as it always does, but the reply
+    # reached the rig with its first 32 characters as 64 undecodable bytes
+    # and the tail intact (farm run be46491e). No event came of it and the
+    # check timed out at 45 s. A scan is safe to repeat, and the capture now
+    # frames what it could not read, so the scan is asked for again.
+    import threading
+
+    damaged = (
+        b"\xff" * 64
+        + b'unt":5,"ok":true,"networks":[{"ssid":"Alteriom-HIL","rssi":-41,'
+        + b'"channel":1}],"seen":true}\n'
+    )
+    stream = ResettableStream()
+    cap = SerialCapture(lambda: stream).start()
+    client = BoardClient("esp32-fde4", cap)
+    try:
+        before = len(stream.written)
+        threading.Timer(0.2, lambda: stream.feed_bytes(damaged)).start()
+        threading.Timer(
+            0.8,
+            lambda: stream.feed(
+                '{"evt":"wifi_scan","ms":6218,"count":5,"ok":true,'
+                '"networks":[{"ssid":"Alteriom-HIL","rssi":-41,"channel":1}],"seen":true}'
+            ),
+        ).start()
+        evt = client.send_cmd_awaiting(
+            "wifi_scan",
+            lambda e: e["evt"] == "wifi_scan",
+            "scan reply",
+            5.0,
+            idempotent=True,
+            ssid="Alteriom-HIL",
+        )
+        assert evt["seen"] is True and evt["ms"] == 6218
+        assert len(stream.written) - before == 2, "sent, then resent once"
+        assert all(b'"ssid": "Alteriom-HIL"' in w for w in stream.written[before:])
+        assert stream.resets == 0
+    finally:
+        cap.stop()
+
+
+def test_an_unreadable_line_never_resends_a_command_that_is_not_safe_to_repeat():
+    # The same damaged line after a role change: that command may already
+    # have rebooted the board, and repeating it stays the worse guess.
+    import threading
+
+    stream = ResettableStream()
+    cap = SerialCapture(lambda: stream).start()
+    client = BoardClient("esp32-02", cap)
+    try:
+        before = len(stream.written)
+        threading.Timer(0.2, lambda: stream.feed_bytes(b"\xff" * 64 + b'unt":5}\n')).start()
+        try:
+            client.send_cmd_awaiting(
+                "gateway_start",
+                lambda e: e["evt"] == "gateway_restarting",
+                "gateway restart acknowledgement",
+                1.0,
+                ssid="x",
+                password="y",
+            )
+        except TimeoutWaitingFor as exc:
+            assert exc.board_id == "esp32-02"
+        else:
+            raise AssertionError("an unreadable line is not a reply")
         assert len(stream.written) - before == 1, "sent exactly once"
     finally:
         cap.stop()
