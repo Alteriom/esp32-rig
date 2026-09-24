@@ -122,6 +122,23 @@ resets a silent board once, over RTS/DTR, before anything is measured, and
 names one that stays dead rather than letting a later test blame the
 project. If the same board does this often, it is that board or its port.
 
+## An update failed, or never started
+
+**Settings → Rig → Software** shows the last state and the reason. The
+rig's own part is fetching and checking the release; a file that is not
+what the release's document says stops it there, with the file named. The
+install itself is the update unit's:
+
+```bash
+systemctl status alteriom-hil-update.path alteriom-hil-update.service
+tail -n 60 /var/lib/alteriom-hil/update/update.log
+```
+
+A path unit that is not enabled (a rig installed before updates from the
+page) is enabled by re-running `rig/install-health-service.sh` from the
+checkout. An install is refused while runs are in progress: it restarts the
+service.
+
 ## Where the logs are
 
 - **The service:** `journalctl -u alteriom-hil-farm -e`

@@ -246,3 +246,4 @@ dialog.dialog details summary{cursor:pointer;color:var(--muted);font-size:.85rem
 .github-actions{flex-wrap:wrap;margin-top:8px}
 ul.plain{margin:6px 0;padding-left:18px}
 .settings-form[hidden]{display:none}
+.update-actions{flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:8px}.update-actions label.check{display:flex;align-items:center;gap:8px;font-size:.85rem}.update-state{margin:6px 0 0}

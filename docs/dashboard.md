@@ -80,7 +80,12 @@ again**, **Details** (the whole picture: the private repositories it was
 given, the public ones it sees, what GitHub refused and why), **Replace
 token** (the form appears only then) and, for a token given from the page,
 **Forget it**; **Connection to a farm**, connect, what is
-shared, disconnect; the version installed.
+shared, disconnect; **Software**: the version installed, the newest release
+(from GitHub's releases of the rig software, or from the farm a node
+belongs to), **Check for updates**, **Install** when one is newer, and
+**Install updates automatically**, off until you turn it on. A rig is never
+updated because a farm said so: the farm's release is offered until you
+install it, from either page, or turn automatic installs on.
 
 **Projects** — the projects this rig runs and no other. Each has a page:
 its configuration (repository, default branch, suite path, families, the

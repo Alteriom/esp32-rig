@@ -144,6 +144,12 @@ class NodeAgent:
                  heartbeat_seconds: float = 15.0, lease_wait: float = 25.0, retry_seconds: float = 5.0,
                  releases: Path | None = None):
         self.manager = manager
+        # The rig's page asks about updates through the manager; the agent is
+        # what knows the portal's release.
+        manager.__dict__["_node_agent"] = self
+        # Releases the owner asked for, by commit: installed whether or not
+        # automatic installs are on.
+        self._requested: set = set()
         self.client = client
         self.name = name
         self.kind = kind
@@ -414,6 +420,11 @@ class NodeAgent:
             return "done", manager.register_device(args["id"], args["mac"]), f"registered {args['id']}"
         if kind == "unregister":
             return "done", manager.unregister_device(args["id"]), f"unregistered {args['id']}"
+        if kind == "update_install":
+            if self.releases is None:
+                return "failed", None, "this node is updated with its host, not by its portal"
+            self.install_offered()
+            return "done", {"update": self._update}, "installing the release the portal names"
         if kind == "update_now":
             if self.releases is None:
                 return "failed", None, "this node is updated with its host, not by its portal"
@@ -505,6 +516,32 @@ class NodeAgent:
         """Finishing its runs for a release, or about to restart into one."""
         return self._update is not None and self._update.get("state") in ("pending", "staged", "installing")
 
+    def _auto_install(self) -> bool:
+        asks = getattr(self.manager, "update_auto", None)
+        try:
+            return bool(asks()) if asks else False
+        except Exception:  # noqa: BLE001 -- a setting that cannot be read is off
+            return False
+
+    def look_again(self) -> None:
+        """Consider the portal's release now (the rig's page asked)."""
+        self._consider_release(self._last_release)
+
+    def install_offered(self) -> None:
+        """Install the release the portal names, because the owner asked --
+        from the rig's page or the portal's page for it."""
+        release = self._last_release if isinstance(self._last_release, dict) else None
+        commit = (release or {}).get("commit")
+        if not commit:
+            return
+        self._requested.add(commit)
+        if (self._update or {}).get("state") in ("available", "failed"):
+            failed = self._update_status()
+            if failed and failed.get("state") == "failed" and self.releases is not None:
+                (self.releases / "status.json").unlink(missing_ok=True)
+            self._update = None
+        self._consider_release(release)
+
     def _update_status(self) -> dict | None:
         """What alteriom-hil-update wrote last, as the portal is told it."""
         if self.releases is None:
@@ -513,7 +550,7 @@ class NodeAgent:
             status = json.loads((self.releases / "status.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
-        if not isinstance(status, dict) or status.get("state") not in ("staged", "installing", "installed", "failed"):
+        if not isinstance(status, dict) or status.get("state") not in ("downloading", "staged", "installing", "installed", "failed"):
             return None
         commit = status.get("commit")
         if not (isinstance(commit, str) and COMMIT_PATTERN.fullmatch(commit)):
@@ -567,6 +604,16 @@ class NodeAgent:
             if update.get("commit") != commit or update.get("state") != "pending":
                 self._update = {"state": "pending", "commit": commit,
                                 "detail": "finishing the runs in progress", "at": _utcnow()}
+            return
+        if commit not in self._requested and not self._auto_install():
+            # Available, not installed: a rig is its owner's. The portal's
+            # page and the rig's own both offer Install; automatic installs
+            # are a setting the owner turns on.
+            if update.get("commit") != commit or update.get("state") != "available":
+                version = release.get("version") or commit[:12]
+                self._update = {"state": "available", "commit": commit,
+                                "detail": f"{version} is available: install it from the rig's page, or turn automatic installs on",
+                                "at": _utcnow()}
             return
         if self._staging:
             return
