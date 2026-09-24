@@ -186,14 +186,18 @@ def validate_config(payload: dict) -> list[str]:
         errors.append("mode must be hardware")
 
     runner = payload.get("runner")
-    farm_mode = (payload.get("farm") or {}).get("mode") if isinstance(payload.get("farm"), dict) else None
     if not isinstance(runner, dict):
         errors.append("runner must be a mapping")
-    elif runner.get("unit") is None and farm_mode == "node":
-        # A node has no GitHub runner: its portal hands it work and releases.
-        pass
-    elif not re.fullmatch(r"actions\.runner\.[A-Za-z0-9_.-]+\.service", str(runner.get("unit", ""))):
-        errors.append("runner.unit must be an actions.runner.*.service unit (or null on a node)")
+    elif runner.get("unit") is not None and not re.fullmatch(
+            r"actions\.runner\.[A-Za-z0-9_.-]+\.service", str(runner.get("unit"))):
+        # A GitHub Actions runner is optional on every host. A standalone rig
+        # has none and never needed one; a node takes its work from its
+        # portal instead. When a host does have one it is named here so the
+        # health check can watch it and `config apply` can restart it -- and
+        # then it has to be a unit that exists. Requiring one used to refuse
+        # every standalone install on a machine without GitHub, at `config
+        # apply`, after the installer had written the units and the token.
+        errors.append("runner.unit must be an actions.runner.*.service unit, or null when this host has no GitHub Actions runner")
 
     paths = payload.get("paths")
     if not isinstance(paths, dict):
