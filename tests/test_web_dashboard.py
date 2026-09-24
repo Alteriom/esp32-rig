@@ -1232,9 +1232,18 @@ def test_every_project_on_a_rig_is_the_operators_to_change():
     assert 'await api("/api/v1/github/remove", {method: "POST"' in script
     # The token, seen whole: kind, expiry, source, reach, per-project access, and Check again.
     assert 'await api("/api/v1/github/check", {method: "POST"' in script and 'class="secondary github-check">Check again</button>' in script
-    assert "function githubAccessMarkup(github)" in script and "Fetches its bundles" in script and "It expires on" in script
-    assert "add it to the token's repository access" in script and "given from this page" in script
-    assert "It was given <strong>" in script and "as any token does" in script, "public repositories are counted apart"
+    assert "function githubAccessMarkup(github)" in script and "Fetches its bundles" in script
+    # A status block, not a paragraph: facts, then the per-project table, the
+    # token form behind a button, and the whole picture in a dialog.
+    assert "function githubFacts(github)" in script and 'class="live-facts worker-facts github-facts"' in script
+    assert '<form id="github-token-form" class="settings-form" autocomplete="off" hidden>' in script and "github-replace" in script
+    assert '<dialog class="dialog github-details">' in script and "github-details-open" in script and "dialog?.showModal()" in script
+    # The rig's page carries the same fact, here and on a portal.
+    assert "function githubFact(github)" in script and '["GitHub", githubFact(worker.github || lastGithubSummary)]' in script
+    assert '["GitHub", githubFact(worker.github)]' in script
+    assert 'Open GitHub settings</a>' in script, "a refusal that names GitHub links to where it is fixed"
+    assert "Repository access</em>" in script and "from this page" in script
+    assert "Private repositories it was given" in script and "Public repositories it sees" in script, "public repositories are counted apart"
     assert "This rig's GitHub token expires in" in script and "GitHub no longer accepts this rig's token" in script
     assert "`/api/v1/jobs/${encodeURIComponent(job.id)}/delete`" in script and "Delete run" in script
     assert "`/api/v1/projects/${encodeURIComponent(name)}/runs/delete`" in script and "Delete its runs" in script

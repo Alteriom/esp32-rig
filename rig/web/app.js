@@ -1511,6 +1511,18 @@ function workerHeading(worker) {
   return `<div class="title-row"><div><p class="eyebrow">${worker.kind === "hardware" ? "HARDWARE NODE" : `${escapeHtml(String(worker.kind).toUpperCase())} WORKER`}</p><h2>${escapeHtml(worker.name)}</h2></div><span class="state ${state.tone}">${state.label}</span></div>`;
 }
 
+// The rig's GitHub in one phrase: what its own page says (a local rig), or
+// what it reported to the portal (a rig there). A rig on a release before
+// this one reports nothing, and the fact says so rather than guessing.
+function githubFact(github) {
+  if (!github) return '<span class="muted">not reported</span>';
+  if (!github.configured) return '<span class="state warn">not connected</span>';
+  if (!github.connected) return '<span class="state bad">refused</span>';
+  const days = github.expires_in_days;
+  const soon = typeof days === "number" && days <= 14;
+  return `<span class="state good">connected</span> ${escapeHtml(github.login || "")}${github.kind ? ` <small class="muted">${escapeHtml(github.kind)}</small>` : ""}${typeof days === "number" ? ` <small class="${soon ? "warn" : "muted"}">${days < 0 ? "expired" : `expires in ${days} d`}</small>` : ""}`;
+}
+
 function workerFacts(worker, {long = false} = {}) {
   const release = releaseState(worker);
   const health = workerHealth(worker);
@@ -1531,6 +1543,7 @@ function workerFacts(worker, {long = false} = {}) {
   if (long && local) {
     facts.push(
       ["Location", worker.location ? escapeHtml(worker.location) : '<span class="muted">not set</span>'],
+      ["GitHub", githubFact(worker.github || lastGithubSummary)],
       ["Commit", farmCommitLink(worker.commit)],
       ["Projects", escapeHtml((worker.profiles || []).filter(name => name !== "canary").join(", ") || "none yet")]);
   } else if (long) {
@@ -1548,6 +1561,7 @@ function workerFacts(worker, {long = false} = {}) {
        isAdmin() ? "An admin gives a rig to somebody; they administer it from then on." : ""],
       ["Visibility", visibilityFact(worker)],
       ["Location", worker.location ? escapeHtml(worker.location) : '<span class="muted">not set</span>'],
+      ["GitHub", githubFact(worker.github)],
       ["Connected", whenSpan(worker.hello_at)], ["Commit", farmCommitLink(worker.commit)],
       ["Profiles", escapeHtml((worker.profiles || []).join(", ") || "—")]);
   }
@@ -4970,83 +4984,133 @@ function projectRepoText(url) {
 // refused.
 function githubKindText(github) {
   const kind = github.kind || "unknown";
-  if (kind === "fine-grained") return "a fine-grained token";
-  if (kind === "classic") return "a classic token";
-  if (kind === "unknown") return "a token";
-  return `a ${escapeHtml(kind)} token`;
+  if (kind === "fine-grained") return "fine-grained token";
+  if (kind === "classic") return "classic token";
+  if (kind === "unknown") return "token";
+  return `${escapeHtml(kind)} token`;
 }
 
-function githubExpiryMarkup(github) {
+// When the token expires, as one phrase and a tone.
+function githubExpiry(github) {
   if (!github.expires_at) {
-    return github.kind === "classic"
-      ? '<span class="muted">It does not expire; a fine-grained token with an expiry, given only the project repositories, is the safer kind for a rig.</span>'
-      : "";
+    return github.kind === "classic" ? {text: "never (classic token)", tone: "muted"} : {text: "not stated", tone: "muted"};
   }
   const days = github.expires_in_days;
   const when = String(github.expires_at).slice(0, 10);
-  if (typeof days === "number" && days < 0) return `<span class="state bad">expired</span> on ${escapeHtml(when)}: make a new one on GitHub and replace it below.`;
-  if (typeof days === "number" && days <= 14) return `<span class="state warn">expires soon</span> on ${escapeHtml(when)}, in ${days} day${days === 1 ? "" : "s"}: make a new one on GitHub and replace it below.`;
-  return `<span class="muted">It expires on ${escapeHtml(when)}.</span>`;
+  if (typeof days === "number" && days < 0) return {text: `expired ${when}`, tone: "bad"};
+  if (typeof days === "number" && days <= 14) return {text: `${when} · in ${days} day${days === 1 ? "" : "s"}`, tone: "warn"};
+  return {text: typeof days === "number" ? `${when} · in ${days} days` : when, tone: "muted"};
 }
 
+// What a fine-grained token was given is its private repositories: GitHub
+// shows every public repository to any token, so those are counted apart.
+function githubGiven(github) {
+  const repos = (github.access && github.access.repositories) || [];
+  const given = repos.filter(row => row.private);
+  return {given, publicRows: repos.filter(row => !row.private), more: Boolean(github.access && github.access.more)};
+}
+
+function githubFacts(github) {
+  const facts = [];
+  const set = github.source === "page" ? "from this page" : "on the host";
+  if (github.connected) {
+    const expiry = githubExpiry(github);
+    const {given, publicRows, more} = githubGiven(github);
+    facts.push(
+      ["Status", '<span class="state good">connected</span>'],
+      ["Account", `<strong>${escapeHtml(github.login)}</strong>`],
+      ["Token", escapeHtml(githubKindText(github))],
+      ["Expires", `<span class="${expiry.tone === "muted" ? "" : expiry.tone}">${escapeHtml(expiry.text)}</span>`],
+      ["Set", set]);
+    if (github.access) {
+      facts.push(["Repositories", github.kind === "fine-grained"
+        ? `${given.length} private given${publicRows.length ? ` · ${publicRows.length}${more ? "+" : ""} public` : ""}`
+        : `all ${escapeHtml(github.login)} can see${(github.scopes || []).length ? ` · ${github.scopes.map(escapeHtml).join(", ")}` : ""}`]);
+    }
+  } else if (github.configured) {
+    facts.push(
+      ["Status", '<span class="state bad">refused</span>'],
+      ["Token", escapeHtml(githubKindText(github))],
+      ["Set", set],
+      ["GitHub says", `<span class="bad">${escapeHtml(github.error || "no")}</span>`]);
+  } else {
+    facts.push(["Status", '<span class="state warn">not connected</span>']);
+  }
+  return `<div class="live-facts worker-facts github-facts">${facts.map(([label, value]) => `<div><small>${label}</small><span>${value}</span></div>`).join("")}</div>`;
+}
+
+// Per project: does the token see the repository, read its code, list its
+// bundles -- the three things the rig does with it -- and what it needs if not.
 function githubAccessMarkup(github) {
   const access = github.access;
-  if (!access) return "";
-  const repos = access.repositories || [];
-  let reach = "";
-  if (github.kind === "fine-grained") {
-    // GitHub lists every public repository the user can see for any token;
-    // the private ones are what this token was given.
-    const given = repos.filter(row => row.private);
-    const publicCount = repos.length - given.length;
-    const publicNote = publicCount ? `, and sees ${publicCount}${access.more ? "+" : ""} public one${publicCount === 1 ? "" : "s"} as any token does` : "";
-    reach = given.length
-      ? `<p>It was given <strong>${given.length} private repositor${given.length === 1 ? "y" : "ies"}</strong>: ${given.map(row => `<code>${escapeHtml(row.name)}</code>`).join(", ")}${publicNote}. A private project's repository has to be among them: on GitHub, add it to the token's repository access, or replace the token below.</p>`
-      : `<p><span class="state warn">no private repository</span> This token was given no private repository${publicNote}${access.error ? ` (${escapeHtml(access.error)})` : ""}: a private project cannot be added with it until GitHub gives it one — on GitHub, add it to the token's repository access, or replace the token below.</p>`;
-  } else if (repos.length) {
-    reach = `<p>It reaches every repository <strong>${escapeHtml(github.login)}</strong> can see${(github.scopes || []).length ? ` (scopes: ${github.scopes.map(scope => `<code>${escapeHtml(scope)}</code>`).join(", ")})` : ""}; ${repos.length}${access.more ? "+" : ""} listed.</p>`;
-  }
+  if (!access || !(access.projects || []).length) return "";
   const mark = ok => ok ? '<span class="state good">yes</span>' : '<span class="state bad">no</span>';
-  const rows = (access.projects || []).map(row => {
+  const rows = access.projects.map(row => {
     const own = row.repo_access || {};
     const supply = row.supply_repo && row.supply_repo !== row.repo ? (row.supply_repo_access || {}) : own;
-    const why = !own.metadata ? "GitHub does not show it to this token"
-      : !own.contents ? "needs Contents: read to check the project out"
-      : !supply.actions ? `needs Actions: read${row.supply_repo && row.supply_repo !== row.repo ? ` on ${projectRepoText(row.supply_repo)}` : ""} to fetch its bundles` : "";
-    return `<tr><td><strong>${escapeHtml(row.label || row.name)}</strong></td><td>${repoLink(row.repo)}</td><td>${mark(own.metadata)}</td><td>${mark(own.contents)}</td><td>${mark(supply.actions)}</td><td class="muted">${escapeHtml(why)}</td></tr>`;
+    const needs = !own.metadata ? "GitHub does not show it to this token"
+      : !own.contents ? "Contents: read, to check the project out"
+      : !supply.actions ? `Actions: read${row.supply_repo && row.supply_repo !== row.repo ? ` on ${projectRepoText(row.supply_repo)}` : ""}, to fetch its bundles` : "";
+    return `<tr><td><strong>${escapeHtml(row.label || row.name)}</strong>${needs ? `<small class="warn">Needs ${escapeHtml(needs)}</small>` : ""}</td><td>${repoLink(row.repo)}</td><td>${mark(own.metadata)}</td><td>${mark(own.contents)}</td><td>${mark(supply.actions)}</td></tr>`;
   }).join("");
-  const table = rows
-    ? `<div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Sees it</th><th>Reads its code</th><th>Fetches its bundles</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-    : "";
-  return reach + table;
+  return `<div class="table-wrap"><table class="fleet github-access"><thead><tr><th>Project</th><th>Repository</th><th>Sees it</th><th>Reads its code</th><th>Fetches its bundles</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function githubMarkup(github, {short = false} = {}) {
+// The whole picture, behind Details: what a person opens when something was refused.
+function githubDetailsMarkup(github) {
+  const {given, publicRows} = githubGiven(github);
+  const list = rows => rows.length ? `<p class="repo-list">${rows.map(row => `<code>${escapeHtml(row.name)}</code>`).join(" ")}</p>` : '<p class="muted">none</p>';
+  const refusals = [];
+  for (const row of (github.access && github.access.projects) || []) {
+    for (const [field, acc] of [["repo", row.repo_access], ["supply_repo", row.supply_repo_access]]) {
+      if (!acc || (field === "supply_repo" && row.supply_repo === row.repo)) continue;
+      if (acc.error) refusals.push([row.label || row.name, acc.repo, acc.error]);
+      for (const [what, why] of Object.entries(acc.refused || {})) refusals.push([row.label || row.name, acc.repo, `${what}: ${why}`]);
+    }
+  }
+  const title = github.connected ? `${escapeHtml(github.login)} · ${escapeHtml(githubKindText(github))}` : github.configured ? "A token GitHub refuses" : "Not connected";
+  return `<dialog class="dialog github-details"><div class="dialog-head"><div><p class="eyebrow">GITHUB TOKEN</p><h2>${title}</h2></div><button type="button" class="secondary dialog-close">Close</button></div>
+    ${githubFacts(github)}
+    ${github.kind === "fine-grained" && github.access ? `<h3>Private repositories it was given (${given.length})</h3>${list(given)}<p class="muted">A fine-grained token reaches the private repositories it was given and no other; GitHub shows every public repository to any token. Widen it on GitHub under the token's <em>Repository access</em>, then press Check again.</p><details><summary>Public repositories it sees (${publicRows.length}${github.access.more ? "+" : ""})</summary>${list(publicRows)}</details>` : ""}
+    ${github.kind === "classic" ? `<h3>Scopes</h3><p>${(github.scopes || []).length ? github.scopes.map(scope => `<code>${escapeHtml(scope)}</code>`).join(" ") : '<span class="muted">none reported</span>'}</p><p class="muted">A classic token reaches everything its account can and does not expire. A fine-grained token with an expiry, given only the project repositories, is the safer kind for a rig.</p>` : ""}
+    ${refusals.length ? `<h3>What GitHub refused</h3><ul class="plain">${refusals.map(([project, repo, why]) => `<li><strong>${escapeHtml(project)}</strong> · <code>${escapeHtml(projectRepoText(repo))}</code>: ${escapeHtml(why)}</li>`).join("")}</ul>` : ""}
+    <h3>Where it lives</h3><p class="muted">${github.source === "page"
+      ? `Given from this page; kept at <code>${escapeHtml(github.path || "")}</code>, readable by the rig only.`
+      : `The host's file <code>${escapeHtml(github.path || "")}</code>, set with <code>${escapeHtml(github.how || "")}</code>. A token given from this page replaces it for the rig.`} Nothing shows the token itself.${github.access?.checked_at ? ` Checked ${escapeHtml(relativeWhen(github.access.checked_at))}.` : ""}</p>
+  </dialog>`;
+}
+
+function githubMarkup(github) {
   if (!github) return "";
-  if (github) lastGithubSummary = github;
-  const check = short ? "" : ' <button type="button" class="secondary github-check">Check again</button>';
-  if (github.connected) {
-    const source = github.source === "page"
-      ? "given from this page"
-      : `set on the host (<code>${escapeHtml(github.path || "")}</code>, with <code>${escapeHtml(github.how)}</code>); a token given below replaces it for the rig`;
-    const checked = github.access?.checked_at ? ` (checked ${escapeHtml(relativeWhen(github.access.checked_at))})` : "";
-    return `<p><span class="state good">connected</span> GitHub accepts this rig's token as <strong>${escapeHtml(github.login)}</strong>: ${githubKindText(github)}, ${source}. ${githubExpiryMarkup(github)}</p>${
-      short ? "" : `${githubAccessMarkup(github)}<p class="muted">Projects are checked out and their bundles fetched with it. Nothing here shows the token: only who it is and what it reaches${checked}.${check}</p>`}`;
+  lastGithubSummary = github;
+  if (!github.connected && !github.configured) {
+    return `${githubFacts(github)}<p class="muted">This rig has no GitHub token, so it can add no project: a project is a GitHub repository whose CI builds the firmware this rig flashes. A <strong>fine-grained</strong> token with <strong>Contents: read</strong> on the project repositories and <strong>Actions: read</strong> to fetch their bundles; the rig checks it with GitHub, keeps it beside its own key, and shows only who it is and what it reaches.</p>`;
   }
-  if (github.configured) {
-    return `<p><span class="state bad">refused</span> GitHub does not accept this rig's token (${githubKindText(github)}${github.source === "page" ? ", given from this page" : `, the host's <code>${escapeHtml(github.path || "")}</code>`})${github.error ? `: ${escapeHtml(github.error)}` : ""}. Replace it below${github.source === "page" ? "" : `, or on the host with <code>${escapeHtml(github.how)}</code>`}.${check}</p>`;
-  }
-  return `<p><span class="state warn">not connected</span> This rig has no GitHub token, so it can add no project: a project is a GitHub repository whose CI builds the firmware this rig flashes.</p>
-    <p class="muted">Give it one below, or on the rig as an administrator: <code>${escapeHtml(github.how)}</code>. A <strong>fine-grained</strong> token with <strong>Contents: read</strong> on the project repositories and <strong>Actions: read</strong> to fetch their bundles; the rig checks it with GitHub, keeps it beside its own key, and shows only who it is and what it reaches afterwards.${check}</p>`;
+  return `${githubFacts(github)}${githubAccessMarkup(github)}`;
+}
+
+// The buttons: ask again, see everything, change the token, forget a page-given one.
+function githubActions(github) {
+  if (!github || !isAdmin() || !shell().projectsAreOwn) return "";
+  const buttons = [];
+  if (github.configured) buttons.push('<button type="button" class="secondary github-check">Check again</button>');
+  if (github.configured) buttons.push('<button type="button" class="secondary github-details-open">Details</button>');
+  buttons.push(`<button type="button" class="${github.configured ? "secondary " : ""}github-replace">${github.configured ? "Replace token" : "Connect GitHub"}</button>`);
+  if (github.source === "page" && github.path) buttons.push('<button type="button" class="secondary github-forget">Forget it</button>');
+  return `<div class="row-actions github-actions">${buttons.join("")}</div>`;
 }
 
 function githubTokenForm(github) {
   if (!isAdmin() || !shell().projectsAreOwn) return "";
-  return `<form id="github-token-form" class="settings-form" autocomplete="off">
-    <label>${github && github.connected ? "Replace the token" : "GitHub token"} <small class="muted">a fine-grained token: Contents read and Actions read on the project repositories. It goes to this rig once, over this connection, and is not shown again.</small><input name="token" type="password" autocomplete="off" required placeholder="github_pat_…"></label>
+  return `<form id="github-token-form" class="settings-form" autocomplete="off" hidden>
+    <label>${github && github.configured ? "New token" : "GitHub token"} <small class="muted">a fine-grained token: Contents read and Actions read on the project repositories. It goes to this rig once, over this connection, and is not shown again.</small><input name="token" type="password" autocomplete="off" required placeholder="github_pat_…"></label>
     <p id="github-token-error" class="failure-summary" hidden></p>
-    <div class="settings-footer"><button type="submit">${github && github.connected ? "Replace" : "Connect GitHub"}</button>${github && github.connected && github.path && !String(github.path).startsWith("/etc/") ? '<button type="button" class="secondary github-forget">Forget it</button>' : ""}</div>
+    <div class="settings-footer"><button type="submit">${github && github.configured ? "Replace" : "Connect"}</button><button type="button" class="secondary github-cancel">Cancel</button></div>
   </form>`;
+}
+
+function githubCardMarkup(github) {
+  return `${githubMarkup(github)}${githubActions(github)}${githubTokenForm(github)}${githubDetailsMarkup(github)}`;
 }
 
 function renderGitHubCard(github) {
@@ -5054,12 +5118,28 @@ function renderGitHubCard(github) {
   if (!card) return;
   if (!github) { card.hidden = true; return; }
   card.hidden = false;
-  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">GITHUB</p><h2>Where projects come from</h2></div>${github.connected ? "" : '<a class="button secondary" href="#configuration/projects">Projects</a>'}</div>${githubMarkup(github)}${githubTokenForm(github)}`;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">GITHUB</p><h2>Where projects come from</h2></div>${github.connected ? "" : '<a class="button secondary" href="#configuration/projects">Projects</a>'}</div>${githubCardMarkup(github)}`;
   wireGitHubCard(card);
 }
 
 function wireGitHubCard(card) {
   const form = card.querySelector("#github-token-form");
+  const rerender = answer => {
+    renderGitHubCard(answer.github);
+    if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+  };
+  card.querySelector(".github-replace")?.addEventListener("click", () => {
+    if (!form) return;
+    form.hidden = false;
+    form.elements.token.focus();
+  });
+  card.querySelector(".github-cancel")?.addEventListener("click", () => {
+    if (!form) return;
+    form.hidden = true;
+    form.elements.token.value = "";
+    const note = card.querySelector("#github-token-error");
+    if (note) note.hidden = true;
+  });
   form?.addEventListener("submit", async event => {
     event.preventDefault();
     const note = card.querySelector("#github-token-error");
@@ -5068,8 +5148,7 @@ function wireGitHubCard(card) {
     try {
       const answer = await api("/api/v1/github", {method: "POST", body: JSON.stringify({token: form.elements.token.value.trim()})});
       form.elements.token.value = "";
-      renderGitHubCard(answer.github);
-      if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+      rerender(answer);
     } catch (error) {
       note.hidden = false;
       note.textContent = error.message;
@@ -5081,17 +5160,16 @@ function wireGitHubCard(card) {
     button.disabled = true;
     button.textContent = "Asking GitHub…";
     try {
-      const answer = await api("/api/v1/github/check", {method: "POST", body: "{}"});
-      renderGitHubCard(answer.github);
-      if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+      rerender(await api("/api/v1/github/check", {method: "POST", body: "{}"}));
     } catch (error) { alert(`This rig refused: ${error.message}`); button.disabled = false; button.textContent = "Check again"; }
   });
+  const dialog = card.querySelector("dialog.github-details");
+  card.querySelector(".github-details-open")?.addEventListener("click", () => dialog?.showModal());
+  dialog?.querySelector(".dialog-close")?.addEventListener("click", () => dialog.close());
   card.querySelector(".github-forget")?.addEventListener("click", async () => {
     if (!confirm("Forget the GitHub token this rig holds? It can add no project until it is given one again.")) return;
     try {
-      const answer = await api("/api/v1/github/remove", {method: "POST", body: "{}"});
-      renderGitHubCard(answer.github);
-      if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+      rerender(await api("/api/v1/github/remove", {method: "POST", body: "{}"}));
     } catch (error) { alert(`This rig refused: ${error.message}`); }
   });
 }
@@ -5119,14 +5197,14 @@ function renderRigProjects(view) {
   </tr>`).join("");
   const own = projects.filter(row => row.origin !== "shipped").length;
   const current = projectEditing && projectEditing !== "new" ? projects.find(row => row.name === projectEditing) : null;
-  const gate = github && !github.connected ? `<section class="card project-gate">${githubMarkup(github)}${githubTokenForm(github)}</section>` : "";
+  const gate = github && !github.connected ? `<section class="card project-gate">${githubCardMarkup(github)}</section>` : "";
   const removed = (view.removed || []).length
     ? `<p class="muted">Removed from this rig: ${view.removed.map(name => `<code>${escapeHtml(name)}</code>${isAdmin() ? ` <button type="button" class="secondary project-restore" data-name="${escapeHtml(name)}">Restore</button>` : ""}`).join(", ")}</p>`
     : "";
   const health = view.health_check
     ? `<p class="muted">The <strong>${escapeHtml(view.health_check.label)}</strong> is not a project: it is the rig's own firmware, installed with each release and run from <a href="#rigs">Boards</a>.</p>`
     : "";
-  const notice = projectNotice ? `<p class="${projectNotice.tone === "bad" ? "failure-summary" : "muted"}">${escapeHtml(projectNotice.text)}</p>` : "";
+  const notice = projectNotice ? `<p class="${projectNotice.tone === "bad" ? "failure-summary" : "muted"}">${escapeHtml(projectNotice.text)}${/GitHub/.test(projectNotice.text) ? ' <a href="#configuration">Open GitHub settings</a>' : ""}</p>` : "";
   projectNotice = null;
   card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${canAdd && !projectEditing ? '<button type="button" class="secondary project-add">Add project</button>' : ""}${github && github.connected ? `<span class="muted" title="GitHub accepts this rig's token">GitHub · ${escapeHtml(github.login)}</span>` : ""}</div></div>
     <p class="muted">A project is a GitHub repository whose firmware this rig flashes and whose test suite it runs. This rig runs the projects listed here and no other: change or remove any of them, the reference the release ships included, and add your own. The rig does not build firmware: your project's CI builds a bundle, and this rig fetches it from GitHub or takes it when the CI hands it over; a run flashes it.</p>

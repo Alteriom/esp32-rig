@@ -75,8 +75,11 @@ Four pages on a rig, one purpose each.
 here and on a farm); **GitHub**, the token the rig reads projects and their
 bundles with: who it is according to GitHub, what kind it is, when it
 expires, where it came from, which repositories it reaches and what it may
-do with each project's, with **Check again**, **Replace** and (for a token
-given from the page) **Forget**; **Connection to a farm**, connect, what is
+do with each project's, as a status block with a per-project table; **Check
+again**, **Details** (the whole picture: the private repositories it was
+given, the public ones it sees, what GitHub refused and why), **Replace
+token** (the form appears only then) and, for a token given from the page,
+**Forget it**; **Connection to a farm**, connect, what is
 shared, disconnect; the version installed.
 
 **Projects** — the projects this rig runs and no other. Each has a page:

@@ -235,3 +235,14 @@ tr.selected td{background:rgba(127,127,127,.08)}
 /* The guide, off the rig: the same row as the pages, set apart as a link out. */
 #nav .nav-guide { margin-left: auto; font-size: 0.85rem; opacity: 0.8; text-decoration: none; align-self: center; padding: 0.35rem 0.6rem; }
 #nav .nav-guide:hover { opacity: 1; text-decoration: underline; }
+
+/* A details dialog: the whole picture behind one button, in the page's own colours. */
+dialog.dialog{border:1px solid var(--line);border-radius:12px;padding:18px 22px 22px;max-width:760px;width:calc(100% - 32px);background:var(--panel);color:var(--ink)}
+dialog.dialog::backdrop{background:rgba(0,0,0,.55)}
+dialog.dialog .dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+dialog.dialog h3{margin:16px 0 6px;font-size:.9rem}
+dialog.dialog details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
+.repo-list code{margin:0 6px 6px 0;display:inline-block}
+.github-actions{flex-wrap:wrap;margin-top:8px}
+ul.plain{margin:6px 0;padding-left:18px}
+.settings-form[hidden]{display:none}
