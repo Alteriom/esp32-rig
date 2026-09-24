@@ -488,6 +488,17 @@ def load_local_profiles(state: Path) -> dict[str, Profile]:
     return load_profiles_from(Path(state) / "profiles", required=False)
 
 
+def removed_profiles(state: Path) -> frozenset:
+    """The shipped profiles this rig's operator removed: `<state>/profiles/
+    <name>.removed`, one empty file each. A rig for one project does not
+    offer the reference suite of another; removing it is the operator's,
+    and restoring it is deleting the file."""
+    directory = Path(state) / "profiles"
+    if not directory.is_dir():
+        return frozenset()
+    return frozenset(path.name[:-len(".removed")] for path in directory.glob("*.removed"))
+
+
 def load_profiles_from(directory: Path, required: bool = True) -> dict[str, Profile]:
     """Every profile document in one directory, keyed by name."""
     directory = Path(directory)

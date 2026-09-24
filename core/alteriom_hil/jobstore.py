@@ -1126,6 +1126,21 @@ class JobStore:
                 (job_id, kind, utcnow(), removed_bytes),
             )
 
+    def delete_job(self, job_id: str) -> bool:
+        """Forget a run: its record, its evidence notes, its board verdicts.
+        The caller has removed what was on disk. Only a finished run is
+        deletable; a queued or running one is cancelled first."""
+        with self.connect() as db:
+            row = db.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                return False
+            if row["status"] in ("queued", "running"):
+                raise ValueError(f"run {job_id[:8]} is {row['status']}; cancel it before deleting it")
+            db.execute("DELETE FROM evidence_records WHERE job_id=?", (job_id,))
+            db.execute("DELETE FROM board_verdicts WHERE job_id=?", (job_id,))
+            db.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        return True
+
     def evidence_removals(self, job_id: str) -> dict:
         with self.connect() as db:
             rows = db.execute("SELECT * FROM evidence_records WHERE job_id=?", (job_id,)).fetchall()

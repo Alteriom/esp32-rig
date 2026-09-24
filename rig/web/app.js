@@ -833,8 +833,15 @@ function jobActionButtons(job, {promotable = true} = {}) {
   if (job.status === "queued" && promotable && isAdmin()) buttons.push(`<button class="secondary job-promote" data-id="${escapeHtml(job.id)}" title="Run this next, ahead of everything else queued">Run next</button>`);
   const mayCancel = isAdmin() || (job.request?.submitted_by && job.request.submitted_by === you?.name);
   if (["queued", "running"].includes(job.status) && mayCancel) buttons.push(`<button class="danger job-cancel" data-id="${escapeHtml(job.id)}" data-status="${escapeHtml(job.status)}">${job.status === "running" ? "Cancel run" : "Cancel"}</button>`);
+  // A finished run is the operator's to keep or not: deleting it takes its
+  // evidence, its log and its record. On a rig; a portal keeps a rig's
+  // history for it.
+  if (!["queued", "running"].includes(job.status) && isAdmin() && shell().projectsAreOwn && !promotableOnlyList) {
+    buttons.push(`<button class="danger job-delete" data-id="${escapeHtml(job.id)}" title="Delete this run: its evidence, log and record">Delete run</button>`);
+  }
   return buttons.join("");
 }
+let promotableOnlyList = false;
 
 function renderYou(identity) {
   you = identity || null;
@@ -916,6 +923,14 @@ function renderJob(job) {
     escapeHtml(jobTargets(job) || ""),
   ].filter(Boolean).join(" · ");
   $("job-actions").innerHTML = jobActionButtons(job);
+  $("job-actions").querySelector(".job-delete")?.addEventListener("click", async () => {
+    if (!confirm(`Delete run ${job.id.slice(0, 8)}? Its evidence, log and record go; this cannot be undone.`)) return;
+    try {
+      await api(`/api/v1/jobs/${encodeURIComponent(job.id)}/delete`, {method: "POST", body: "{}"});
+    } catch (error) { alert(`This rig refused: ${error.message}`); return; }
+    navigateTo("#runs");
+    await refresh(true);
+  });
   const result = job.result || {};
   const selection = selectionOf(job);
   const partial = selection.tests.length || selection.keyword;
@@ -986,9 +1001,24 @@ function familyLabel(target) { return target.replace(/^esp32-/, "").toUpperCase(
 function renderProfiles() {
   const select = document.getElementById("profile-select");
   if (!select) return;
-  const names = Object.keys(profiles).sort();
-  if (!names.length) return;
-  // Opens on the farm's default profile; after that the choice is the operator's.
+  // On a rig the form runs projects; the health check is run from Boards.
+  // A rig with no project yet says so rather than offering the health check
+  // as if it were one.
+  const every = Object.keys(profiles).sort();
+  const names = shell().projectsAreOwn ? every.filter(name => name !== "canary") : every;
+  const submit = $("suite-submit");
+  if (!names.length) {
+    if (every.length) {
+      select.innerHTML = '<option value="">No project on this rig yet</option>';
+      select.dataset.signature = "none";
+      if (submit) submit.disabled = true;
+      const note = $("bundle-note");
+      if (note) note.innerHTML = 'Add a project under <a href="#configuration/projects">Settings → Projects</a>; the Rig Health Check is run from <a href="#rigs">Boards</a>.';
+      renderProjectStrip("");
+    }
+    return;
+  }
+  // Opens on the rig's default project; after that the choice is the operator's.
   const chosen = select.value && names.includes(select.value) ? select.value
     : names.includes(defaultProfile) ? defaultProfile : names[0];
   const signature = JSON.stringify([names, chosen]);
@@ -1401,8 +1431,14 @@ function renderVersion(version, repos) {
   const link = $("repo-link");
   link.hidden = !repos.farm;
   if (repos.farm) { link.href = repos.farm; $("repo-name").textContent = repos.farm.replace(/^https:\/\/github\.com\//, ""); }
-  // What this farm mostly validates: its default profile's repository.
-  const underTest = repoForProfile(defaultProfile);
+  // What this rig is for: its projects' repositories (the health check is
+  // not one). A portal says what its default profile validates.
+  const projectNames = shell().projectsAreOwn
+    ? Object.keys(profiles).filter(name => name !== "canary").sort()
+    : [defaultProfile];
+  const underTest = shell().projectsAreOwn
+    ? projectNames.map(repoForProfile).filter(Boolean)
+    : [repoForProfile(defaultProfile)].filter(Boolean);
   const rows = [
     ["Version", number],
     ["Build", version?.build],
@@ -1411,7 +1447,7 @@ function renderVersion(version, repos) {
     ["Deployed", version?.installed_at],
   ].filter(([, value]) => value !== undefined && value !== null && value !== "");
   $("version-detail").innerHTML = known
-    ? `<div class="detail-grid">${rows.map(([label, value]) => `<div><small>${escapeHtml(label)}</small><span>${label === "Commit" ? shaLink(value, repos.farm) : escapeHtml(value)}</span></div>`).join("")}</div>${version.subject ? `<p class="muted">${escapeHtml(version.subject)}</p>` : ""}${repos.farm ? `<p class="muted">Source: <a href="${escapeHtml(repos.farm)}" target="_blank" rel="noopener">${escapeHtml(repos.farm)}</a>${underTest ? ` · under validation: <a href="${escapeHtml(underTest)}" target="_blank" rel="noopener">${escapeHtml(underTest)}</a>` : ""}</p>` : ""}`
+    ? `<div class="detail-grid">${rows.map(([label, value]) => `<div><small>${escapeHtml(label)}</small><span>${label === "Commit" ? shaLink(value, repos.farm) : escapeHtml(value)}</span></div>`).join("")}</div>${version.subject ? `<p class="muted">${escapeHtml(version.subject)}</p>` : ""}${repos.farm ? `<p class="muted">${shell().projectsAreOwn ? "Rig software" : "Source"}: <a href="${escapeHtml(repos.farm)}" target="_blank" rel="noopener">${escapeHtml(repos.farm)}</a>${underTest.length ? ` · ${shell().projectsAreOwn ? "projects" : "under validation"}: ${underTest.map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url.replace(/^https:\/\/github\.com\//, ""))}</a>`).join(", ")}` : shell().projectsAreOwn ? ' · <a href="#configuration/projects">no project yet</a>' : ""}</p>` : ""}`
     : `<p class="muted">This host reports no version stamp. It is running code installed before the farm recorded one, or installed by hand; re-run <code>install-health-service.sh</code> (the deploy workflow does) to stamp it.</p>`;
 }
 
@@ -3518,7 +3554,9 @@ function renderJobs(page) {
   };
   const queueOrder = lastQueue.queued || [];
   const dash = "—";
-  $("jobs").innerHTML = jobs.map(job => `<tr><td>${new Date(job.created_at).toLocaleString()}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("")
+  promotableOnlyList = true;
+  $("jobs").innerHTML = jobs.map(job => `<tr><td>${new Date(job.created_at).toLocaleString()}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("");
+  promotableOnlyList = false
     || `<tr><td colspan="9" class="muted">${runQuery.q || runQuery.status || runQuery.kind ? "No run matches this filter." : "No pipeline history yet."}</td></tr>`;
   document.querySelectorAll(".view-job").forEach(button => button.addEventListener("click", () => {
     openRun(button.dataset.id);
@@ -4852,12 +4890,53 @@ function githubMarkup(github, {short = false} = {}) {
     <p class="muted">On the rig, as an administrator: <code>${escapeHtml(github.how)}</code> — it asks for a fine-grained token with <strong>Contents: read</strong> on the project repositories and <strong>Actions: read</strong> to fetch their bundles, checks it with GitHub, and stores it beside the API token. Nothing here shows the token afterwards, only who it is.</p>`;
 }
 
+// The token, from the page: sent once to this rig, checked with GitHub,
+// kept under the rig's state directory, never shown again. Offered to an
+// admin key on a rig; the terminal command remains the other way.
+function githubTokenForm(github) {
+  if (!isAdmin() || !shell().projectsAreOwn) return "";
+  return `<form id="github-token-form" class="settings-form" autocomplete="off">
+    <label>${github && github.connected ? "Replace the token" : "GitHub token"} <small class="muted">a fine-grained token: Contents read and Actions read on the project repositories. It goes to this rig once, over this connection, and is not shown again.</small><input name="token" type="password" autocomplete="off" required placeholder="github_pat_…"></label>
+    <p id="github-token-error" class="failure-summary" hidden></p>
+    <div class="settings-footer"><button type="submit">${github && github.connected ? "Replace" : "Connect GitHub"}</button>${github && github.connected && github.path && !String(github.path).startsWith("/etc/") ? '<button type="button" class="secondary github-forget">Forget it</button>' : ""}</div>
+  </form>`;
+}
+
 function renderGitHubCard(github) {
   const card = $("github-card");
   if (!card) return;
   if (!github) { card.hidden = true; return; }
   card.hidden = false;
-  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">GITHUB</p><h2>Where projects come from</h2></div>${github.connected ? "" : '<a class="button secondary" href="#configuration/projects">Projects</a>'}</div>${githubMarkup(github)}`;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">GITHUB</p><h2>Where projects come from</h2></div>${github.connected ? "" : '<a class="button secondary" href="#configuration/projects">Projects</a>'}</div>${githubMarkup(github)}${githubTokenForm(github)}`;
+  wireGitHubCard(card);
+}
+
+function wireGitHubCard(card) {
+  const form = card.querySelector("#github-token-form");
+  form?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const note = card.querySelector("#github-token-error");
+    const button = form.querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      const answer = await api("/api/v1/github", {method: "POST", body: JSON.stringify({token: form.elements.token.value.trim()})});
+      form.elements.token.value = "";
+      renderGitHubCard(answer.github);
+      if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+    } catch (error) {
+      note.hidden = false;
+      note.textContent = error.message;
+      button.disabled = false;
+    }
+  });
+  card.querySelector(".github-forget")?.addEventListener("click", async () => {
+    if (!confirm("Forget the GitHub token this rig holds? It can add no project until it is given one again.")) return;
+    try {
+      const answer = await api("/api/v1/github/remove", {method: "POST", body: "{}"});
+      renderGitHubCard(answer.github);
+      if (rigProjectsView) { rigProjectsView = {...rigProjectsView, github: answer.github}; renderRigProjects(rigProjectsView); }
+    } catch (error) { alert(`This rig refused: ${error.message}`); }
+  });
 }
 
 function projectOf(name) {
@@ -4872,24 +4951,32 @@ function renderRigProjects(view) {
   const canAdd = Boolean(github && github.connected) && isAdmin();
   if (!canAdd && projectEditing === "new") projectEditing = null;
   if (projectOpen && !projectOf(projectOpen)) projectOpen = null;
+  const originNote = row => row.origin === "changed" ? " · the release's, changed here" : row.origin === "shipped" ? " · shipped with the rig" : "";
   const rows = projects.map(row => `<tr class="clickable${projectOpen === row.name ? " selected" : ""}" data-project="${escapeHtml(row.name)}">
-    <td><a class="row-link project-open" href="#configuration/projects/${escapeHtml(row.name)}"><strong>${escapeHtml(row.label || row.name)}</strong></a><small><code>${escapeHtml(row.name)}</code>${row.shipped ? ' · shipped with the rig' : ""}</small></td>
+    <td><a class="row-link project-open" href="#configuration/projects/${escapeHtml(row.name)}"><strong>${escapeHtml(row.label || row.name)}</strong></a><small><code>${escapeHtml(row.name)}</code>${originNote(row)}</small></td>
     <td>${row.repo ? `<a href="${escapeHtml(row.repo)}" target="_blank" rel="noopener">${escapeHtml(projectRepoText(row.repo))}</a>` : '<span class="muted">—</span>'}<small>default <code>${escapeHtml(row.default_ref || "")}</code></small></td>
     <td>${escapeHtml(profileTakes(row))}</td>
     <td>${row.supply_workflow ? `<code>${escapeHtml(row.supply_workflow)}</code>` : '<span class="bad">no producer</span>'}${row.supply_repo && row.supply_repo !== row.repo ? `<small>${repoLink(row.supply_repo)}</small>` : ""}</td>
     <td><code>${escapeHtml(row.suite_path || "")}</code></td>
     <td class="nowrap"><button type="button" class="secondary project-open" data-name="${escapeHtml(row.name)}">${projectOpen === row.name ? "Close" : "Open"}</button></td>
   </tr>`).join("");
-  const own = projects.filter(row => !row.shipped).length;
+  const own = projects.filter(row => row.origin !== "shipped").length;
   const current = projectEditing && projectEditing !== "new" ? projects.find(row => row.name === projectEditing) : null;
-  const gate = github && !github.connected ? `<section class="card project-gate">${githubMarkup(github)}</section>` : "";
+  const gate = github && !github.connected ? `<section class="card project-gate">${githubMarkup(github)}${githubTokenForm(github)}</section>` : "";
+  const removed = (view.removed || []).length
+    ? `<p class="muted">Removed from this rig: ${view.removed.map(name => `<code>${escapeHtml(name)}</code>${isAdmin() ? ` <button type="button" class="secondary project-restore" data-name="${escapeHtml(name)}">Restore</button>` : ""}`).join(", ")}</p>`
+    : "";
+  const health = view.health_check
+    ? `<p class="muted">The <strong>${escapeHtml(view.health_check.label)}</strong> is not a project: it is the rig's own firmware, installed with each release and run from <a href="#rigs">Boards</a>.</p>`
+    : "";
   const notice = projectNotice ? `<p class="${projectNotice.tone === "bad" ? "failure-summary" : "muted"}">${escapeHtml(projectNotice.text)}</p>` : "";
   projectNotice = null;
   card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${canAdd && !projectEditing ? '<button type="button" class="secondary project-add">Add project</button>' : ""}${github && github.connected ? `<span class="muted" title="GitHub accepts this rig's token">GitHub · ${escapeHtml(github.login)}</span>` : ""}</div></div>
-    <p class="muted">A project is a GitHub repository whose firmware this rig flashes and whose test suite it runs. The projects that come with the rig are listed with yours; add your own here. The rig does not build firmware: your project's CI builds a bundle, and this rig fetches it from GitHub or takes it when the CI hands it over; a run flashes it.</p>
+    <p class="muted">A project is a GitHub repository whose firmware this rig flashes and whose test suite it runs. This rig runs the projects listed here and no other: change or remove any of them, the reference the release ships included, and add your own. The rig does not build firmware: your project's CI builds a bundle, and this rig fetches it from GitHub or takes it when the CI hands it over; a run flashes it.</p>
     ${gate}${notice}
     ${projectEditing ? projectForm(current) : ""}
-    <div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${projects.length ? `<div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="muted">No project on this rig yet.</p>'}
+    ${removed}${health}
     ${projectOpen ? projectPage(projectOf(projectOpen), github) : ""}
     <p class="muted">Your projects are documents under <code>${escapeHtml(view.directory || "")}</code>, one per project; upgrading the rig leaves them alone.</p>`;
   wireRigProjects(card);
@@ -4910,12 +4997,14 @@ function projectPage(row, github) {
   const canFetch = Boolean(github && github.connected) && isAdmin() && Boolean(row.supply_workflow);
   const actions = [
     `<button type="button" class="secondary project-run" data-name="${escapeHtml(row.name)}">Run</button>`,
-    canFetch ? `<button type="button" class="secondary project-fetch" data-name="${escapeHtml(row.name)}" title="The newest bundle the supply workflow uploaded to GitHub">Fetch newest bundle</button>` : "",
-    !row.shipped && isAdmin() ? `<button type="button" class="secondary project-edit" data-name="${escapeHtml(row.name)}">Change</button>` : "",
-    !row.shipped && isAdmin() ? `<button type="button" class="danger project-remove" data-name="${escapeHtml(row.name)}">Remove</button>` : "",
+    canFetch ? `<button type="button" class="secondary project-fetch" data-name="${escapeHtml(row.name)}" title="Get the firmware your CI built: the newest bundle the supply workflow uploaded to GitHub, so a run can flash it">Get firmware from GitHub</button>` : "",
+    isAdmin() ? `<button type="button" class="secondary project-edit" data-name="${escapeHtml(row.name)}">Change</button>` : "",
+    isAdmin() ? `<button type="button" class="danger project-remove" data-name="${escapeHtml(row.name)}">${row.origin === "shipped" ? "Remove from this rig" : "Remove"}</button>` : "",
   ].filter(Boolean).join(" ");
+  const eyebrow = row.origin === "shipped" ? "SHIPPED WITH THE RIG" : row.origin === "changed" ? "THE RELEASE'S, CHANGED HERE" : "YOUR PROJECT";
   return `<section class="card project-page" data-project="${escapeHtml(row.name)}">
-    <div class="title-row"><div><p class="eyebrow">${row.shipped ? "SHIPPED WITH THE RIG" : "YOUR PROJECT"}</p><h2>${escapeHtml(row.label || row.name)}</h2></div><div class="row-actions">${actions}</div></div>
+    <div class="title-row"><div><p class="eyebrow">${eyebrow}</p><h2>${escapeHtml(row.label || row.name)}</h2></div><div class="row-actions">${actions}</div></div>
+    ${canFetch ? '<p class="muted">The rig does not build firmware. <strong>Get firmware from GitHub</strong> fetches the newest bundle the project\'s supply workflow uploaded, so the run form has something to flash; your CI can also hand a bundle over directly.</p>' : ""}
     <div class="detail-grid">
       ${field("Name", `<code>${escapeHtml(row.name)}</code>`)}
       ${field("Repository", row.repo ? `<a href="${escapeHtml(row.repo)}" target="_blank" rel="noopener">${escapeHtml(projectRepoText(row.repo))}</a>` : "—")}
@@ -4937,10 +5026,22 @@ async function loadProjectPage(name) {
   const bundlesBox = page.querySelector(".project-bundles");
   const runsBox = page.querySelector(".project-runs");
   const jobs = ((lastStatus || {}).jobs || []).filter(job => job.kind === "suite" && jobProfile(job) === name).slice(0, 5);
-  runsBox.innerHTML = `<h3>Recent runs</h3>${jobs.length
+  const finished = ((lastStatus || {}).jobs || []).filter(job => job.kind === "suite" && jobProfile(job) === name && !["queued", "running"].includes(job.status)).length;
+  runsBox.innerHTML = `<h3>Recent runs${finished && isAdmin() ? ` <button type="button" class="danger project-runs-delete" data-name="${escapeHtml(name)}" title="Delete this project's finished runs: their evidence, logs and records">Delete its runs</button>` : ""}</h3>${jobs.length
     ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Run</th><th>Status</th><th>Revision</th><th>When</th></tr></thead><tbody>${jobs.map(job => `<tr class="clickable" data-href="#run/${escapeHtml(job.id)}"><td><a class="row-link" href="#run/${escapeHtml(job.id)}"><code>${escapeHtml(job.id.slice(0, 8))}</code></a></td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td>${revisionLabel(job)}</td><td class="nowrap">${whenSpan(job.created_at)}</td></tr>`).join("")}</tbody></table></div>`
     : '<p class="muted">No run of this project yet.</p>'}`;
   linkRows(runsBox);
+  runsBox.querySelector(".project-runs-delete")?.addEventListener("click", async event => {
+    const button = event.currentTarget;
+    if (!confirm(`Delete every finished run of ${name}? Their evidence, logs and records go; queued and running ones stay.`)) return;
+    button.disabled = true;
+    try {
+      const answer = await api(`/api/v1/projects/${encodeURIComponent(name)}/runs/delete`, {method: "POST", body: "{}"});
+      projectNotice = {tone: "good", text: `Deleted ${answer.deleted.length} run${answer.deleted.length === 1 ? "" : "s"} of ${name}${answer.kept.length ? `; ${answer.kept.length} still queued or running` : ""}.`};
+      await refresh(true);
+      renderRigProjects(rigProjectsView);
+    } catch (error) { alert(`This rig refused: ${error.message}`); button.disabled = false; }
+  });
   let found;
   try { found = await api(`/api/v1/artifacts?profile=${encodeURIComponent(name)}&limit=5`); }
   catch (error) { bundlesBox.innerHTML = `<p class="failure-summary">Could not list its bundles: ${escapeHtml(error.message)}</p>`; return; }
@@ -5015,15 +5116,28 @@ function wireRigProjects(card) {
     redraw();
   }));
   card.querySelectorAll(".project-run").forEach(button => button.addEventListener("click", () => runProject(button.dataset.name)));
+  card.querySelectorAll(".project-restore").forEach(button => button.addEventListener("click", async () => {
+    try {
+      const answer = await api(`/api/v1/projects/${encodeURIComponent(button.dataset.name)}/restore`, {method: "POST", body: "{}"});
+      rigProjectsView = {...rigProjectsView, projects: answer.projects, removed: answer.removed_shipped || []};
+      projectOpen = answer.restored;
+    } catch (error) { alert(`This rig refused: ${error.message}`); return; }
+    redraw();
+  }));
+  wireGitHubCard(card);
   card.querySelectorAll(".project-fetch").forEach(button => button.addEventListener("click", () => fetchProjectBundle(button.dataset.name, button)));
   card.querySelectorAll(".project-edit").forEach(button => button.addEventListener("click", () => { projectEditing = button.dataset.name; redraw(); }));
   card.querySelector(".project-cancel")?.addEventListener("click", () => { projectEditing = null; redraw(); });
   card.querySelectorAll(".project-remove").forEach(button => button.addEventListener("click", async () => {
     const name = button.dataset.name;
-    if (!confirm(`Remove the project ${name}? Its runs stay in the history; this rig just stops offering it.`)) return;
+    const row = projectOf(name);
+    const shipped = row && row.origin !== "own";
+    if (!confirm(shipped
+      ? `Remove ${name} from this rig? It comes with the release, so it can be restored; its runs stay in the history.`
+      : `Remove the project ${name}? Its runs stay in the history; this rig just stops offering it.`)) return;
     try {
       const answer = await api(`/api/v1/projects/${encodeURIComponent(name)}/delete`, {method: "POST", body: "{}"});
-      rigProjectsView = {...rigProjectsView, projects: answer.projects};
+      rigProjectsView = {...rigProjectsView, projects: answer.projects, removed: answer.removed_shipped || []};
     } catch (error) { alert(`This rig refused: ${error.message}`); return; }
     projectEditing = null;
     if (projectOpen === name) projectOpen = null;
@@ -5046,7 +5160,7 @@ function wireRigProjects(card) {
     submit.disabled = true;
     try {
       const answer = await api(path, {method: "POST", body: JSON.stringify(body)});
-      rigProjectsView = {...rigProjectsView, projects: answer.projects};
+      rigProjectsView = {...rigProjectsView, projects: answer.projects, removed: answer.removed_shipped || rigProjectsView.removed || []};
       projectEditing = null;
       projectOpen = answer.project?.name || projectOpen;
       redraw();

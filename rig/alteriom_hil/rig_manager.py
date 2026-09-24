@@ -119,6 +119,15 @@ class RigMixin:
         ("POST", r"/api/v1/projects", "admin", "create_project"),
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})", "admin", "update_project"),
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/delete", "admin", "delete_project"),
+        ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/restore", "admin", "restore_project"),
+        # A project's runs, gone together: the evidence, the logs, the records.
+        ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/runs/delete", "admin", "delete_project_runs"),
+        # One finished run, gone.
+        ("POST", r"/api/v1/jobs/(?P<job_id>[0-9a-f]{32})/delete", "admin", "delete_run"),
+        # The token, given from the page: kept in the state directory, checked
+        # with GitHub first, never read back.
+        ("POST", r"/api/v1/github", "admin", "set_github_token"),
+        ("POST", r"/api/v1/github/remove", "admin", "remove_github_token"),
         # The newest bundle the project's supply workflow uploaded, fetched
         # by the rig from GitHub: how a rig no CI can reach gets its firmware.
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/fetch", "admin", "fetch_project_bundle"),
@@ -155,12 +164,50 @@ class RigMixin:
     # is already answered with (`_clone_credentials`); `alteriom-hil-admin
     # github set` writes it. The rig says who the token is, never what it is.
 
+    def github_token_path(self) -> Path:
+        """Where this rig's GitHub token is: the one the page stored under
+        the state directory when there is one, else the host's consumer
+        credential file, which `alteriom-hil-admin github set` writes."""
+        own = Path(self.state) / "github-token"
+        return own if own.is_file() else Path(self.CONSUMER_TOKEN_PATH)
+
     def _github(self) -> "github_access.Status":
         status = self.__dict__.get("_github_status")
-        if status is None or status.path != self.CONSUMER_TOKEN_PATH:
-            status = github_access.Status(Path(self.CONSUMER_TOKEN_PATH))
+        path = self.github_token_path()
+        if status is None or status.path != path:
+            status = github_access.Status(path)
             self.__dict__["_github_status"] = status
         return status
+
+    def set_github_token(self, body, identity=None) -> dict:
+        """The token from the page. Checked with GitHub before it is kept,
+        written 0600 under the state directory (the service's own, which is
+        why it can be written from here), and answered as who it is."""
+        token = str((body or {}).get("token") or "").strip()
+        if not token or any(ch.isspace() for ch in token) or len(token) > 512:
+            raise ValueError("a GitHub token is one line, without spaces")
+        try:
+            who = github_access.whoami(token)
+        except github_access.GitHubError as error:
+            raise ValueError(f"not stored: {error}") from None
+        path = Path(self.state) / "github-token"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(token + "\n", encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+        self.__dict__.pop("_github_status", None)
+        return {"stored": True, "login": who["login"], "path": str(path), "github": self._github().view()}
+
+    def remove_github_token(self, body, identity=None) -> dict:
+        """Forget the token the page stored. The host's own file, if any, is
+        the administrator's to remove (`alteriom-hil-admin github remove`)."""
+        path = Path(self.state) / "github-token"
+        removed = path.is_file()
+        if removed:
+            path.unlink()
+        self.__dict__.pop("_github_status", None)
+        return {"removed": removed, "github": self._github().view()}
 
     def github_view(self, identity=None) -> dict:
         return self._github().view()
@@ -194,7 +241,10 @@ class RigMixin:
         return {
             "name": name,
             "label": spec.label,
-            "shipped": name in self.shipped_profiles,
+            "shipped": name in self.shipped_profiles and name not in self.overridden_profiles,
+            # shipped: the release's, as it came; changed: the release's, with
+            # the operator's document over it; own: the operator's alone.
+            "origin": "changed" if name in self.overridden_profiles else "shipped" if name in self.shipped_profiles else "own",
             "location": spec.location,
             "repo": spec.repo,
             "default_ref": spec.default_ref,
@@ -213,8 +263,16 @@ class RigMixin:
         """Every project this rig can run: the ones its release ships and
         the ones its operator added, told apart, because only the latter are
         changed from here."""
+        from alteriom_hil.service import HEALTH_CHECK_PROFILE
+        health = self.profiles.get(HEALTH_CHECK_PROFILE)
         return {
-            "projects": [self._project_row(name) for name in sorted(self.profiles)],
+            "projects": [self._project_row(name) for name in sorted(self.profiles) if name != HEALTH_CHECK_PROFILE],
+            # Shipped projects the operator removed from this rig; each can be
+            # restored.
+            "removed": sorted(self.removed_profile_names),
+            # The rig's own firmware: run from Boards, installed with a
+            # release. Said here so the page can say why it is not a project.
+            "health_check": {"name": HEALTH_CHECK_PROFILE, "label": health.label} if health else None,
             "directory": str(self._local_profiles_dir()),
             "default_profile": self.default_profile,
             # Whether a project can be added here at all, and as whom.
@@ -282,11 +340,15 @@ class RigMixin:
         return doc
 
     def _own_project(self, name: str) -> Path:
-        """The document of a project the operator added, or why not."""
+        """The document a change or removal of this project touches: the
+        operator's own under the state directory -- for a shipped project,
+        the override that will stand in for it. The health check is the
+        rig's own and is not a project to change."""
+        from alteriom_hil.service import HEALTH_CHECK_PROFILE
         if name not in self.profiles:
             raise LookupError(f"no project named {name} on this rig")
-        if name in self.shipped_profiles:
-            raise ValueError(f"{name} is shipped with the rig; it is not changed from here")
+        if name == HEALTH_CHECK_PROFILE:
+            raise ValueError(f"{name} is the rig's own health check, not a project; it comes with the release")
         return self._local_profiles_dir() / f"{name}.yaml"
 
     def _write_project(self, doc: dict) -> dict:
@@ -330,12 +392,19 @@ class RigMixin:
         return fields
 
     def create_project(self, body, identity=None) -> dict:
+        from alteriom_hil.service import HEALTH_CHECK_PROFILE
         fields = self._checked_with_github(body or {})
         doc = self._project_document(fields)
+        if doc["name"] == HEALTH_CHECK_PROFILE:
+            raise ValueError(f"{doc['name']} is the rig's own health check; choose another name")
         if doc["name"] in self.profiles:
             shipped = doc["name"] in self.shipped_profiles
             raise ValueError(f"{doc['name']} is already a project on this rig"
                              + (", shipped with it" if shipped else "") + "; choose another name")
+        if doc["name"] in self.removed_profile_names:
+            # A removed shipped name, taken for a project of one's own: the
+            # document stands in for the shipped one; the tombstone goes.
+            (self._local_profiles_dir() / f"{doc['name']}.removed").unlink(missing_ok=True)
         return self._write_project(doc)
 
     def update_project(self, body, name, identity=None) -> dict:
@@ -398,10 +467,75 @@ class RigMixin:
             return {}
 
     def delete_project(self, body, name, identity=None) -> dict:
+        """The operator's own document goes; a shipped project is hidden by a
+        tombstone instead, and can be restored. Its runs stay in the history
+        as what they were."""
         path = self._own_project(name)
         path.unlink(missing_ok=True)
+        if name in self.shipped_profiles:
+            self._local_profiles_dir().mkdir(parents=True, exist_ok=True)
+            (self._local_profiles_dir() / f"{name}.removed").write_text("", encoding="utf-8")
         self.reload_profiles()
-        return {"removed": name, "projects": self.projects_view()["projects"]}
+        view = self.projects_view()
+        return {"removed": name, "projects": view["projects"], "removed_shipped": view["removed"]}
+
+    def restore_project(self, body, name, identity=None) -> dict:
+        """A shipped project back as the release ships it: the tombstone and
+        any override of it go."""
+        if name not in self.shipped_profiles:
+            raise LookupError(f"{name} is not a project the release ships, so there is nothing to restore")
+        directory = self._local_profiles_dir()
+        (directory / f"{name}.removed").unlink(missing_ok=True)
+        (directory / f"{name}.yaml").unlink(missing_ok=True)
+        self.reload_profiles()
+        view = self.projects_view()
+        return {"restored": name, "project": self._project_row(name), "projects": view["projects"],
+                "removed_shipped": view["removed"]}
+
+    # ---- a run, or a project's runs, deleted --------------------------------------------
+
+    def delete_run(self, body, job_id, identity=None) -> dict:
+        """A finished run, gone: its evidence and captures, its log, the
+        artifact link that was its firmware, and its record. What a run
+        left is the operator's to keep or not; retention removes evidence by
+        age, this removes a run by choice."""
+        job = self.store.get(job_id)
+        if job is None:
+            raise LookupError("no such run")
+        if job.get("status") in ("queued", "running"):
+            raise ValueError(f"run {job_id[:8]} is {job['status']}; cancel it before deleting it")
+        freed = 0
+        for path in (self.state / "runs" / job_id, self.state / "artifacts" / job_id):
+            if path.is_symlink():
+                path.unlink()
+            elif path.is_dir():
+                freed += sum(f.stat().st_size for f in path.rglob("*") if f.is_file() and not f.is_symlink())
+                shutil.rmtree(path, ignore_errors=True)
+        log_file = self.state / "logs" / f"{job_id}.log"
+        if log_file.is_file():
+            freed += log_file.stat().st_size
+            log_file.unlink()
+        self.store.delete_job(job_id)
+        self._storage_changed()
+        return {"deleted": job_id, "bytes": freed, "profile": (job.get("request") or {}).get("profile")}
+
+    def delete_project_runs(self, body, name, identity=None) -> dict:
+        """Every finished run of this project, deleted; the queued or running
+        ones are left and named."""
+        if name not in self.profiles and name not in self.removed_profile_names:
+            raise LookupError(f"no project named {name} on this rig")
+        deleted, kept, freed = [], [], 0
+        for job in self.store.recent(limit=100000):
+            request = job.get("request") or {}
+            if job.get("kind") != "suite" or request.get("profile", DEFAULT_PROFILE) != name:
+                continue
+            if job.get("status") in ("queued", "running"):
+                kept.append(job["id"])
+                continue
+            answer = self.delete_run(None, job["id"])
+            deleted.append(job["id"])
+            freed += answer["bytes"]
+        return {"project": name, "deleted": deleted, "kept": kept, "bytes": freed}
 
     # ---- the farm this rig shows ---------------------------------------------------
 
@@ -902,9 +1036,10 @@ class RigMixin:
         No token file means no credential -- correct for a public repository,
         and a clear failure for a private one.
         """
-        if not self.CONSUMER_TOKEN_PATH.is_file():
+        token_path = self.github_token_path()
+        if not token_path.is_file():
             return spec.repo, None
-        if not os.access(self.CONSUMER_TOKEN_PATH, os.R_OK):
+        if not os.access(token_path, os.R_OK):
             # Present but unreadable is its own failure, and a silent one
             # otherwise: the askpass helper would return nothing, git would see
             # an empty password, and the run would fail as "authentication
@@ -914,7 +1049,7 @@ class RigMixin:
             raise PipelineError(
                 "build",
                 "The consumer credential cannot be read",
-                f"{self.CONSUMER_TOKEN_PATH} exists but is not readable by this "
+                f"{token_path} exists but is not readable by this "
                 f"service. Match the API token's permissions: "
                 f"chmod 640 and chgrp to the service group.",
             )
@@ -923,7 +1058,7 @@ class RigMixin:
             "#!/bin/sh\n"
             "# Answers git's password prompt from the token file. Written here\n"
             "# so the token never reaches argv, a URL, or this log.\n"
-            f"cat {self.CONSUMER_TOKEN_PATH}\n",
+            f"cat {token_path}\n",
             encoding="utf-8",
         )
         askpass.chmod(0o700)

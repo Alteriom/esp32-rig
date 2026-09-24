@@ -1080,7 +1080,7 @@ def test_settings_projects_is_a_persons_workspaces_and_the_farms_build_for_a_rig
     # A project has a page: fields, bundles held, recent runs, run / fetch /
     # change / remove.
     assert "function projectPage(row, github)" in script and "async function loadProjectPage(name)" in script
-    assert "`/api/v1/projects/${encodeURIComponent(name)}/fetch`" in script and "Fetch newest bundle" in script
+    assert "`/api/v1/projects/${encodeURIComponent(name)}/fetch`" in script and "Get firmware from GitHub" in script
     assert 'await api(`/api/v1/artifacts?profile=${encodeURIComponent(name)}&limit=5`)' in script
     # And Settings -> General says where projects come from.
     assert "function renderGitHubCard(github)" in script and 'await api("/api/v1/github")' in script
@@ -1200,6 +1200,29 @@ def test_the_run_form_follows_the_project():
     assert 'const needed = project && (project.needs || []).length ? new Set(project.needs.map(need => need.target)) : null;' in script
     assert 'unneeded ? "not a family this project takes"' in script
     assert "This project's suite is checked out per run, so its files are not listed here" in script
+
+
+def test_every_project_on_a_rig_is_the_operators_to_change():
+    """A rig runs the projects listed and no other: the reference the
+    release ships can be changed (an override) or removed (a tombstone) and
+    restored; the health check is not a project and is said so; a run can
+    be deleted from its page and a project's runs from the project's; the
+    token can be given from the GitHub card; and "Fetch newest bundle"
+    says what it is for."""
+    script = dashboard()
+    assert 'isAdmin() ? `<button type="button" class="secondary project-edit"' in script, "Change, for every project"
+    assert '${row.origin === "shipped" ? "Remove from this rig" : "Remove"}' in script
+    assert "`/api/v1/projects/${encodeURIComponent(button.dataset.name)}/restore`" in script and "project-restore" in script
+    assert "is not a project: it is the rig's own firmware" in script
+    assert ">Get firmware from GitHub</button>" in script and "Fetch newest bundle" not in script
+    assert 'id="github-token-form"' in script and 'await api("/api/v1/github", {method: "POST"' in script
+    assert 'await api("/api/v1/github/remove", {method: "POST"' in script
+    assert "`/api/v1/jobs/${encodeURIComponent(job.id)}/delete`" in script and "Delete run" in script
+    assert "`/api/v1/projects/${encodeURIComponent(name)}/runs/delete`" in script and "Delete its runs" in script
+    # The version card names the rig's projects, and the run form offers
+    # projects rather than the health check.
+    assert 'Object.keys(profiles).filter(name => name !== "canary").sort()' in script
+    assert "No project on this rig yet" in script and 'const names = shell().projectsAreOwn ? every.filter(name => name !== "canary") : every;' in script
 
 
 def test_the_rigs_document_is_the_rigs_application():
