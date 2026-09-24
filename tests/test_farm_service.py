@@ -3020,3 +3020,25 @@ def test_a_standalone_rig_answers_its_own_dashboard_without_a_portal_half(tmp_pa
         assert status in (200, 404) and isinstance(body, dict)
     finally:
         server.shutdown()
+
+
+def test_the_service_registers_the_boards_it_finds_unless_told_not_to(tmp_path, monkeypatch):
+    """`inventory.auto_register` is true by default and reaches the service
+    as ALTERIOM_HIL_AUTO_REGISTER through runtime.env, which every unit
+    sources. The service read neither and passed nothing to
+    `publish_inventory`, so a fresh rig listed its boards as unregistered for
+    ever while verify-rig said they register themselves (found installing
+    rig-2 from the v1.0.158 release)."""
+    manager = _store_manager(tmp_path)
+    manager.registry = tmp_path / "inventory.yaml"
+    manager.board_map = tmp_path / "board-map.yaml"
+    seen = []
+    monkeypatch.setattr(rig_manager, "publish_inventory",
+                        lambda *a, **k: seen.append(k.get("auto_register")) or {"boards": [], "missing": [], "unregistered": [], "probe_errors": []})
+    monkeypatch.delenv("ALTERIOM_HIL_AUTO_REGISTER", raising=False)
+    manager.refresh_inventory()
+    monkeypatch.setenv("ALTERIOM_HIL_AUTO_REGISTER", "0")
+    manager.refresh_inventory()
+    monkeypatch.setenv("ALTERIOM_HIL_AUTO_REGISTER", "1")
+    manager.refresh_inventory()
+    assert seen == [True, False, True]
