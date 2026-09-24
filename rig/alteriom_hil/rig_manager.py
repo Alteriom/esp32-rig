@@ -297,10 +297,12 @@ class RigMixin:
             reach = self._github_reach(token)
         except github_access.GitHubError:
             reach = {"repositories": [], "more": False}
-        names = sorted(row["name"] for row in reach.get("repositories", []))
-        listed = ", ".join(names[:12]) + (", …" if len(names) > 12 or reach.get("more") else "")
+        # The private ones: GitHub lists every public repository the user can
+        # see for any token, so only the private ones say what the token was given.
+        names = sorted(row["name"] for row in reach.get("repositories", []) if row.get("private"))
+        listed = ", ".join(names[:12]) + (", …" if len(names) > 12 else "")
         short = repo.split("github.com/", 1)[-1]
-        return (f"{words}. It is a fine-grained token that reaches {len(names)} "
+        return (f"{words}. It is a fine-grained token given {len(names)} private "
                 f"repositor{'y' if len(names) == 1 else 'ies'}{': ' + listed if listed else ''}. "
                 f"On GitHub, add {short} to the token's repository access (Settings → Developer settings → "
                 f"Personal access tokens → the token), or give this rig a token that reaches it (Settings → Rig → GitHub).")
