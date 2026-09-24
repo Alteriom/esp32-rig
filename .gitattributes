@@ -1,0 +1,6 @@
+# Line endings: the rig runs on Linux and its scripts are read by bash there;
+# a checkout on Windows must not turn them into CRLF (a suite run from such a
+# checkout, or a rig installed from one, fails on the first shell script).
+* text=auto eol=lf
+*.png binary
+*.stl binary

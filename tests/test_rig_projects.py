@@ -50,10 +50,22 @@ def _rig(tmp_path, mode="standalone", github="connected"):
     else:
         token_file.write_text("ghp_test\n", encoding="utf-8")
     status = github_access.Status(token_file)
-    who = (lambda token: {"login": "octocat", "type": "User"}) if github == "connected" \
+    who = (lambda token: {"login": "octocat", "type": "User", "kind": "fine-grained",
+                          "expires_at": "2027-01-01T00:00:00Z", "expires_in_days": 98, "scopes": []}) if github == "connected" \
         else (lambda token: (_ for _ in ()).throw(github_access.GitHubError("GitHub refused the token (401): it is wrong, expired or revoked")))
     status.view = lambda ask=who, _view=status.view: _view(ask)
     rig.__dict__["_github_status"] = status
+    # What the token reaches and may do, as GitHub would say it: the known
+    # repositories, whole; anything else unseen. Stood in for here so no
+    # test asks api.github.com.
+    rig._github_reach = lambda token: {
+        "repositories": [{"name": url.split("github.com/", 1)[1], "private": bool(seen.get("private"))}
+                         for url, seen in KNOWN_REPOS.items()], "more": False}
+    rig._github_repo_access = lambda token, url: (
+        {"repo": url, "metadata": True, "contents": True, "actions": True, "private": bool(KNOWN_REPOS[url].get("private")),
+         "error": None, "refused": {}} if url in KNOWN_REPOS else
+        {"repo": url, "metadata": False, "contents": False, "actions": False, "private": None,
+         "error": f"GitHub has no /repos/{url.split('github.com/', 1)[-1]} for this token (404)", "refused": {}})
 
     def repository(token, url):
         if url in KNOWN_REPOS:
@@ -593,7 +605,13 @@ def test_the_github_routes_say_who_the_rig_is_and_never_the_token(tmp_path):
     try:
         status, body = call("GET", "/api/v1/github")
         assert status == 200 and body["connected"] is True and body["login"] == "octocat"
+        assert body["kind"] == "fine-grained" and body["expires_at"] == "2027-01-01T00:00:00Z" and body["source"] == "host"
+        assert {row["name"] for row in body["access"]["repositories"]} == {"example/my-sensor", "example/builds"}
         assert "ghp_" not in json.dumps(body)
+        status, body = call("POST", "/api/v1/github/check", {})
+        assert status == 200 and body["github"]["connected"] is True and "access" in body["github"]
+        status, body = call("POST", "/api/v1/github/check", {}, bearer="u" * 40)
+        assert status in (401, 403), "asking GitHub again is an administrator's"
         status, body = call("GET", "/api/v1/projects")
         assert status == 200 and body["github"]["login"] == "octocat"
         status, body = call("POST", "/api/v1/projects/canary/fetch", {})
@@ -639,6 +657,9 @@ def test_github_access_reads_the_repository_and_the_artifact_listing(monkeypatch
         return answers[url.replace(github_access.GITHUB_API, "")]
 
     monkeypatch.setattr(github_access, "http_json", fake_http_json)
+    # /user is asked with its headers, for what GitHub says about the token itself.
+    monkeypatch.setattr(github_access, "_ask_full",
+                        lambda url, token, timeout=15.0: (fake_http_json(url, headers={"Authorization": f"Bearer {token}"}), {}))
     assert github_access.whoami("tok")["login"] == "octocat"
     seen_as = github_access.repository("tok", "https://github.com/example/my-sensor.git")
     assert seen_as == {"url": "https://github.com/example/my-sensor", "default_branch": "develop", "private": True, "archived": False}
@@ -839,3 +860,132 @@ def test_the_host_configuration_names_the_farm_a_rig_shows(tmp_path):
     assert "ALTERIOM_HIL_FARM_PUBLIC_URL=off" in hil_config.runtime_env(config("off"))
     assert "ALTERIOM_HIL_FARM_PUBLIC_URL" not in hil_config.runtime_env(config(None))
     assert hil_config.set_value(config("off"), "farm.public_url", "https://farm.example.org")["farm"]["public_url"] == "https://farm.example.org"
+
+
+# ---- the token, seen whole -------------------------------------------------------------
+
+def _sub(tmp_path, name):
+    (tmp_path / name).mkdir()
+    return tmp_path / name
+
+
+def test_whoami_reads_what_the_token_is_from_its_headers(monkeypatch):
+    """One answer to /user says who the token is; its headers say what it
+    is: when it expires (every expiring token) and, for a classic one, its
+    scopes. The kind is the prefix GitHub gives each kind."""
+    monkeypatch.setattr(github_access, "_ask_full", lambda url, token, timeout=15.0: (
+        {"login": "octocat", "type": "User"},
+        {"github-authentication-token-expiration": "2030-01-02 03:04:05 UTC", "x-oauth-scopes": "repo, workflow"}))
+    who = github_access.whoami("ghp_classic")
+    assert who["login"] == "octocat" and who["kind"] == "classic" and who["scopes"] == ["repo", "workflow"]
+    assert who["expires_at"] == "2030-01-02T03:04:05Z" and who["expires_in_days"] > 365
+    assert github_access.whoami("github_pat_fine")["kind"] == "fine-grained"
+    monkeypatch.setattr(github_access, "_ask_full", lambda url, token, timeout=15.0: ({"login": "octocat"}, {}))
+    never = github_access.whoami("github_pat_x")
+    assert never["expires_at"] is None and never["expires_in_days"] is None and never["scopes"] == []
+    assert github_access.token_kind("something-else") == "unknown"
+    assert github_access.token_expiry({"github-authentication-token-expiration": "soon"}) == (None, None)
+
+
+def test_repository_access_asks_for_the_code_and_the_artifacts_separately(monkeypatch):
+    """Seeing a repository, reading its code and listing its artifacts are
+    three permissions; the rig asks for each the way it will use it, and
+    keeps the refusal's words."""
+    def fake_ask(url, token, timeout=15.0):
+        path = url.replace(github_access.GITHUB_API, "")
+        if path == "/repos/acme/thing":
+            return {"full_name": "acme/thing", "private": True}
+        if path == "/repos/acme/thing/contents/":
+            return [{"name": "README.md"}]
+        if path == "/repos/acme/thing/actions/artifacts?per_page=1":
+            raise github_access.GitHubError("GitHub refused /repos/acme/thing/actions/artifacts?per_page=1 (403): the token has no access to it, or the rate limit is spent")
+        if path == "/repos/acme/hidden":
+            raise github_access.GitHubError("GitHub has no /repos/acme/hidden for this token (404)")
+        if path.startswith("/user/repos?"):
+            return [{"full_name": "acme/thing", "private": True}]
+        raise AssertionError(path)
+    monkeypatch.setattr(github_access, "_ask", fake_ask)
+    seen = github_access.repository_access("ghp_x", "https://github.com/acme/thing")
+    assert seen["metadata"] and seen["contents"] and seen["actions"] is False and seen["private"] is True
+    assert "(403)" in seen["refused"]["actions"] and "contents" not in seen["refused"]
+    hidden = github_access.repository_access("ghp_x", "https://github.com/acme/hidden")
+    assert not hidden["metadata"] and not hidden["contents"] and not hidden["actions"] and "(404)" in hidden["error"]
+    assert github_access.reachable_repositories("ghp_x") == {"repositories": [{"name": "acme/thing", "private": True}], "more": False}
+
+
+def test_the_github_view_says_what_the_token_is_and_reaches_never_the_token(tmp_path):
+    """Kind, expiry, where it came from, the repositories it reaches, and
+    what it may do with each project's repository -- asked of GitHub once
+    and kept, asked again on request; the token itself never."""
+    rig = _rig(tmp_path)
+    view = rig.github_view()
+    assert view["connected"] and view["kind"] == "fine-grained" and view["expires_at"] == "2027-01-01T00:00:00Z"
+    assert view["expires_in_days"] == 98 and view["source"] == "host"
+    access = view["access"]
+    assert {row["name"] for row in access["repositories"]} == {"example/my-sensor", "example/builds"}
+    assert access["more"] is False and access["checked_at"]
+    assert "canary" not in {row["name"] for row in access["projects"]}, "the health check is not a project"
+    for row in access["projects"]:
+        assert set(row["repo_access"]) >= {"metadata", "contents", "actions", "private", "error"}
+        assert set(row["supply_repo_access"]) >= {"metadata", "contents", "actions"}
+    assert "ghp_test" not in json.dumps(view)
+    # A project of one's own is checked too, and its repository is what is asked about.
+    rig.create_project(MINE)
+    mine = [row for row in rig.github_view()["access"]["projects"] if row["name"] == "my-sensor"]
+    assert mine and mine[0]["repo_access"]["contents"] is True and mine[0]["repo_access"]["private"] is True
+    # Kept until asked again.
+    asked = []
+    rig._github_reach = lambda token: asked.append(token) or {"repositories": [], "more": False}
+    assert rig.github_view()["access"]["repositories"] and not asked, "the kept answer"
+    fresh = rig.check_github({})["github"]
+    assert asked == ["ghp_test"] and fresh["access"]["repositories"] == []
+    # A token given from the page says so.
+    rig.__dict__.pop("_github_status", None)
+    (tmp_path / "state").mkdir(exist_ok=True)
+    (tmp_path / "state" / "github-token").write_text("github_pat_page\n", encoding="utf-8")
+    rig._github().view = lambda ask=None, _v=rig._github().view: _v(lambda token: {"login": "octocat", "kind": "fine-grained"})
+    assert rig.github_view()["source"] == "page"
+
+
+def test_a_repository_the_token_does_not_reach_is_refused_naming_what_it_reaches(tmp_path):
+    """A fine-grained token reaches the repositories it was given and no
+    other, and GitHub says 404 for the rest -- which reads like a typo. The
+    refusal names what the token reaches and where on GitHub to widen it,
+    for a project added by hand and for one looked up from its URL."""
+    rig = _rig(tmp_path)
+    with pytest.raises(ValueError) as refused:
+        rig.create_project({**MINE, "repo": "https://github.com/acme/elsewhere"})
+    words = str(refused.value)
+    assert "cannot read https://github.com/acme/elsewhere" in words and "(404)" in words
+    assert "fine-grained token that reaches 2 repositories: example/builds, example/my-sensor" in words
+    assert "add acme/elsewhere to the token's repository access" in words and "Settings → Rig → GitHub" in words
+    with pytest.raises(ValueError, match="fine-grained token that reaches"):
+        rig.inspect_repository({"repo": "https://github.com/acme/elsewhere"})
+    # The supply repository is held to the same.
+    with pytest.raises(ValueError, match="cannot read the supply repository https://github.com/acme/builds: .*fine-grained token that reaches"):
+        rig.create_project({**MINE, "supply_repo": "https://github.com/acme/builds"})
+    # A classic token is refused plainly: it reaches whatever its user can.
+    classic = _rig(_sub(tmp_path, "classic"))
+    classic.__dict__["_github_status"].view = lambda ask=None: {
+        "configured": True, "connected": True, "login": "octocat", "error": None, "kind": "classic",
+        "expires_at": None, "expires_in_days": None, "scopes": ["repo"], "path": "x", "checked_at": "now", "how": "h"}
+    with pytest.raises(ValueError) as plain:
+        classic.create_project({**MINE, "repo": "https://github.com/acme/elsewhere"})
+    assert "fine-grained" not in str(plain.value) and "(404)" in str(plain.value)
+
+
+def test_the_rig_view_carries_a_github_summary_and_nothing_secret(tmp_path):
+    """A farm's page for a rig may say whether the rig's GitHub is healthy:
+    connected, as whom, what kind, when it expires. Not where the token is,
+    never the token."""
+    rig = _rig(tmp_path)
+    github = rig.rig_view()["github"]
+    assert github == {"configured": True, "connected": True, "login": "octocat", "kind": "fine-grained",
+                      "expires_at": "2027-01-01T00:00:00Z", "expires_in_days": 98}
+    assert "ghp_test" not in json.dumps(rig.rig_view())
+    bare = _rig(_sub(tmp_path, "bare"), github="none")
+    assert bare.rig_view()["github"] == {"configured": False, "connected": False, "login": None, "kind": None,
+                                         "expires_at": None, "expires_in_days": None}
+    refused = _rig(_sub(tmp_path, "refused"), github="refused")
+    summary = refused.rig_view()["github"]
+    assert summary["configured"] is True and summary["connected"] is False and summary["kind"] == "classic"

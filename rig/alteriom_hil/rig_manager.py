@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -128,6 +129,8 @@ class RigMixin:
         # with GitHub first, never read back.
         ("POST", r"/api/v1/github", "admin", "set_github_token"),
         ("POST", r"/api/v1/github/remove", "admin", "remove_github_token"),
+        # Ask GitHub again now: who the token is, what it reaches.
+        ("POST", r"/api/v1/github/check", "admin", "check_github"),
         # The newest bundle the project's supply workflow uploaded, fetched
         # by the rig from GitHub: how a rig no CI can reach gets its firmware.
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/fetch", "admin", "fetch_project_bundle"),
@@ -215,7 +218,103 @@ class RigMixin:
         return {"removed": removed, "github": self._github().view()}
 
     def github_view(self, identity=None) -> dict:
-        return self._github().view()
+        """The token as the page may know it: who it is, what kind, when it
+        expires, where it came from (this page, or the host's file), and --
+        when GitHub accepts it -- what it reaches and what it may do with
+        each project's repository. Never the token."""
+        view = dict(self._github().view())
+        view["source"] = "page" if Path(view.get("path") or "") == Path(self.state) / "github-token" else "host"
+        if view.get("connected"):
+            view["access"] = self._github_access_report(self._github().token() or "")
+        return view
+
+    def check_github(self, body=None, identity=None) -> dict:
+        """Ask GitHub again now rather than at the cache's own pace: after a
+        token was changed on GitHub, or a repository added to it."""
+        self._github().forget()
+        self.__dict__.pop("_github_access", None)
+        return {"github": self.github_view()}
+
+    def _github_reach(self, token: str) -> dict:
+        return github_access.reachable_repositories(token)
+
+    def _github_repo_access(self, token: str, url: str) -> dict:
+        return github_access.repository_access(token, url)
+
+    def _project_repositories(self) -> list:
+        from alteriom_hil.service import HEALTH_CHECK_PROFILE
+        rows = []
+        for name, spec in sorted(self.profiles.items()):
+            if name == HEALTH_CHECK_PROFILE or not spec.repo:
+                continue
+            rows.append({"name": name, "label": spec.label, "repo": spec.repo,
+                         "supply_repo": spec.supply_repo or spec.repo})
+        return rows
+
+    def _github_access_report(self, token: str) -> dict:
+        """What the token reaches, and what it may do with each project's
+        repository (read it, read its code, list its bundles). Asked of
+        GitHub rarely -- kept github_access.STATUS_TTL, keyed by the token
+        and the projects -- and again on request (check_github)."""
+        rows = self._project_repositories()
+        key = (hashlib.sha256(token.encode("utf-8")).hexdigest(),
+               tuple((row["repo"], row["supply_repo"]) for row in rows))
+        held = self.__dict__.get("_github_access")
+        if held and held["key"] == key and time.time() - held["at"] < github_access.STATUS_TTL:
+            return held["report"]
+        try:
+            reach = self._github_reach(token)
+        except github_access.GitHubError as error:
+            reach = {"repositories": [], "more": False, "error": str(error)}
+        seen: dict = {}
+        projects = []
+        for row in rows:
+            entry = dict(row)
+            for field in ("repo", "supply_repo"):
+                url = row[field]
+                if url not in seen:
+                    try:
+                        seen[url] = self._github_repo_access(token, url)
+                    except github_access.GitHubError as error:
+                        seen[url] = {"repo": url, "metadata": False, "contents": False, "actions": False,
+                                     "private": None, "error": str(error), "refused": {}}
+                entry[f"{field}_access"] = seen[url]
+            projects.append(entry)
+        report = {"repositories": reach.get("repositories", []), "more": bool(reach.get("more")),
+                  "error": reach.get("error"), "projects": projects,
+                  "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        self.__dict__["_github_access"] = {"key": key, "at": time.time(), "report": report}
+        return report
+
+    def _cannot_read(self, token: str, repo: str, error, what: str = "") -> str:
+        """Why a repository was refused, said with what would fix it: a
+        fine-grained token reaches the repositories it was given and no
+        other, so the refusal names them, and where on GitHub the list is."""
+        words = f"this rig's GitHub token cannot read {what}{repo}: {error}"
+        if self._github().view().get("kind") != "fine-grained":
+            return words
+        try:
+            reach = self._github_reach(token)
+        except github_access.GitHubError:
+            reach = {"repositories": [], "more": False}
+        names = sorted(row["name"] for row in reach.get("repositories", []))
+        listed = ", ".join(names[:12]) + (", …" if len(names) > 12 or reach.get("more") else "")
+        short = repo.split("github.com/", 1)[-1]
+        return (f"{words}. It is a fine-grained token that reaches {len(names)} "
+                f"repositor{'y' if len(names) == 1 else 'ies'}{': ' + listed if listed else ''}. "
+                f"On GitHub, add {short} to the token's repository access (Settings → Developer settings → "
+                f"Personal access tokens → the token), or give this rig a token that reaches it (Settings → Rig → GitHub).")
+
+    def github_summary(self) -> dict:
+        """What a farm may know about this rig's GitHub: connected or not,
+        as whom, what kind, when it expires. Never the token, never its path."""
+        status = self._github().view()
+        return {key: status.get(key) for key in ("configured", "connected", "login", "kind", "expires_at", "expires_in_days")}
+
+    def rig_view(self) -> dict:
+        view = super().rig_view()
+        view["github"] = self.github_summary()
+        return view
 
     def _require_github(self) -> str:
         """The token, when GitHub is connected; otherwise why a project cannot
@@ -260,7 +359,7 @@ class RigMixin:
         try:
             found = self._github_look_around(token, repo)
         except github_access.GitHubError as error:
-            raise ValueError(f"this rig's GitHub token cannot read {repo}: {error}") from None
+            raise ValueError(self._cannot_read(token, repo, error)) from None
         owner, name = github_access.parse_repo(found["repo"])
         suggested = {
             "name": re.sub(r"[^a-z0-9-]+", "-", name.lower()).strip("-")[:64] or "project",
@@ -460,7 +559,7 @@ class RigMixin:
         try:
             seen = self._github_repository(token, repo)
         except github_access.GitHubError as error:
-            raise ValueError(f"this rig's GitHub token cannot read {repo}: {error}") from None
+            raise ValueError(self._cannot_read(token, repo, error)) from None
         fields["repo"] = seen.get("url") or repo
         if not str(fields.get("default_ref") or "").strip():
             fields["default_ref"] = seen.get("default_branch") or "main"
@@ -469,7 +568,7 @@ class RigMixin:
             try:
                 self._github_repository(token, github_access.normalise_repo(supply))
             except github_access.GitHubError as error:
-                raise ValueError(f"this rig's GitHub token cannot read the supply repository {supply}: {error}") from None
+                raise ValueError(self._cannot_read(token, github_access.normalise_repo(supply), error, what="the supply repository ")) from None
         return fields
 
     def create_project(self, body, identity=None) -> dict:
@@ -521,7 +620,11 @@ class RigMixin:
             zipped = self._github_download(token, found["download_url"])
             body = github_access.tarball_from_zip(zipped)
         except github_access.GitHubError as error:
-            raise ValueError(str(error)) from None
+            message = str(error)
+            if "(403)" in message:
+                message += (". Listing a repository's Actions artifacts needs Actions: read on it; what the token "
+                            "may do with each project is on Settings → Rig → GitHub.")
+            raise ValueError(message) from None
         accepted = self.accept_bundle({
             "profile": name, "repo": found["repo"], "workflow": spec.supply_workflow,
             "run_id": found["run_id"], "run_url": found["run_url"], "commit": found["commit"],

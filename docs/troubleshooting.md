@@ -57,9 +57,24 @@ read** on the repositories the rig will test.
 
 ## Adding a project is refused
 
-The message is GitHub's answer. Usually the token cannot read that
-repository (not selected when the token was made, or an organisation that
-has not approved it), or the URL is not a GitHub repository.
+The message is GitHub's answer, and for a fine-grained token it names the
+repositories the token reaches: the new one is not among them (not selected
+when the token was made, or an organisation that has not approved it).
+Add it to the token's *Repository access* on GitHub, press **Check again**
+on Settings → Rig → GitHub, and add the project again. Or the URL is not a
+GitHub repository.
+
+## Get firmware from GitHub is refused with a 403
+
+The token sees the repository but may not list its Actions artifacts: it
+lacks **Actions: read** there. The GitHub card's per-project table says so
+("fetches its bundles: no").
+
+## The Overview says the token expires soon
+
+Fine-grained tokens expire. Make a new one on GitHub with the same
+repositories and permissions and paste it under Settings → Rig → GitHub
+(**Replace**); nothing else changes.
 
 ## Get firmware from GitHub finds nothing
 

@@ -1230,6 +1230,11 @@ def test_every_project_on_a_rig_is_the_operators_to_change():
     assert ">Get firmware from GitHub</button>" in script and "Fetch newest bundle" not in script
     assert 'id="github-token-form"' in script and 'await api("/api/v1/github", {method: "POST"' in script
     assert 'await api("/api/v1/github/remove", {method: "POST"' in script
+    # The token, seen whole: kind, expiry, source, reach, per-project access, and Check again.
+    assert 'await api("/api/v1/github/check", {method: "POST"' in script and 'class="secondary github-check">Check again</button>' in script
+    assert "function githubAccessMarkup(github)" in script and "Fetches its bundles" in script and "It expires on" in script
+    assert "add it to the token's repository access" in script and "given from this page" in script
+    assert "This rig's GitHub token expires in" in script and "GitHub no longer accepts this rig's token" in script
     assert "`/api/v1/jobs/${encodeURIComponent(job.id)}/delete`" in script and "Delete run" in script
     assert "`/api/v1/projects/${encodeURIComponent(name)}/runs/delete`" in script and "Delete its runs" in script
     # The version card names the rig's projects, and the run form offers

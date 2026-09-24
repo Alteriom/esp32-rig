@@ -17,6 +17,7 @@ it. Every call is a small, fixed conversation with api.github.com.
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import io
 import json
@@ -68,6 +69,51 @@ def _ask(url: str, token: str, timeout: float = 15.0):
         raise GitHubError(f"GitHub could not be reached: {error.__class__.__name__}: {error}"[:200]) from None
 
 
+def _ask_full(url: str, token: str, timeout: float = 15.0):
+    """One GET answered as (body, headers). The headers are where GitHub
+    says what it knows about the token itself -- when it expires, what a
+    classic one is scoped to -- so /user is asked this way."""
+    request = urllib.request.Request(url, headers={**_headers(token), "User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 -- api.github.com
+            raw = response.read()
+            headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
+    except urllib.error.HTTPError as error:
+        raise GitHubError(_refusal(error, url)) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise GitHubError(f"GitHub could not be reached: {error.__class__.__name__}: {error}"[:200]) from None
+    return (json.loads(raw) if raw else {}), headers
+
+
+# What a token is, by the prefix GitHub gives each kind. A fine-grained token
+# is the one a rig wants: it expires, and it reaches the repositories it was
+# given and no other -- which is also why a project can be refused with it.
+TOKEN_KINDS = (("github_pat_", "fine-grained"), ("ghp_", "classic"), ("gho_", "oauth"),
+               ("ghu_", "app-user"), ("ghs_", "app-installation"))
+EXPIRY = re.compile(r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})")
+
+
+def token_kind(token: str) -> str:
+    for prefix, kind in TOKEN_KINDS:
+        if str(token or "").startswith(prefix):
+            return kind
+    return "unknown"
+
+
+def token_expiry(headers: dict) -> tuple:
+    """(when, days left) from the expiration header GitHub sends with every
+    answer to a token that expires; (None, None) for one that does not."""
+    match = EXPIRY.search(str(headers.get("github-authentication-token-expiration") or ""))
+    if not match:
+        return None, None
+    when = f"{match.group(1)}T{match.group(2)}Z"
+    try:
+        stamp = calendar.timegm(time.strptime(when, "%Y-%m-%dT%H:%M:%SZ"))
+    except ValueError:
+        return None, None
+    return when, int((stamp - time.time()) // 86400)
+
+
 def _refusal(error: urllib.error.HTTPError, url: str) -> str:
     what = url.replace(GITHUB_API, "")
     if error.code == 401:
@@ -94,11 +140,58 @@ def normalise_repo(url: str) -> str:
 
 
 def whoami(token: str) -> dict:
-    """Who the token is: the login GitHub answers /user with."""
-    answer = _ask(f"{GITHUB_API}/user", token)
+    """Who the token is -- the login GitHub answers /user with -- and what
+    it is: its kind, when it expires, and a classic token's scopes, all read
+    from that one answer. Never the token."""
+    answer, headers = _ask_full(f"{GITHUB_API}/user", token)
     if not isinstance(answer, dict) or not answer.get("login"):
         raise GitHubError("GitHub answered /user with no login")
-    return {"login": str(answer["login"]), "type": str(answer.get("type") or "")}
+    expires_at, expires_in_days = token_expiry(headers)
+    scopes = [part.strip() for part in str(headers.get("x-oauth-scopes") or "").split(",") if part.strip()]
+    return {"login": str(answer["login"]), "type": str(answer.get("type") or ""), "kind": token_kind(token),
+            "expires_at": expires_at, "expires_in_days": expires_in_days, "scopes": scopes}
+
+
+REACH_PAGE = 100
+
+
+def reachable_repositories(token: str) -> dict:
+    """The repositories the token can see, as GitHub lists them for it. A
+    fine-grained token restricted to selected repositories lists exactly
+    those -- what a person needs to see when adding a project is refused. A
+    classic token lists everything its user can, so one page is asked for
+    and `more` says there are others."""
+    answer = _ask(f"{GITHUB_API}/user/repos?per_page={REACH_PAGE}&sort=full_name"
+                  f"&affiliation=owner,collaborator,organization_member", token)
+    rows = answer if isinstance(answer, list) else []
+    repositories = [{"name": str(row["full_name"]), "private": bool(row.get("private"))}
+                    for row in rows if isinstance(row, dict) and row.get("full_name")]
+    return {"repositories": repositories, "more": len(rows) >= REACH_PAGE}
+
+
+def repository_access(token: str, repo_url: str) -> dict:
+    """What the token may do with one repository, asked the way the rig uses
+    it: see it at all (metadata), read its code (Contents, for the checkout),
+    list its Actions artifacts (Actions, for the bundles). Each is a small
+    request GitHub answers or refuses; the refusals are kept in words."""
+    owner, repo = parse_repo(repo_url)
+    base = f"{GITHUB_API}/repos/{owner}/{repo}"
+    result = {"repo": f"https://github.com/{owner}/{repo}", "metadata": False, "contents": False,
+              "actions": False, "private": None, "error": None, "refused": {}}
+    try:
+        seen = _ask(base, token)
+    except GitHubError as error:
+        result["error"] = str(error)
+        return result
+    result["metadata"] = True
+    result["private"] = bool(seen.get("private")) if isinstance(seen, dict) else None
+    for key, url in (("contents", f"{base}/contents/"), ("actions", f"{base}/actions/artifacts?per_page=1")):
+        try:
+            _ask(url, token)
+            result[key] = True
+        except GitHubError as error:
+            result["refused"][key] = str(error)
+    return result
 
 
 def repository(token: str, url: str) -> dict:
@@ -224,7 +317,8 @@ class Status:
                                       f"Give it the API token's owner, group and mode (0640).")
         if not token:
             self._held = None
-            return self._answer(configured=False, connected=False, login=None, error=None)
+            return self._answer(configured=False, connected=False, login=None, error=None,
+                                kind=None, expires_at=None, expires_in_days=None, scopes=[])
         key = hashlib.sha256(token.encode("utf-8")).hexdigest()
         now = time.time()
         if self._held is not None and self._key == key and now - self._at < (
@@ -232,9 +326,12 @@ class Status:
             return self._held
         try:
             who = ask(token)
-            answer = self._answer(configured=True, connected=True, login=who["login"], error=None)
+            answer = self._answer(configured=True, connected=True, login=who["login"], error=None,
+                                  kind=who.get("kind") or token_kind(token), expires_at=who.get("expires_at"),
+                                  expires_in_days=who.get("expires_in_days"), scopes=list(who.get("scopes") or []))
         except GitHubError as error:
-            answer = self._answer(configured=True, connected=False, login=None, error=str(error))
+            answer = self._answer(configured=True, connected=False, login=None, error=str(error),
+                                  kind=token_kind(token), expires_at=None, expires_in_days=None, scopes=[])
         self._held, self._key, self._at = answer, key, now
         return answer
 
