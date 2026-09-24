@@ -51,8 +51,15 @@ OURS = {
 #
 # The four comments that named our private consumer are rewritten about a
 # consumer in general (step 14c); nothing names it now.
+#
+# rig_manager.py names the public farm once, on purpose: a rig's overview
+# shows the public page of the farm its software comes from, so a rig on
+# its own can see where it could connect (owner, 2026-09-24). It is the
+# public address, not a private host; `farm.public_url: off` shows none,
+# and another URL shows another farm.
 KNOWN = {
     ("rig/harden-pi.sh", "a host of ours"): 1,
+    ("rig/alteriom_hil/rig_manager.py", "our portal"): 1,
 }
 
 

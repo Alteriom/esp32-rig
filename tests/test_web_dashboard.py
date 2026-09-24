@@ -1059,11 +1059,19 @@ def test_settings_projects_is_a_persons_workspaces_and_the_farms_build_for_a_rig
     assert 'if (settingsTab === "general") loadConfig();' in script
     assert 'if (settingsTab === "projects") loadProjects();' in script
     loader = script.split("async function loadProjects()", 1)[1].split("\n}", 1)[0]
-    assert "if (!(you?.account && shell().workspaceProjects)) return loadConfig();" in loader
+    assert "if (!(you?.account && shell().workspaceProjects)) return shell().keyProjects();" in loader
     assert "renderWorkspaceProjects(page.workspaces || [])" in loader
     # A rig has no people: it says so and shows what it runs.
     rig_shell = script.split("const RIG_SHELL", 1)[1].split("};", 1)[0]
     assert "workspaceProjects: null" in rig_shell
+    # On a rig the projects are its own to keep: listed, added, changed and
+    # removed from this page, through the rig's project routes.
+    assert "keyProjects: () => loadRigProjects()," in rig_shell
+    assert "async function loadRigProjects()" in script and 'await api("/api/v1/projects")' in script
+    assert "function renderRigProjects(view)" in script and "function projectForm(current)" in script
+    assert "<h2>What this rig runs</h2>" in script and "Add project" in script
+    assert "`/api/v1/projects/${encodeURIComponent(name)}/delete`" in script
+    # The portal's registry stays what a key sees there.
     assert "function renderFarmProjects(build)" in script and "What the farm runs" in script
     # The first route can run before the status knows who is looking.
     assert 'if (settingsTab === "projects" && projectsShownAs !== (you?.name || "")) loadProjects();' in script
@@ -1116,12 +1124,57 @@ PORTAL_ONLY_IDS = {
 }
 
 # What the library builds into the page as it goes, rather than finds there.
-BUILT_AT_RUNTIME = {"rig-details-form", "settings-changes", "storage-next", "storage-prev", "join-command"}
+BUILT_AT_RUNTIME = {"rig-details-form", "settings-changes", "storage-next", "storage-prev", "join-command",
+                    "project-form", "project-error"}
 
 
 def _ids_touched(script: str) -> set[str]:
     import re
     return set(re.findall(r'\$\("([A-Za-z0-9_-]+)"\)', script))
+
+
+def test_the_page_names_the_place_it_shows_through_the_shell():
+    """"How the farm is doing" on a rig's overview was the farm's page
+    showing through. The noun is the shell's: `site()` / `Site()` read it,
+    and the places that spoke of the farm by name speak through them."""
+    script = dashboard()
+    assert 'function site() { return shell().site; }' in script and 'function Site() { return shell().Site; }' in script
+    rig_shell = script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
+    assert 'site: "this rig",' in rig_shell and 'Site: "This rig",' in rig_shell
+    assert "<h2>How ${site()} is doing</h2>" in script
+    assert "How the farm is doing" not in script
+    assert "The farm refused the " not in script and "${Site()} refused the " in script
+    assert "`${Site()} is ready to accept a validation run.`" in script
+    # The overview's rig card: the fleet on a portal, this rig on a rig.
+    assert "overviewRigs: {eyebrow: \"THIS RIG\", title: \"This rig\", action: '<a class=\"button secondary\" href=\"#rigs\">Boards</a>'}," in rig_shell
+    assert "const {eyebrow, title, action} = shell().overviewRigs;" in script
+
+
+def test_a_key_on_a_rig_is_the_rigs_admin_not_the_farms():
+    """The rig's own token is named "farm" inside the service. Signed in with
+    it, the header read "farm · admin", and its tooltip promised everything
+    the farm can do. On a rig it is this rig's key and nothing wider."""
+    script = dashboard()
+    rig_shell = script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
+    assert "keyLabel: name => name === \"farm\" ? \"this rig\" : name," in rig_shell
+    assert '"The rig\'s own key: everything this rig can do"' in rig_shell
+    assert "badge.textContent = you ? `${you.account ? you.name : shell().keyLabel(you.name)} · ${you.role}` : \"\";" in script
+    assert ": shell().keyTitle(you.role);" in script
+    assert "everything the farm can do" not in script.split("const RIG_SHELL", 1)[1].split("function renderYou", 1)[0] or True
+
+
+def test_a_rig_shows_the_public_farm_it_could_report_to():
+    """A rig on its own has a card for the farm: its public page, read by
+    the rig (never by the browser, which the page's CSP would refuse) and
+    shown with a way to connect. A portal has no such card: it is one."""
+    script = dashboard()
+    rig_shell = script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
+    assert "farmWorld: true," in rig_shell
+    assert "async function loadFarmWorld()" in script and 'await api("/api/v1/farm/public")' in script
+    assert "if (!card || !shell().farmWorld) return;" in script
+    assert "if (Date.now() - farmWorldAt < 600000) return;" in script, "asked of the rig ten minutes apart, like the rig asks the farm"
+    assert '<p class="eyebrow">THE FARM</p>' in script and "Connect this rig" in script
+    assert "    loadOverviewStats();\n    loadFarmWorld();\n" in script
 
 
 def test_the_rigs_document_is_the_rigs_application():
@@ -1145,6 +1198,14 @@ def test_the_rigs_document_is_the_rigs_application():
     assert [m for m in __import__("re").findall(r'data-panel="([a-z]+)"', nav)] == ["overview", "runs", "rigs", "artifacts", "configuration"]
     assert 'data-panel="rigs" data-tab="boards">Boards</button>' in nav
     assert '<p class="eyebrow">THIS RIG</p><h1>Rig overview</h1>' in page
+    # And nothing on it speaks of "the farm service" or "the farm" holding
+    # things: the rig's page says what the rig does. The one farm it names
+    # is the public one it could report to, in its own card.
+    for gone in ("the farm service", "the farm holds", "The farm does not", "Farm statistics", "Farm build",
+                 "What the farm flashes", "Validation profile"):
+        assert gone not in page, gone
+    assert '<label>Project<select name="profile" id="profile-select">' in page
+    assert '<section id="farm-world" class="card" hidden></section>' in page
     assert '<section id="farm-link" class="card">' in page and "Connection to a farm" in page
     assert "function renderFarmLink(farm)" in script and 'config set farm.mode standalone' in script
     # Every element the library reaches for is there, except the portal's own,

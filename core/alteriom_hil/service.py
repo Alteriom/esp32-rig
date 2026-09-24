@@ -65,7 +65,7 @@ from alteriom_hil import webhooks as farm_webhooks
 from alteriom_hil.providers import Redactor, budget_used, scrub_tree
 from alteriom_hil.artifacts import MAX_BUNDLE_BYTES, extract_bundle, load_artifacts
 from alteriom_hil.board import SUPPORTED_TARGETS, Board
-from alteriom_hil.profiles import ProfileError, load_profiles
+from alteriom_hil.profiles import ProfileError, load_local_profiles, load_profiles
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
 from alteriom_hil.board_registry import (
     load_inventory_snapshot,
@@ -520,6 +520,35 @@ class BaseManager:
             self.__dict__["_profiles"] = found
         return found
 
+    def _load_every_profile(self) -> dict:
+        """What this farm can run: the profiles shipped in its checkout and
+        the projects its operator added under `<state>/profiles/`. Two
+        directories because they have two lives -- the shipped ones change
+        with a release, the operator's survive one -- and one namespace,
+        because a run names a profile and nothing else."""
+        shipped = load_profiles(self.repo)
+        local = load_local_profiles(self.state)
+        clash = sorted(set(shipped) & set(local))
+        if clash:
+            raise ProfileError(
+                f"{Path(self.state) / 'profiles'}: {', '.join(clash)} "
+                f"{'is' if len(clash) == 1 else 'are'} shipped with the rig; a project of your own needs another name")
+        self.__dict__["_shipped_profiles"] = frozenset(shipped)
+        return {**shipped, **local}
+
+    def reload_profiles(self) -> dict:
+        """Read the profiles again, after a project was added or removed."""
+        found = self._load_every_profile()
+        self.__dict__["_profiles"] = found
+        return found
+
+    @property
+    def shipped_profiles(self) -> frozenset:
+        """The names that came with the rig's release, as opposed to the
+        operator's own; a manager built without __init__ counts every
+        profile it knows as shipped."""
+        return self.__dict__.get("_shipped_profiles") or frozenset(self.profiles)
+
     @property
     def default_profile(self) -> str:
         """The profile a run is for when it names none, and the one the
@@ -551,7 +580,7 @@ class BaseManager:
         # Loaded once, at start: a malformed profile should stop the service
         # coming up, where an operator sees it, rather than failing the first
         # run that happens to name it. The property below is the lazy path.
-        self._profiles = load_profiles(self.repo)
+        self._profiles = self._load_every_profile()
         named = os.environ.get(DEFAULT_PROFILE_ENV, "").strip()
         if named and named not in self._profiles:
             # Said at start, like a malformed profile: otherwise it is found
@@ -2481,6 +2510,9 @@ class BaseManager:
                 "portal_url": os.environ.get("ALTERIOM_HIL_PORTAL_URL"),
                 "worker_name": os.environ.get("ALTERIOM_HIL_WORKER_NAME"),
                 "node_key_file": os.environ.get("ALTERIOM_HIL_NODE_KEY_FILE"),
+                # The farm this rig shows the public side of, connected or
+                # not (`farm.public_url`; "off" shows none).
+                "public_url": os.environ.get("ALTERIOM_HIL_FARM_PUBLIC_URL"),
             },
             "retention": {
                 "enabled": retention.get("enabled") if retention else None,

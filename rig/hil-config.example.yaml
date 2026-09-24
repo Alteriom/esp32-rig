@@ -64,6 +64,10 @@ farm:
   # named for this worker.
   mode: standalone
   # portal_url: https://portal.example.org
+  # The farm whose public page this rig shows on its overview, connected to
+  # it or not. Unset: the public farm the rig software comes from; "off":
+  # show none. A node shows the portal it reports to instead.
+  # public_url: https://farm.example.org
   # worker_name: rig-01
   # node_key_file: /etc/alteriom-hil/node-key
 quarantine:

@@ -42,6 +42,7 @@ from alteriom_hil.board_registry import (
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
 from alteriom_hil.inventory import discover, probe_details, publish_inventory
 from alteriom_hil.jobstore import JobCancelled, utcnow
+from alteriom_hil.profiles import NAME_PATTERN, parse_profile
 from alteriom_hil.providers import Redactor, scrub_tree
 from alteriom_hil.farm_shared import BOARD_ID_PATTERN, DEFAULT_PROFILE, ElsewhereError, PipelineError, RigBusyError, TARGETS
 from alteriom_hil.farm_shared import (  # noqa: F401 -- re-exported: found here before core had them
@@ -107,6 +108,236 @@ def _plural(count: int, noun: str) -> str:
 
 
 class RigMixin:
+    # The rig's own routes, declared beside the methods that answer them
+    # (the portal's are PortalMixin.WORKSPACE_ROUTES). Projects: what this
+    # rig runs, which its operator adds to from Settings -> Projects. The
+    # public farm: the portal's world page, read by the rig and shown on
+    # its overview, so a rig on its own still sees where it could connect.
+    PROJECT_ROUTES = (
+        ("GET", r"/api/v1/projects", "user", "projects_view"),
+        ("POST", r"/api/v1/projects", "admin", "create_project"),
+        ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})", "admin", "update_project"),
+        ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/delete", "admin", "delete_project"),
+        ("GET", r"/api/v1/farm/public", "user", "farm_public_view"),
+    )
+
+    # Where a rig looks when nothing names a farm: the public farm the rig
+    # software comes from. `farm.public_url` in the host configuration
+    # points it elsewhere, or "off" shows none.
+    PUBLIC_FARM_URL = "https://espfarm.alteriom.net"
+    PUBLIC_FARM_TTL = 600        # a good answer is kept this long
+    PUBLIC_FARM_RETRY = 120      # a failed read is not retried sooner
+    PUBLIC_FARM_TIMEOUT = 6
+
+    def api_routes(self) -> tuple:
+        from alteriom_hil.service import ApiRoute
+
+        mine = tuple(ApiRoute(method, re.compile(pattern), audience, answers)
+                     for method, pattern, audience, answers in self.PROJECT_ROUTES)
+        # Cooperative: a standalone farm is this half and the portal's on
+        # one base, and the portal's routes come after these.
+        inherited = super().api_routes() if hasattr(super(), "api_routes") else ()
+        return mine + tuple(inherited)
+
+    # ---- projects: what this rig runs -----------------------------------------------
+
+    def _local_profiles_dir(self) -> Path:
+        return Path(self.state) / "profiles"
+
+    def _project_row(self, name: str) -> dict:
+        spec = self.profiles[name]
+        return {
+            "name": name,
+            "label": spec.label,
+            "shipped": name in self.shipped_profiles,
+            "location": spec.location,
+            "repo": spec.repo,
+            "default_ref": spec.default_ref,
+            "suite_path": spec.suite_path,
+            "revision_key": spec.revision_key,
+            "min_boards": spec.min_boards,
+            "exclusive": spec.exclusive,
+            "timeout_seconds": spec.suite_timeout,
+            "needs": [dict(need) for need in spec.needs],
+            "supply_repo": spec.supply_repo,
+            "supply_workflow": spec.supply_workflow,
+            "supply_artifact": spec.supply_artifact,
+        }
+
+    def projects_view(self, identity=None) -> dict:
+        """Every project this rig can run: the ones its release ships and
+        the ones its operator added, told apart, because only the latter are
+        changed from here."""
+        return {
+            "projects": [self._project_row(name) for name in sorted(self.profiles)],
+            "directory": str(self._local_profiles_dir()),
+            "default_profile": self.default_profile,
+        }
+
+    def _project_document(self, fields: dict) -> dict:
+        """A profile document from the few things a person knows about their
+        project. Everything else is the generic shape: the suite lives in
+        the project's repository and is checked out per run; its firmware
+        is a bundle the project's own CI built and handed over; the rig's
+        flasher flashes it by the manifest. Validated as any profile is, so
+        a document that would stop the service starting is refused here."""
+        text = lambda key, default="": str(fields.get(key) if fields.get(key) is not None else default).strip()
+        name = text("name").lower()
+        if not NAME_PATTERN.fullmatch(name):
+            raise ValueError("a project's name is lowercase letters, digits and dashes, up to 64")
+        repo = text("repo")
+        if not re.fullmatch(r"https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/[^\s]+", repo):
+            raise ValueError("repo must be the project's https:// repository URL")
+        label = text("label", name)[:80] or name
+        default_ref = text("default_ref", "main")[:120]
+        if not default_ref or any(ch.isspace() for ch in default_ref):
+            raise ValueError("default_ref is a branch, tag or commit, without spaces")
+        suite_path = text("suite_path", "tests").strip("/")
+        revision_key = text("revision_key", f"{name.replace('-', '_')}_sha")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", revision_key):
+            raise ValueError("revision_key is the manifest key that holds the commit: letters, digits and underscores")
+        supply_repo = text("supply_repo", repo)
+        supply_workflow = text("supply_workflow", ".github/workflows/hil.yml")
+        supply_artifact = text("supply_artifact", "hil-artifacts")
+        try:
+            min_boards = int(fields.get("min_boards") or 1)
+            timeout = int(fields.get("timeout_seconds") or 1800)
+        except (TypeError, ValueError):
+            raise ValueError("min_boards and timeout_seconds are whole numbers") from None
+        families = fields.get("families") or []
+        if isinstance(families, str):
+            families = [part.strip() for part in families.split(",") if part.strip()]
+        if not isinstance(families, list):
+            raise ValueError("families is a list of chip families")
+        unknown = sorted(set(families) - set(TARGETS))
+        if unknown:
+            raise ValueError(f"not a chip family this rig knows: {', '.join(unknown)} (one of {', '.join(sorted(TARGETS))})")
+        # Families named: the run takes one board of each and leaves the rest
+        # free. None named: it takes the whole bench, as the shipped suites do.
+        exclusive = fields.get("exclusive", not families)
+        if not isinstance(exclusive, bool):
+            raise ValueError("exclusive is true or false")
+        doc = {
+            "schema": 1,
+            "name": name,
+            "label": label,
+            "source": {"location": "consumer", "repo": repo, "default_ref": default_ref},
+            "build": {"revision_key": revision_key},
+            "flash": {"command": ["{python}", "-m", "alteriom_hil.flash_artifacts",
+                                  "--artifacts", "{artifact_dir}", "--board-map", "{board_map}",
+                                  "--revision-key", revision_key]},
+            "supply": {"repo": supply_repo, "workflow": supply_workflow, "artifact": supply_artifact},
+            "suite": {"path": suite_path, "min_boards": min_boards, "exclusive": exclusive,
+                      "timeout_seconds": timeout},
+            "report": {"title": f"HIL {label} {{revision}}"},
+        }
+        if families:
+            doc["needs"] = [{"target": family, "count": 1} for family in dict.fromkeys(families)]
+        parse_profile(doc, f"project {name}")   # ProfileError is a ValueError: a 400 with the reason
+        return doc
+
+    def _own_project(self, name: str) -> Path:
+        """The document of a project the operator added, or why not."""
+        if name not in self.profiles:
+            raise LookupError(f"no project named {name} on this rig")
+        if name in self.shipped_profiles:
+            raise ValueError(f"{name} is shipped with the rig; it is not changed from here")
+        return self._local_profiles_dir() / f"{name}.yaml"
+
+    def _write_project(self, doc: dict) -> dict:
+        directory = self._local_profiles_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{doc['name']}.yaml"
+        tmp = path.with_suffix(".yaml.tmp")
+        tmp.write_text(yaml.safe_dump(doc, sort_keys=False, allow_unicode=True), encoding="utf-8")
+        os.replace(tmp, path)
+        try:
+            self.reload_profiles()
+        except Exception:
+            # Whatever was written is not what the running rig will run on;
+            # take it back rather than leave a service that cannot restart.
+            path.unlink(missing_ok=True)
+            self.reload_profiles()
+            raise
+        return {"project": self._project_row(doc["name"]), "path": str(path),
+                "projects": self.projects_view()["projects"]}
+
+    def create_project(self, body, identity=None) -> dict:
+        doc = self._project_document(body or {})
+        if doc["name"] in self.profiles:
+            shipped = doc["name"] in self.shipped_profiles
+            raise ValueError(f"{doc['name']} is already a project on this rig"
+                             + (", shipped with it" if shipped else "") + "; choose another name")
+        return self._write_project(doc)
+
+    def update_project(self, body, name, identity=None) -> dict:
+        self._own_project(name)
+        return self._write_project(self._project_document({**(body or {}), "name": name}))
+
+    def delete_project(self, body, name, identity=None) -> dict:
+        path = self._own_project(name)
+        path.unlink(missing_ok=True)
+        self.reload_profiles()
+        return {"removed": name, "projects": self.projects_view()["projects"]}
+
+    # ---- the farm this rig shows ---------------------------------------------------
+
+    def _public_farm_url(self) -> str | None:
+        """The farm whose public page this rig shows: the portal it reports
+        to, else `farm.public_url`, else the Alteriom farm; "off" is none."""
+        mode = self.__dict__.get("mode", "standalone")
+        if mode == "node" or os.environ.get("ALTERIOM_HIL_FARM_ATTACHED") == "1":
+            portal = (os.environ.get("ALTERIOM_HIL_PORTAL_URL") or "").strip()
+            if portal:
+                return portal.rstrip("/")
+        chosen = os.environ.get("ALTERIOM_HIL_FARM_PUBLIC_URL")
+        if chosen is None:
+            return self.PUBLIC_FARM_URL
+        chosen = chosen.strip()
+        return None if chosen in ("", "off") else chosen.rstrip("/")
+
+    def _read_public_farm(self, url: str) -> dict:
+        """One read of a portal's world page, trimmed to the fields the
+        overview shows. Split out so a test can stand in for the network."""
+        import urllib.request
+        request = urllib.request.Request(f"{url}/api/v1/world", headers={
+            "Accept": "application/json", "User-Agent": "alteriom-hil-rig"})
+        with urllib.request.urlopen(request, timeout=self.PUBLIC_FARM_TIMEOUT) as response:
+            payload = json.loads(response.read(512 * 1024).decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("not a world page")
+        rigs = []
+        for rig in (payload.get("rigs") or [])[:50]:
+            if isinstance(rig, dict) and rig.get("name"):
+                rigs.append({key: rig.get(key) for key in (
+                    "name", "description", "location", "online", "version", "health",
+                    "boards", "families", "runs", "setup")})
+        return {"rigs": rigs, "stats": payload.get("stats") or {},
+                "window_days": payload.get("window_days"), "software": payload.get("software") or {}}
+
+    def farm_public_view(self, identity=None) -> dict:
+        """The public farm as its world page tells it, read by this rig and
+        kept a while: a rig asks once in ten minutes, however many browsers
+        are open on it, and a farm that cannot be reached is said so, with
+        the last good answer if there was one."""
+        url = self._public_farm_url()
+        if not url:
+            return {"url": None, "ok": False, "error": None, "fetched_at": None, "world": None}
+        cache = self.__dict__.setdefault("_public_farm_cache", {})
+        now = time.time()
+        held = cache.get(url)
+        if held and now - held["at"] < (self.PUBLIC_FARM_TTL if held["answer"]["ok"] else self.PUBLIC_FARM_RETRY):
+            return held["answer"]
+        try:
+            world = self._read_public_farm(url)
+            answer = {"url": url, "ok": True, "error": None, "fetched_at": utcnow(), "world": world}
+        except Exception as exc:  # the network, the portal, the shape: all one thing to the page
+            reason = f"{exc.__class__.__name__}: {exc}"[:200]
+            answer = {"url": url, "ok": False, "error": reason, "fetched_at": utcnow(),
+                      "world": held["answer"]["world"] if held else None}
+        cache[url] = {"at": now, "answer": answer}
+        return answer
+
     def _scrub_run_evidence(self, job_id: str, redactor: Redactor, log) -> list:
         """The last pass over a run's evidence before anything reads it.
 

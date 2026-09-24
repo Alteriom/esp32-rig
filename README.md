@@ -108,6 +108,26 @@ A **profile** is the document that says where your firmware comes from, which
 boards a run needs, and what to run — one file, checked in, so a run is
 reproducible and a second project does not mean a second rig.
 
+## Your project on the rig
+
+A *project* is a repository whose firmware the rig flashes and whose test
+suite it runs. Two come with the rig -- the Rig Health Check and the
+painlessMesh reference -- and yours is added from the dashboard: **Settings →
+Projects → Add project** asks for the repository, the branch a run is for by
+default, where the pytest suite lives in it, which chip families a run takes,
+and the CI workflow that builds the firmware bundle. The rig writes the
+profile document under its state directory (`/var/lib/alteriom-hil/profiles/`
+on a standard install), reads it back at once, and an upgrade leaves it
+alone. The same is done over the API (`GET`/`POST /api/v1/projects`) with an
+admin key. The rig does not build firmware: your CI builds a bundle and hands
+it to the rig (`POST /api/v1/artifacts`), and a run flashes it.
+
+The rig's overview also shows the public page of the farm its software comes
+from -- how many rigs and boards, how they are doing -- with a way to connect
+this rig to it. Nothing there is yours; connecting is a choice, made in
+Settings. `farm.public_url` in the host configuration points it at another
+farm, or `off` shows none.
+
 ## Licence
 
 Apache-2.0. The patent grant matters for a tool people run beside their own

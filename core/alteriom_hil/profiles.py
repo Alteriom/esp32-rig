@@ -478,9 +478,23 @@ def load_profiles(repo: Path) -> dict[str, Profile]:
     missing would show up as "unsupported validation profile" on a submitted
     run, which points the operator at the request instead of the typo.
     """
-    directory = Path(repo) / "profiles"
+    return load_profiles_from(Path(repo) / "profiles")
+
+
+def load_local_profiles(state: Path) -> dict[str, Profile]:
+    """The projects an operator added on this rig: `<state>/profiles/*.yaml`,
+    written from Settings -> Projects (or by hand). An empty or absent
+    directory is a rig with nothing of its own yet, not an error."""
+    return load_profiles_from(Path(state) / "profiles", required=False)
+
+
+def load_profiles_from(directory: Path, required: bool = True) -> dict[str, Profile]:
+    """Every profile document in one directory, keyed by name."""
+    directory = Path(directory)
     if not directory.is_dir():
-        raise ProfileError(f"no profiles directory at {directory}")
+        if required:
+            raise ProfileError(f"no profiles directory at {directory}")
+        return {}
     found: dict[str, Profile] = {}
     for path in sorted(directory.glob("*.yaml")):
         try:
@@ -495,6 +509,6 @@ def load_profiles(repo: Path) -> dict[str, Profile]:
                 f"{path}: profile name {profile.name!r} does not match its filename"
             )
         found[profile.name] = profile
-    if not found:
+    if not found and required:
         raise ProfileError(f"no profiles found in {directory}")
     return found

@@ -51,6 +51,21 @@ function isPortal() { return document.body.dataset.app === "portal"; }
 // (docs/public-release-plan.md, step 11).
 const RIG_SHELL = {
   name: "rig",
+  // The noun for what is being looked at, wherever the page speaks of it.
+  site: "this rig",
+  Site: "This rig",
+  // The rig's own key is the rig, not "farm" (the token's name in the
+  // service); whoever holds it administers this rig and nothing wider.
+  keyLabel: name => name === "farm" ? "this rig" : name,
+  keyTitle: role => role === "admin"
+    ? "The rig's own key: everything this rig can do"
+    : "A key of this rig: runs, health checks and bundles; not the queue, cleanup or the board registry",
+  overviewRigs: {eyebrow: "THIS RIG", title: "This rig", action: '<a class="button secondary" href="#rigs">Boards</a>'},
+  localRigLabel: "This rig",
+  // Settings -> Projects, for a key: on a rig the projects are its own to keep.
+  keyProjects: () => loadRigProjects(),
+  // A rig shows the public farm it could report to; a portal is one.
+  farmWorld: true,
   fleet: () => [localRig()],
   rigsOnlineText: (online, total) => "1",
   rigsIdleNote: rigs => "this host",
@@ -94,6 +109,8 @@ const RIG_SHELL = {
   pendingSummary: rig => "",
 };
 function shell() { return isPortal() && typeof PORTAL_SHELL !== "undefined" ? PORTAL_SHELL : RIG_SHELL; }
+function site() { return shell().site; }
+function Site() { return shell().Site; }
 const $ = id => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -840,12 +857,12 @@ function renderYou(identity) {
   const badge = $("you");
   if (!badge) return;
   badge.hidden = !you;
-  badge.textContent = you ? `${you.name} · ${you.role}` : "";
+  badge.textContent = you ? `${you.account ? you.name : shell().keyLabel(you.name)} · ${you.role}` : "";
   badge.title = !you ? "" : you.account
     ? (you.role === "admin" ? "Your account: the farm's admin"
       : you.role === "guest" ? "Your account, not yet let in: the farm's admin can"
       : "Your account: your rigs, your runs, your events")
-    : (you.role === "admin" ? "An admin key: everything the farm can do" : "A user key: runs, health checks and bundles; not the queue, cleanup or the board registry");
+    : shell().keyTitle(you.role);
 }
 
 function installJobActionHandlers(root = document) {
@@ -907,8 +924,8 @@ function renderJob(job) {
     : "";
   $("job-summary").innerHTML = `<p><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span>${partial ? ' <span class="state warn">PARTIAL</span>' : ""} <strong>${escapeHtml(jobSummary(job))}</strong></p>${runFacts(job)}${partial ? `<p class="muted">Selection: ${selection.tests.length ? selection.tests.map(t => `<code>${escapeHtml(t)}</code>`).join(" ") : "all files"}${selection.keyword ? ` matching <code>${escapeHtml(selection.keyword)}</code>` : ""}</p>` : ""}${result.detail ? `<p class="failure-summary">${escapeHtml(result.detail)}</p>` : ""}${reruns}${renderArtifacts(job)}${renderBundleNote(job)}${renderEvidenceNote(job)}`;
   $("job-summary").querySelectorAll(".open-bundle").forEach(button => button.addEventListener("click", () => openBundle(button.dataset.id)));
-  $("job-summary").querySelectorAll(".rerun-failed").forEach(button => button.addEventListener("click", () => { button.disabled = true; rerun(job, failed).catch(error => { alert(`The farm refused the run: ${error.message}`); button.disabled = false; }); }));
-  $("job-summary").querySelectorAll(".rerun-same").forEach(button => button.addEventListener("click", () => { button.disabled = true; rerun(job, selection.tests, selection.keyword).catch(error => { alert(`The farm refused the run: ${error.message}`); button.disabled = false; }); }));
+  $("job-summary").querySelectorAll(".rerun-failed").forEach(button => button.addEventListener("click", () => { button.disabled = true; rerun(job, failed).catch(error => { alert(`${Site()} refused the run: ${error.message}`); button.disabled = false; }); }));
+  $("job-summary").querySelectorAll(".rerun-same").forEach(button => button.addEventListener("click", () => { button.disabled = true; rerun(job, selection.tests, selection.keyword).catch(error => { alert(`${Site()} refused the run: ${error.message}`); button.disabled = false; }); }));
   $("simulation").innerHTML = renderSimulation(job);
   $("pipeline").innerHTML = `<h3>Pipeline</h3><div class="pipeline">${inferredProgress(job).map(stage => `<article class="pipeline-stage ${escapeHtml(stage.status)}"><span class="stage-dot"></span><div><small class="stage-group">${escapeHtml(stage.group || "pipeline")}</small><strong>${escapeHtml(stage.label)}</strong><small><span class="stage-status">${escapeHtml(stage.status)}</span>${escapeHtml(stage.summary || "")}${stage.status === "running" && stage.started_at ? ` · ${liveTimer(stage.started_at)}` : ""}</small></div></article>`).join("")}</div>`;
   $("timing").innerHTML = renderTimings(job);
@@ -1048,7 +1065,7 @@ function renderBundleChoices() {
     bundleChoices.signature = signature;
     select.innerHTML = bundles.length
       ? bundles.map(bundle => `<option value="${escapeHtml(bundle.id)}"${bundle.id === chosen ? " selected" : ""}>${escapeHtml(bundleChoiceLabel(bundle))}</option>`).join("")
-      : `<option value="">${bundleChoices.loading || !bundleChoices.loadedAt ? "Loading the bundles the farm holds…" : "No bundle held for this profile"}</option>`;
+      : `<option value="">${bundleChoices.loading || !bundleChoices.loadedAt ? `Loading the bundles ${site()} holds…` : "No bundle held for this project"}</option>`;
     select.disabled = !bundles.length;
     $("suite-submit").disabled = !bundles.length;
     const hint = [
@@ -1061,8 +1078,8 @@ function renderBundleChoices() {
     $("bundle-note").innerHTML = bundleChoices.error
       ? `<span class="failure-summary">Could not list the bundles: ${escapeHtml(bundleChoices.error)}</span>`
       : bundles.length || !bundleChoices.loadedAt
-        ? `The farm does not build firmware: it flashes bundles built by ${producer}. To test another commit, run that workflow. <a href="#artifacts">Every bundle</a>`
-        : `The farm holds no ${escapeHtml(spec.label || profile)} bundle, and it does not build firmware. Run ${producer}: it builds the bundle and dispatches the run that flashes it.`;
+        ? `${Site()} does not build firmware: it flashes bundles built by ${producer}. To test another commit, run that workflow. <a href="#artifacts">Every bundle</a>`
+        : `${Site()} holds no ${escapeHtml(spec.label || profile)} bundle, and it does not build firmware. Run ${producer}: it builds the bundle and dispatches the run that flashes it.`;
   }
   renderFamilies(familyArgs.targets, familyArgs.inv);
 }
@@ -1104,7 +1121,7 @@ function renderFamilies(targets, inv) {
     const count = (inv.boards || []).filter(board => board.target === target).length;
     return `<label title="${escapeHtml(target)} · ${absent ? "not in this bundle" : `${count} connected board(s)`}"${absent ? ' class="muted"' : ""}><input type="checkbox" name="target" value="${escapeHtml(target)}"${checked ? " checked" : ""}${absent ? " disabled" : ""}> ${escapeHtml(familyLabel(target))}${count ? ` <small>×${count}</small>` : " <small class=muted>none</small>"}</label>`;
   });
-  fieldset.innerHTML = `<legend>Artifact families</legend>${boxes.join("") || "<span class=muted>The farm service reported no artifact families.</span>"}`;
+  fieldset.innerHTML = `<legend>Artifact families</legend>${boxes.join("") || "<span class=muted>The service reported no artifact families.</span>"}`;
 }
 
 // ---- Test selection ----------------------------------------------------------
@@ -1123,7 +1140,7 @@ function renderSuiteTests(catalogue) {
     const tests = entry.tests || [];
     const capabilities = [...new Set(tests.flatMap(test => test.capabilities || []))];
     return `<label class="test-file" title="${escapeHtml(tests.map(test => test.name).join("\n"))}"><input type="checkbox" name="test" value="${escapeHtml(entry.file)}"${previous.has(entry.file) ? " checked" : ""}> ${escapeHtml(entry.file.replace(/^test_/, "").replace(/\.py$/, "").replaceAll("_", " "))} <small>${escapeHtml(tests.length)} test${tests.length === 1 ? "" : "s"}${capabilities.length ? ` · ${escapeHtml(capabilities.join(", "))}` : ""}</small></label>`;
-  }).join("") || "<span class=muted>The farm service reported no suite tests.</span>"}`;
+  }).join("") || "<span class=muted>The service reported no suite tests.</span>"}`;
   fieldset.querySelectorAll("input[name=test]").forEach(input => input.addEventListener("change", updateSelectionNote));
   updateSelectionNote();
 }
@@ -1486,7 +1503,7 @@ function localRig() {
   const inv = lastInventory || {};
   const status = lastStatus || {};
   return {
-    name: "local", label: farmMode === "node" ? "This rig" : "This farm", local: true, kind: "hardware", online: true,
+    name: "local", label: shell().localRigLabel, local: true, kind: "hardware", online: true,
     version: status.version?.version, commit: status.version?.commit,
     boards: (inv.boards || []).length, missing: (inv.missing || []).length,
     running: (lastQueue.running_jobs || []).length, max_runs: lastQueue.concurrency || 1,
@@ -1611,7 +1628,8 @@ function rigTable(rigs) {
 function renderOverviewRigs(rigs) {
   const card = $("overview-rigs");
   const release = shell().releaseBadge();
-  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">FLEET</p><h2>Rigs</h2></div><div class="row-actions">${release}<a class="button secondary" href="#rigs">Manage rigs</a></div></div>${
+  const {eyebrow, title, action} = shell().overviewRigs;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">${eyebrow}</p><h2>${title}</h2></div><div class="row-actions">${release}${action}</div></div>${
     rigs.length ? rigTable(rigs) : '<p class="muted">No rig has connected to this portal yet. Add one from Rigs.</p>'}`;
   linkRows(card);
 }
@@ -3628,7 +3646,7 @@ function renderBundles() {
       <td class="nowrap">${runs === 1 ? "1 run" : `${runs} runs`}<small>${entry.last_used_at ? `last ${whenSpan(entry.last_used_at)}` : "never used"}</small></td>
       <td class="nowrap">${actorLink(entry.actor) || '<span class="muted">—</span>'}</td>
     </tr>`;
-  }).join("") || `<tr><td colspan="6" class="muted">${index.count ? "No bundle matches this filter." : "The farm keeps no firmware bundles."}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">${index.count ? "No bundle matches this filter." : `${Site()} keeps no firmware bundles.`}</td></tr>`;
 }
 
 function appSlot(family) {
@@ -4065,7 +4083,7 @@ function renderLibrary(library) {
       <div class="table-wrap"><table class="fleet library-table"><thead><tr><th>Branch</th><th>Latest build</th><th>Families</th><th>Last run</th><th class="num">Kept</th><th class="num">Size</th><th></th></tr></thead><tbody>${project.branches.map((group, index) => libraryRow(project, group, index)).join("")}</tbody></table></div>
       ${more > 0 ? `<button type="button" class="linkish library-show-more">Show ${escapeHtml(more)} more branch${more === 1 ? "" : "es"}</button>` : ""}
     </section>`;
-  }).join("") : '<section class="card"><p class="muted">The farm keeps no firmware yet. A project\'s CI supplies its bundles; the Rig Health Check firmware arrives with each farm deploy.</p></section>';
+  }).join("") : '<section class="card"><p class="muted">${Site()} keeps no firmware yet. A project\'s CI supplies its bundles; the Rig Health Check firmware arrives with each release.</p></section>';
 }
 
 function installLibraryHandlers() {
@@ -4112,7 +4130,7 @@ function renderRetention(plan) {
   const last = plan.last
     ? `<p class="muted">Last sweep ${whenSpan(plan.last.finished_at)}: ${escapeHtml(plan.last.removed.runs)} runs' captures, ${escapeHtml(plan.last.removed.logs)} logs, ${escapeHtml(plan.last.removed.workspaces)} checkouts removed${(plan.last.errors || []).length ? `; ${escapeHtml(plan.last.errors.length)} could not be` : ""}.</p>`
     : "";
-  $("retention").innerHTML = `<div class="title-row"><div><p class="eyebrow">RETENTION</p><h2>What the farm deletes on its own</h2></div><span class="state ${settings.enabled ? "good" : "warn"}">${settings.enabled ? "DAILY" : "OFF"}</span></div>
+  $("retention").innerHTML = `<div class="title-row"><div><p class="eyebrow">RETENTION</p><h2>What ${site()} deletes on its own</h2></div><span class="state ${settings.enabled ? "good" : "warn"}">${settings.enabled ? "DAILY" : "OFF"}</span></div>
     <p class="muted">${settings.enabled ? "Every day: " : "Off: run evidence and logs are kept for good. Set <code>retention.enabled</code> in the host configuration to remove "}${rule}</p>
     ${due}${last}
     ${runs + logs + checkouts ? '<div class="actions admin-only"><button type="button" class="danger retention-run">Remove these now</button></div>' : ""}`;
@@ -4247,7 +4265,7 @@ $("prune-form").addEventListener("submit", async event => {
   }
   if (!Object.keys(rules).length) return alert("Give at least one rule: an age, a number to keep per project, or both.");
   try { renderPrunePreview(await api("/api/v1/artifacts/prune", {method: "POST", body: JSON.stringify({...rules, dry_run: true})}), rules); }
-  catch (error) { alert(`The farm refused the prune: ${error.message}`); }
+  catch (error) { alert(`${Site()} refused the prune: ${error.message}`); }
 });
 $("artifacts-refresh").addEventListener("click", () => loadArtifacts());
 $("close-bundle").textContent = "Back to firmware";
@@ -4466,7 +4484,7 @@ async function loadOverviewStats() {
   const rateTone = totals.pass_rate == null ? "" : totals.pass_rate >= 0.9 ? "good" : totals.pass_rate >= 0.6 ? "warn" : "bad";
   const item = (label, value, tone = "") => `<div><small>${label}</small><strong class="${tone}">${value}</strong></div>`;
   $("overview-stats").hidden = false;
-  $("overview-stats").innerHTML = `<div class="title-row"><div><p class="eyebrow">LAST 7 DAYS</p><h2>How the farm is doing</h2></div><button type="button" class="secondary go-statistics">Statistics</button></div>
+  $("overview-stats").innerHTML = `<div class="title-row"><div><p class="eyebrow">LAST 7 DAYS</p><h2>How ${site()} is doing</h2></div><button type="button" class="secondary go-statistics">Statistics</button></div>
     <div class="stats-band-row">
       <svg class="spark" viewBox="0 0 ${days.length * 14} 30" preserveAspectRatio="none" role="img" aria-label="Suite runs per day, last 7 days">${spark}</svg>
       ${item("Suite runs", escapeHtml(totals.runs ?? 0))}
@@ -4675,7 +4693,7 @@ function renderConfig(config) {
   if (!portal) {
     const s = config.service || {}, h = config.health || {};
     groups.push(
-      viewGroup("Runs", "How the farm takes its work.", [
+      viewGroup("Runs", `How ${site()} takes its work.`, [
         ["Runs at once", plainValue(s.concurrency)],
         ["A run may take", plainValue(s.suite_timeout_seconds, "s"), "Then it is interrupted, its evidence kept."],
       ]),
@@ -4740,7 +4758,7 @@ async function loadProjects() {
   // flash for a person and a wasted read for everybody.
   if (!document.body.dataset.mode) return;
   projectsShownAs = you?.name || "";
-  if (!(you?.account && shell().workspaceProjects)) return loadConfig();
+  if (!(you?.account && shell().workspaceProjects)) return shell().keyProjects();
   let page;
   try { page = await shell().workspaceProjects(); }
   catch (error) { $("config-projects").innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
@@ -4751,6 +4769,174 @@ async function loadProjects() {
       $("config-projects").insertAdjacentHTML("beforeend", `<section class="card">${farmProjectsMarkup(config.build || {})}</section>`);
     } catch (error) { /* the farm's registry is not this page's reason to exist */ }
   }
+}
+
+// ---- Settings -> Projects, on a rig -------------------------------------------------
+// What this rig runs, and where a person who just installed it adds their
+// own: a project is their repository, its suite and the boards it wants.
+// The rig writes the profile document under <state>/profiles/ and reads it
+// back at once; the shipped ones (the Rig Health Check, the painlessMesh
+// reference) are listed but are the release's to change.
+let rigProjectsView = null;
+let projectEditing = null;   // null, "new", or the name of the project being changed
+
+async function loadRigProjects() {
+  const card = $("config-projects");
+  if (!card) return;
+  try { rigProjectsView = await api("/api/v1/projects"); }
+  catch (error) { card.innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
+  renderRigProjects(rigProjectsView);
+}
+
+function projectRepoText(url) {
+  return String(url || "").replace(/^https:\/\/(www\.)?(github\.com\/)?/, "").replace(/\.git$/, "");
+}
+
+function renderRigProjects(view) {
+  const card = $("config-projects");
+  if (!card) return;
+  const projects = view.projects || [];
+  const rows = projects.map(row => `<tr>
+    <td><strong>${escapeHtml(row.label || row.name)}</strong><small><code>${escapeHtml(row.name)}</code>${row.shipped ? ' · shipped with the rig' : ""}</small></td>
+    <td>${row.repo ? `<a href="${escapeHtml(row.repo)}" target="_blank" rel="noopener">${escapeHtml(projectRepoText(row.repo))}</a>` : '<span class="muted">—</span>'}<small>default <code>${escapeHtml(row.default_ref || "")}</code></small></td>
+    <td>${escapeHtml(profileTakes(row))}</td>
+    <td>${row.supply_workflow ? `<code>${escapeHtml(row.supply_workflow)}</code>` : '<span class="bad">no producer</span>'}${row.supply_repo && row.supply_repo !== row.repo ? `<small>${repoLink(row.supply_repo)}</small>` : ""}</td>
+    <td><code>${escapeHtml(row.suite_path || "")}</code></td>
+    <td class="nowrap">${row.shipped ? "" : `<button type="button" class="secondary project-edit admin-only" data-name="${escapeHtml(row.name)}">Change</button> <button type="button" class="danger project-remove admin-only" data-name="${escapeHtml(row.name)}">Remove</button>`}</td>
+  </tr>`).join("");
+  const own = projects.filter(row => !row.shipped).length;
+  const current = projectEditing && projectEditing !== "new" ? projects.find(row => row.name === projectEditing) : null;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${projectEditing ? "" : '<button type="button" class="secondary project-add admin-only">Add project</button>'}</div></div>
+    <p class="muted">A project is a repository whose firmware this rig flashes and whose test suite it runs. The Rig Health Check and the painlessMesh reference come with the rig; add your own here. The rig does not build firmware: your project's CI builds a bundle and hands it to this rig, and a run flashes it.</p>
+    ${projectEditing ? projectForm(current) : ""}
+    <div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted">Your projects are documents under <code>${escapeHtml(view.directory || "")}</code>, one per project; upgrading the rig leaves them alone.</p>`;
+  wireRigProjects(card);
+}
+
+function projectForm(current) {
+  const value = (key, fallback = "") => escapeHtml(current && current[key] != null ? current[key] : fallback);
+  const families = (current?.needs || []).map(need => need.target);
+  return `<form id="project-form" class="settings-form" autocomplete="off" data-name="${current ? escapeHtml(current.name) : ""}">
+    <div class="title-row"><div><p class="eyebrow">${current ? "CHANGE PROJECT" : "NEW PROJECT"}</p><h3>${current ? escapeHtml(current.label || current.name) : "Your repository, its suite, its boards"}</h3></div></div>
+    <label>Name <small class="muted">lowercase letters, digits and dashes; what a run names</small><input name="name" value="${value("name")}"${current ? " readonly" : ""} required pattern="[a-z0-9][a-z0-9-]{0,63}" placeholder="my-sensor"></label>
+    <label>Label <small class="muted">how it reads on this page and in reports</small><input name="label" value="${value("label")}" placeholder="My sensor firmware"></label>
+    <label>Repository <small class="muted">https://; checked out fresh for every run</small><input name="repo" type="url" value="${value("repo")}" required placeholder="https://github.com/you/my-sensor"></label>
+    <label>Default ref <small class="muted">the branch or tag a run is for when none is named</small><input name="default_ref" value="${value("default_ref", "main")}"></label>
+    <label>Suite path <small class="muted">a pytest suite, relative to the repository</small><input name="suite_path" value="${value("suite_path", "tests")}"></label>
+    <label>Chip families <small class="muted">comma-separated; a run takes one board of each. Empty: the whole bench</small><input name="families" value="${escapeHtml(families.join(", "))}" placeholder="esp32, esp32-c3"></label>
+    <label>Minimum boards <input name="min_boards" type="number" min="1" max="64" value="${value("min_boards", 1)}"></label>
+    <label>A run may take <small class="muted">seconds, then it is interrupted and its evidence kept</small><input name="timeout_seconds" type="number" min="60" max="86400" value="${value("timeout_seconds", 1800)}"></label>
+    <details><summary>Where its firmware comes from</summary>
+      <p class="muted">This rig flashes what your CI built. Name the workflow that builds the bundle and the artifact it uploads; the bundle's manifest carries the commit under the revision key.</p>
+      <label>Supply repository <small class="muted">empty: the repository above</small><input name="supply_repo" type="url" value="${value("supply_repo")}" placeholder="https://github.com/you/my-sensor"></label>
+      <label>Workflow <input name="supply_workflow" value="${value("supply_workflow", ".github/workflows/hil.yml")}"></label>
+      <label>Artifact name <input name="supply_artifact" value="${value("supply_artifact", "hil-artifacts")}"></label>
+      <label>Manifest revision key <small class="muted">empty: the name, as <code>my_sensor_sha</code></small><input name="revision_key" value="${value("revision_key")}" placeholder="my_sensor_sha"></label>
+    </details>
+    <p id="project-error" class="failure-summary" hidden></p>
+    <div class="settings-footer"><button type="submit">${current ? "Save" : "Add project"}</button><button type="button" class="secondary project-cancel">Cancel</button></div>
+  </form>`;
+}
+
+function wireRigProjects(card) {
+  const redraw = () => renderRigProjects(rigProjectsView);
+  card.querySelector(".project-add")?.addEventListener("click", () => {
+    projectEditing = "new";
+    redraw();
+    $("project-form")?.querySelector("input[name=name]")?.focus();
+  });
+  card.querySelectorAll(".project-edit").forEach(button => button.addEventListener("click", () => { projectEditing = button.dataset.name; redraw(); }));
+  card.querySelector(".project-cancel")?.addEventListener("click", () => { projectEditing = null; redraw(); });
+  card.querySelectorAll(".project-remove").forEach(button => button.addEventListener("click", async () => {
+    const name = button.dataset.name;
+    if (!confirm(`Remove the project ${name}? Its runs stay in the history; this rig just stops offering it.`)) return;
+    try {
+      const answer = await api(`/api/v1/projects/${encodeURIComponent(name)}/delete`, {method: "POST", body: "{}"});
+      rigProjectsView = {...rigProjectsView, projects: answer.projects};
+    } catch (error) { alert(`This rig refused: ${error.message}`); return; }
+    projectEditing = null;
+    redraw();
+  }));
+  const form = $("project-form");
+  form?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const fields = Object.fromEntries(new FormData(form).entries());
+    const body = {
+      ...fields,
+      families: String(fields.families || "").split(",").map(part => part.trim()).filter(Boolean),
+      min_boards: Number(fields.min_boards) || 1,
+      timeout_seconds: Number(fields.timeout_seconds) || 1800,
+    };
+    for (const key of ["supply_repo", "revision_key", "label"]) if (!body[key]) delete body[key];
+    const name = form.dataset.name;
+    const path = name ? `/api/v1/projects/${encodeURIComponent(name)}` : "/api/v1/projects";
+    const submit = form.querySelector("button[type=submit]");
+    submit.disabled = true;
+    try {
+      const answer = await api(path, {method: "POST", body: JSON.stringify(body)});
+      rigProjectsView = {...rigProjectsView, projects: answer.projects};
+      projectEditing = null;
+      redraw();
+    } catch (error) {
+      const note = $("project-error");
+      note.hidden = false;
+      note.textContent = error.message;
+      submit.disabled = false;
+    }
+  });
+}
+
+// ---- the public farm, on a rig's overview ------------------------------------------
+// The rig reads the farm's public page (GET /api/v1/farm/public, kept on
+// the rig ten minutes at a time) and shows it: how many rigs and boards,
+// which are shown publicly, how it is doing. Nothing here is this rig's;
+// the point is that a rig on its own can see where it could connect.
+let farmWorldAt = 0;
+
+async function loadFarmWorld() {
+  const card = $("farm-world");
+  if (!card || !shell().farmWorld) return;
+  if (Date.now() - farmWorldAt < 600000) return;
+  farmWorldAt = Date.now();
+  let view;
+  try { view = await api("/api/v1/farm/public"); }
+  catch (error) { farmWorldAt = 0; return; }
+  renderFarmWorld(view);
+}
+
+function renderFarmWorld(view) {
+  const card = $("farm-world");
+  if (!card) return;
+  if (!view || !view.url) { card.hidden = true; return; }
+  card.hidden = false;
+  const host = view.url.replace(/^https?:\/\//, "");
+  const world = view.world;
+  const stats = world?.stats || {};
+  const item = (label, value) => `<div><small>${label}</small><strong>${value}</strong></div>`;
+  const families = Object.entries(stats.families || {}).map(([family, count]) => `<span class="artifact">${escapeHtml(family)} × ${escapeHtml(count)}</span>`).join("");
+  const rigRows = (world?.rigs || []).slice(0, 8).map(rig => `<tr>
+    <td><strong>${escapeHtml(rig.name)}</strong><small>${escapeHtml([rig.description, rig.location].filter(Boolean).join(" · "))}</small></td>
+    <td><span class="state ${rig.online ? "good" : "muted"}">${rig.online ? "online" : "offline"}</span></td>
+    <td class="num">${escapeHtml(rig.boards ?? "—")}</td>
+    <td>${escapeHtml(Object.entries(rig.families || {}).map(([family, count]) => `${count > 1 ? `${count} × ` : ""}${family}`).join(", ") || "—")}</td>
+    <td class="num">${escapeHtml(rig.runs?.runs ?? 0)}${rig.runs?.runs ? ` <small class="muted">${escapeHtml(rig.runs.passed)} passed</small>` : ""}</td>
+  </tr>`).join("");
+  const connected = farmMode === "node" || farmMode === "attached";
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">THE FARM</p><h2><a href="${escapeHtml(view.url)}" target="_blank" rel="noopener">${escapeHtml(host)}</a></h2></div><div class="row-actions">${connected ? '<span class="state good">this rig reports to it</span>' : '<a class="button secondary" href="#configuration">Connect this rig</a>'}</div></div>
+    ${world ? `<div class="stats-band-row">
+      ${item("Rigs online", `${escapeHtml(stats.online ?? 0)} / ${escapeHtml(stats.rigs ?? 0)}`)}
+      ${item("Boards", escapeHtml(stats.boards ?? 0))}
+      ${item(`Runs, ${escapeHtml(world.window_days || 7)} days`, escapeHtml(stats.runs ?? 0))}
+      ${item("Pass rate", escapeHtml(percent(stats.pass_rate)))}
+    </div>
+    ${families ? `<div class="artifacts">${families}</div>` : ""}
+    ${rigRows
+      ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Public rig</th><th>State</th><th class="num">Boards</th><th>Families</th><th class="num">Runs</th></tr></thead><tbody>${rigRows}</tbody></table></div>`
+      : '<p class="muted">No rig is shown publicly right now.</p>'}` : ""}
+    <p class="muted">${view.ok
+      ? `The farm's public page, as this rig read it ${whenSpan(view.fetched_at)}. Nothing here is this rig's; connecting it is a choice, made in Settings.`
+      : `The farm could not be reached${view.error ? ` (${escapeHtml(view.error)})` : ""}${world ? "; this is what it last said" : ""}.`}</p>`;
 }
 
 function renderWorkspaceProjects(workspaces) {
@@ -5068,7 +5254,7 @@ function renderActive(jobs, queue, inv) {
     : "";
   const queueBlock = `<div><div class="queue-head"><div><p class="eyebrow">QUEUE</p>${pausedNote}</div>${pauseButton}</div>${queueList}</div>`;
   if (!running) {
-    $("active-run").innerHTML = `<div class="live-grid"><div><div class="title-row"><div><p class="eyebrow">PIPELINE</p><h2>No active execution</h2></div><span class="state ${queue?.paused ? "warn" : "good"}">${queue?.paused ? "PAUSED" : "READY"}</span></div><p class="muted">${queue?.paused ? "The queue is paused; resume it to start the next job." : "The farm is ready to accept a validation run."}</p></div>${queueBlock}</div>`;
+    $("active-run").innerHTML = `<div class="live-grid"><div><div class="title-row"><div><p class="eyebrow">PIPELINE</p><h2>No active execution</h2></div><span class="state ${queue?.paused ? "warn" : "good"}">${queue?.paused ? "PAUSED" : "READY"}</span></div><p class="muted">${queue?.paused ? "The queue is paused; resume it to start the next job." : `${Site()} is ready to accept a validation run.`}</p></div>${queueBlock}</div>`;
   } else {
     const progress = inferredProgress(running);
     const done = progress.filter(stage => ["passed", "skipped"].includes(stage.status)).length;
@@ -5135,6 +5321,7 @@ async function refresh(force = false) {
       if (!document.querySelector('.page[data-page="board"]').hidden && boardPage.id) renderBoard();
     }
     loadOverviewStats();
+    loadFarmWorld();
     if (selectedJobId) await showJob(selectedJobId);
     $("live-dot").className = "live-dot online"; $("last-updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
   } catch (error) {
@@ -5188,7 +5375,7 @@ $("close-job").addEventListener("click", () => {
 // carrying, which is why it asks.
 async function requestHealth(boards, button) {
   const what = boards ? `${boards.length} board(s)` : "every connected board";
-  if (!confirm(`Run the Rig Health Check on ${what}?\n\nThe Rig Health Check is the farm's own firmware: it checks that the ESP boots, its serial path is clean, its flash keeps a value, the rig can reset it, its radio sees and joins the rig, and the rig's uplink and broker answer.\n\nIt flashes over whatever firmware ${boards ? "that board is" : "those boards are"} carrying now.`)) return;
+  if (!confirm(`Run the Rig Health Check on ${what}?\n\nThe Rig Health Check is the rig's own firmware: it checks that the ESP boots, its serial path is clean, its flash keeps a value, the rig can reset it, its radio sees and joins the rig, and the rig's uplink and broker answer.\n\nIt flashes over whatever firmware ${boards ? "that board is" : "those boards are"} carrying now.`)) return;
   if (button) button.disabled = true;
   try {
     const job = await api("/api/v1/health", {
@@ -5219,7 +5406,7 @@ $("refresh").addEventListener("click", async () => {
 $("suite-form").addEventListener("submit", async event => {
   event.preventDefault(); const form = new FormData(event.target), targets = form.getAll("target");
   const bundle = selectedBundle();
-  if (!bundle) return alert("Choose a firmware bundle. The farm does not build firmware: it flashes a bundle a project's CI built.");
+  if (!bundle) return alert(`Choose a firmware bundle. ${Site()} does not build firmware: it flashes a bundle a project's CI built.`);
   if (!targets.length) return alert("Select at least one artifact family");
   // The bundle is the whole of what is flashed, so it names the commit too.
   const body = {profile: form.get("profile"), ref: bundle.revision, artifact: bundle.id, targets};
@@ -5232,7 +5419,7 @@ $("suite-form").addEventListener("submit", async event => {
     const job = await api("/api/v1/suites", {method: "POST", body: JSON.stringify(body)});
     preferredBundle = null;
     await refresh(true); await showJob(job.id, {focus: true, force: true});
-  } catch (error) { alert(`The farm refused the run: ${error.message}`); }
+  } catch (error) { alert(`${Site()} refused the run: ${error.message}`); }
 });
 $("suite-form").elements.keyword.addEventListener("input", updateSelectionNote);
 $("profile-select").addEventListener("change", () => renderProfiles());
