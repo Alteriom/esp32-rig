@@ -116,6 +116,7 @@ class BoardClient:
         predicate: Callable[[dict], bool],
         description: str,
         timeout: float = 10.0,
+        idempotent: bool = False,
         **kwargs,
     ) -> dict:
         """Send a command and wait for its reply, resending a corrupted one.
@@ -131,7 +132,25 @@ class BoardClient:
         Only a reported parse failure is retried. A command that ran and
         whose reply went missing is never resent — for a role change that
         reboots the board, that would be a different and worse guess.
+
+        A command that is safe to repeat -- a scan, a read -- may say so
+        with ``idempotent=True``, and is then also resent when what came
+        back could not be read: the capture frames a line it received with
+        undecodable bytes and no event as ``{"evt":"unreadable"}``. Seen on
+        esp32-fde4 (farm run be46491e): its scan reply arrived with the
+        first 32 characters as 64 undecodable bytes and the rest intact, the
+        board neither reset nor slow, and the check timed out at 45 s with
+        the answer in the serial log. Nothing else can tell a damaged reply
+        from a silent board. An ``unreadable`` that was only noise costs a
+        repeatable command one more run; a command that is not safe to
+        repeat ignores it, as before.
         """
+        def resend_on(e: dict) -> bool:
+            if e["evt"] == "error":
+                error = str(e.get("error", ""))
+                return error == "bad json" or error.startswith("frame dropped")
+            return idempotent and e["evt"] == "unreadable"
+
         deadline = time.monotonic() + timeout
         self.clear_pending()
         self.send_cmd(cmd, **kwargs)
@@ -142,16 +161,7 @@ class BoardClient:
                     description, self.board_id, self.capture.raw_log
                 )
             evt = self.wait_for(
-                lambda e: predicate(e)
-                or (
-                    e["evt"] == "error"
-                    and (
-                        e.get("error") == "bad json"
-                        or str(e.get("error", "")).startswith("frame dropped")
-                    )
-                ),
-                description,
-                remaining,
+                lambda e: predicate(e) or resend_on(e), description, remaining
             )
             if predicate(evt):
                 return evt

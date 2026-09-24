@@ -277,3 +277,106 @@ def test_tabs_and_emoji_survive():
     line = "🕸️ MESH STATUS:	Mesh Node Id: 3711130777"
 
     assert SerialCapture._bounded(line) == line
+
+
+def test_a_line_with_undecodable_bytes_and_no_event_is_framed_as_unreadable():
+    # esp32-fde4's scan reply (farm run be46491e) arrived with its first 32
+    # characters -- `{"evt":"wifi_scan","ms":6218,"co` -- as 64 bytes that
+    # were not UTF-8, and the tail intact. The tail's inner object parses
+    # but carries no "evt", so the line yielded no event and the check waited
+    # 45 s for an answer that was in the raw log. The capture now says what
+    # it saw, as its own event, so a command safe to repeat can act on it.
+    tail = (
+        b'unt":5,"ok":true,"networks":[{"ssid":"Alteriom-HIL","rssi":-41,'
+        b'"channel":1}],"seen":true}'
+    )
+    stream = FakeStream([b"\xff" * 64 + tail + b"\n"])
+    cap = SerialCapture(lambda: stream).start()
+    try:
+        evt = cap.next_event(timeout=2)
+        assert evt == {
+            "evt": "unreadable",
+            "source": "rig",
+            "undecodable": 64,
+            "chars": 64 + len(tail),
+        }
+        assert cap.next_event(timeout=0.2) is None
+        # The line itself stays in the raw log, U+FFFD and all: the evidence
+        # that the board answered and what its answer was.
+        assert any('"seen":true}' in line and "\ufffd" * 64 in line for line in cap.raw_log)
+    finally:
+        cap.stop()
+
+
+def test_a_carried_frame_head_with_an_undecodable_byte_is_judged_with_its_tail():
+    # A head passed on before its tail (the S3's stall, above) that carries
+    # a byte that was not UTF-8 inside a string is a valid event once the
+    # tail joins it. Calling it unreadable while it is still being carried
+    # would have a repeatable command resent for a reply that completes a
+    # moment later, so the judgement waits for the carry to be resolved.
+    stream = PacedStream(
+        [
+            b'{"evt":"wifi_scan","ssid":"Alteri\xffom","networks":[',
+            (0.2, b""),
+            (0.2, b""),
+            (0.2, b""),
+            (0.2, b""),
+            b'{"rssi":-41}],"seen":true}\n',
+        ]
+    )
+    cap = SerialCapture(lambda: stream)
+    cap.PARTIAL_FRAME_MAX_WAIT = 0.3  # pass the head on before the tail comes
+    cap.start()
+    try:
+        evt = cap.next_event(timeout=4)
+        assert evt["evt"] == "wifi_scan" and evt["seen"] is True
+        assert evt["ssid"] == "Alteri\ufffdom"
+        assert cap.next_event(timeout=0.5) is None, "no unreadable for a frame that completed"
+    finally:
+        cap.stop()
+
+
+def test_a_carried_frame_head_whose_tail_never_completes_it_is_unreadable():
+    # The same head, followed by a tail that does not finish the frame: now
+    # nothing will, and what was seen -- head and tail together -- is said.
+    stream = PacedStream(
+        [
+            b'{"evt":"wifi_scan","ssid":"Alteri\xffom"',
+            (0.2, b""),
+            (0.2, b""),
+            (0.2, b""),
+            (0.2, b""),
+            b'ks":[],"seen":false\n',
+        ]
+    )
+    cap = SerialCapture(lambda: stream)
+    cap.PARTIAL_FRAME_MAX_WAIT = 0.3
+    cap.start()
+    try:
+        evt = cap.next_event(timeout=4)
+        assert evt["evt"] == "unreadable" and evt["undecodable"] == 1
+        assert evt["chars"] == len('{"evt":"wifi_scan","ssid":"Alteri?om"' + 'ks":[],"seen":false')
+        assert cap.next_event(timeout=0.5) is None
+    finally:
+        cap.stop()
+
+
+def test_undecodable_bytes_beside_a_whole_event_are_not_unreadable():
+    # The ESP32 classic prints one damaged byte at boot ("Incorrect.\ufffdxize
+    # of core dump image") and its boot ROM banner is binary at this baud;
+    # a line that still yields an event is that event, nothing more, and a
+    # clean non-JSON line is nothing at all.
+    stream = FakeStream(
+        [
+            b'\xff\xfe{"evt":"info","nodeId":7}\n',
+            b"E (344) esp_core_dump_flash: Incorrect size of core dump image: 1\n",
+            b'{"evt":"boot","nodeId":7}\n',
+        ]
+    )
+    cap = SerialCapture(lambda: stream).start()
+    try:
+        assert cap.next_event(timeout=2) == {"evt": "info", "nodeId": 7}
+        assert cap.next_event(timeout=2) == {"evt": "boot", "nodeId": 7}
+        assert cap.next_event(timeout=0.2) is None
+    finally:
+        cap.stop()
