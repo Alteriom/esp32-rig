@@ -4477,6 +4477,20 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             scope = getattr(manager, "run_scope", None)
             return scope(identity) if scope is not None else (None, None)
 
+        def _visible(self, identity) -> set[str] | None:
+            """Which rigs this caller may see: None for every rig.
+
+            The same fallback as `_runs`, for the same reason. `visible_rigs`
+            is the portal's: a standalone rig has no portal half, and asking
+            its manager raised NotThisHalf straight out of the handler -- so
+            /api/v1/status, /api/v1/inventory, a rig's page and a board's
+            history all dropped the connection on exactly the host the rig
+            is for. A rig with no portal has nobody to scope by: the caller
+            holds its token, and sees it whole.
+            """
+            visible = getattr(manager, "visible_rigs", None)
+            return visible(identity) if visible is not None else None
+
         def _identity(self) -> Identity | None:
             supplied = self.headers.get("Authorization", "")
             if supplied.startswith("Bearer "):
@@ -4906,7 +4920,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # A rig outside this caller's workspace is not found rather
                 # than forbidden: a 403 confirms the rig exists, and its name
                 # is the one thing a stranger can guess.
-                mine = manager.visible_rigs(identity)
+                mine = self._visible(identity)
                 if mine is not None and match.group(1) not in mine:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig"})
                 return self._worker_call(lambda: manager.rig_detail(match.group(1), keys, identity))
@@ -5034,7 +5048,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     # Two scopes: which rigs appear at all, and whose
                     # diagnostics may be read -- a rig lent to this caller is
                     # in the first and not the second.
-                    health = manager.portal_health(manager.visible_rigs(identity),
+                    health = manager.portal_health(self._visible(identity),
                                                    owned=self._runs(identity)[0])
                 else:
                     try:
@@ -5045,7 +5059,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # admin, which is every rig and the answer this has always
                 # given; a set for an account, and then everything below that
                 # names a rig is cut to it.
-                mine = manager.visible_rigs(identity)
+                mine = self._visible(identity)
                 # And which runs, which is a narrower question: a rig shared
                 # with this caller is one they may run on, not one whose
                 # runs are theirs to read.
@@ -5264,7 +5278,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             if path == "/api/v1/inventory":
                 return self._json(HTTPStatus.OK,
                                   manager.inventory_snapshot(annotate=True,
-                                                             workers=manager.visible_rigs(identity),
+                                                             workers=self._visible(identity),
                                                              runs=self._runs(identity)))
             match = re.fullmatch(r"/api/v1/inventory/([a-z0-9][a-z0-9._-]{0,31})/history", path)
             if match:
@@ -5273,7 +5287,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # is not found, and the verdicts come back without the run
                 # ids they may not follow.
                 rig = manager.rig_of_board(match.group(1))
-                mine = manager.visible_rigs(identity)
+                mine = self._visible(identity)
                 if mine is not None and rig not in mine:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "no such board"})
                 return self._json(HTTPStatus.OK, manager.board_history(

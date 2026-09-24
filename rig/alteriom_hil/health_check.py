@@ -406,10 +406,15 @@ def collect_health(env: dict[str, str] | None = None, previous: dict | None = No
             "ok" if code == 0 and output == "active" else "unhealthy",
             f"{runner_unit}: {output or 'unknown'}",
         )
-    elif values.get("ALTERIOM_HIL_FARM_MODE") == "node":
-        add(checks, "runner_service", "ok", "no runner: a node takes its work and its releases from its portal")
     else:
-        add(checks, "runner_service", "unhealthy", "HIL_RUNNER_UNIT is unset")
+        # No GitHub Actions runner on this host. A standalone rig never
+        # needed one; a node takes its work from its portal. Neither is a
+        # fault, and saying it was failed the health service on every
+        # standalone rig, every five minutes.
+        add(checks, "runner_service", "ok",
+            "no GitHub Actions runner on this host: a node takes its work from its portal"
+            if values.get("ALTERIOM_HIL_FARM_MODE") == "node"
+            else "no GitHub Actions runner on this host; the rig is driven through its dashboard and API")
 
     if values.get("ALTERIOM_HIL_GATEWAY_ENABLED") == "1":
         gateway_unit = values.get(

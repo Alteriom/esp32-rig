@@ -87,12 +87,20 @@ def test_missing_hardware_is_degraded_not_unhealthy(tmp_path, monkeypatch):
     assert not [check for check in payload["checks"] if check["status"] == "unhealthy"]
 
 
-def test_a_node_without_a_runner_is_not_unhealthy_for_it(monkeypatch):
+def test_a_host_without_a_github_runner_is_not_unhealthy_for_it(monkeypatch):
+    """A standalone rig never needed one; a node takes its work from its
+    portal. Saying otherwise failed alteriom-hil-health.service every five
+    minutes on every standalone rig (found installing rig-2 from the v1.0.157
+    release). A runner that is named and not running is still a fault."""
     monkeypatch.setattr(health_check, "command", lambda *args, **kwargs: (1, ""))
     checks = {check["name"]: check for check in health_check.collect_health({"ALTERIOM_HIL_FARM_MODE": "node"})["checks"]}
     assert checks["runner_service"]["status"] == "ok"
     checks = {check["name"]: check for check in health_check.collect_health({})["checks"]}
-    assert checks["runner_service"]["status"] == "unhealthy", "a host that is not a node still needs its runner"
+    assert checks["runner_service"]["status"] == "ok", "standalone: no runner, no fault"
+    assert "no GitHub Actions runner" in checks["runner_service"]["message"]
+    checks = {check["name"]: check for check in health_check.collect_health(
+        {"HIL_RUNNER_UNIT": "actions.runner.example.service"})["checks"]}
+    assert checks["runner_service"]["status"] == "unhealthy", "named, and not running"
 
 
 def test_invalid_service_configuration_is_unhealthy(tmp_path, monkeypatch):
