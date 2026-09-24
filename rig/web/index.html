@@ -20,7 +20,7 @@
       <button class="nav-item" data-panel="rigs">Rigs</button>
       <button class="nav-item farm-wide" data-panel="artifacts">Firmware</button>
       <button class="nav-item farm-wide" data-panel="statistics">Insights</button>
-      <button class="nav-item farm-wide" data-panel="configuration">Settings</button>
+      <button class="nav-item" data-panel="configuration">Settings</button>
       <!-- The header's .connection block carries the same name and the same
            sign out, and is display:none below 850px. The nav is not, so on a
            phone this is where you see who you are and stop being it. -->
@@ -234,9 +234,9 @@
         <div class="page-heading"><div><p class="eyebrow">DISK</p><h1 id="storage-title">Storage</h1><p id="storage-subtitle" class="muted"></p></div><div class="row-actions"><button id="close-storage" class="secondary">Back to artifacts</button></div></div>
         <section id="storage-detail" class="card"><p class="muted">Loading…</p></section>
       </section>
-      <section class="page farm-wide" data-page="configuration" hidden>
+      <section class="page" data-page="configuration" hidden>
         <div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>Settings</h1></div></div>
-        <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="general" class="active">General</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
+        <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="general" class="active farm-wide">General</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
         <div id="settings-general">
           <section class="card"><div class="title-row"><div><p class="eyebrow">THIS DEPLOYMENT</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div><div id="portal-config" hidden></div></section>
           <section class="card"><div class="title-row"><div><p class="eyebrow">DECISIONS</p><h2 id="config-title">What the farm decides with</h2></div></div><p id="config-source" class="muted"></p><div id="config"><p class="muted">Loading…</p></div><p class="muted">A rig's own settings -- runs at once, retention, host health -- are on its page under Rigs, and changed there.</p></section>
