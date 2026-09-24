@@ -190,11 +190,16 @@ def test_automatic_installs_are_the_owners_setting_and_the_watch_obeys_it(tmp_pa
     monkeypatch.setattr(rig, "UPDATE_CHECK_DELAY", 0)
     staged = []
     monkeypatch.setattr(rig, "_stage_update", lambda avail: staged.append(avail["version"]))
-    monkeypatch.setattr(updates.time, "sleep", lambda seconds: (_ for _ in ()).throw(StopIteration) if staged else None)
-    try:
-        rig._update_watch()
-    except StopIteration:
+    # One turn: the watch sleeps, looks, stages; the next sleep ends the test.
+    class Enough(Exception):
         pass
+
+    def stop_once_staged(seconds):
+        if staged:
+            raise Enough
+    monkeypatch.setattr(updates.time, "sleep", stop_once_staged)
+    with pytest.raises(Enough):
+        rig._update_watch()
     assert staged == ["1.0.9"]
     # Off: the same turn stages nothing.
     rig.set_update_auto({"auto": False})
@@ -205,12 +210,10 @@ def test_automatic_installs_are_the_owners_setting_and_the_watch_obeys_it(tmp_pa
     def sleep(seconds):
         calls["n"] += 1
         if calls["n"] > 1:
-            raise StopIteration
+            raise Enough
     monkeypatch.setattr(updates.time, "sleep", sleep)
-    try:
+    with pytest.raises(Enough):
         rig._update_watch()
-    except StopIteration:
-        pass
     assert staged == [] and rig.update_view()["available"]["version"] == "1.0.9", "seen and offered, not installed"
 
 
