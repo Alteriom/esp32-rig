@@ -1688,7 +1688,10 @@ function renderFleet() {
   renderHardwareOverview(lastInventory || {});
   $("refresh").disabled = shell().rediscoverDisabled(rigBusy);
   $("refresh").textContent = shell().rediscoverLabel;
-  $("add-rig").hidden = !shell().addRig;
+  // Adding a rig is what a portal is for, and it is everybody's: a person
+  // brings their own, and it is theirs from the moment it is made. An
+  // address with no account and no key is nobody yet.
+  $("add-rig").hidden = !shell().addRig || !(isAdmin() || you?.account);
   const checkAll = $("check-all");
   checkAll.hidden = !canaryAvailable();
   checkAll.disabled = !((lastInventory || {}).boards || []).length;
@@ -1913,9 +1916,14 @@ function rigActions(rig) {
     : `<button class="secondary admin-only rig-drain">Drain</button>`);
   buttons.push(`<button class="secondary admin-only rig-command" data-kind="logs"${busy("logs")}>Logs</button>`);
   buttons.push(`<button class="secondary admin-only rig-command" data-kind="restart"${busy("restart") || (running ? " disabled" : "")} title="${running ? "It is running a job: drain it and let the run end first" : "Restart the rig's farm service"}">Restart</button>`);
-  buttons.push(`<button class="secondary admin-only rig-edit">Edit</button>`);
-  const deletable = rig.drained || !rig.online;
-  buttons.push(`<button class="danger admin-only rig-delete"${deletable ? "" : ' disabled title="Drain it first: a rig taking work is not deleted"'}>Delete</button>`);
+  // What a rig says about itself and whether it exists are its owner's
+  // (FarmManager.may_manage_rig; the service refuses the rest with "no such
+  // rig"). The host controls above stay an operator's.
+  if (ownsRig(rig)) {
+    buttons.push(`<button class="secondary rig-edit">Edit</button>`);
+    const deletable = rig.drained || !rig.online;
+    buttons.push(`<button class="danger rig-delete"${deletable ? "" : ' disabled title="Drain it first: a rig taking work is not deleted"'}>Delete</button>`);
+  }
   return buttons.join("");
 }
 

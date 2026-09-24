@@ -551,6 +551,18 @@ ACCOUNT_ROUTES: tuple[tuple[str, re.Pattern], ...] = (
     ("POST", re.compile(rf"/api/v1/rigs/{RIG_NAME}/webhooks/[0-9a-f]{{1,16}}")),
     ("POST", re.compile(rf"/api/v1/rigs/{RIG_NAME}/webhooks/[0-9a-f]{{1,16}}/test")),
     ("DELETE", re.compile(rf"/api/v1/rigs/{RIG_NAME}/webhooks/[0-9a-f]{{1,16}}")),
+    # Their own rigs, whole: adding one, and the life of one they own --
+    # its name and description while it is still joining, a new join
+    # command, and deleting it. People bring their own rigs; that is the
+    # premise, and for a long time only an admin could act on it, because
+    # every host this farm had was the farm's own. `create_rig` gives a new
+    # rig to whoever added it, and the handler asks `may_manage_rig` before
+    # the other three, so an account reaches exactly its own and is told
+    # "no such rig" about everybody else's (the same answer the reads give).
+    ("POST", re.compile(r"/api/v1/rigs")),
+    ("PATCH", re.compile(rf"/api/v1/rigs/{RIG_NAME}")),
+    ("POST", re.compile(rf"/api/v1/rigs/{RIG_NAME}/join")),
+    ("DELETE", re.compile(rf"/api/v1/rigs/{RIG_NAME}")),
 )
 
 # The USER_WRITES an account may NOT make, and why each one waits.
