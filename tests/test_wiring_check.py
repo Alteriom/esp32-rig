@@ -27,32 +27,24 @@ from alteriom_hil.serial_capture import SerialCapture
 from alteriom_hil.sim import SimHub
 
 REPO = Path(__file__).resolve().parents[1]
-PLATFORM = REPO / "canary" / "firmware" / "src" / "canary_platform.h"
+# The firmware's own tables, as the release this repository pins publishes
+# them; the source lives in the firmware's repository.
+PIN = json.loads((REPO / "canary" / "firmware.json").read_text(encoding="utf-8"))
 
 
 def test_the_canary_refuses_exactly_the_pins_the_farm_does():
     """The farm checks wiring where it is written; the canary checks it again
-    where it drives. Two tables of one fact drift, so they are compared."""
-    source = PLATFORM.read_text(encoding="utf-8").split("the pins an instrument may be wired to", 1)[1]
-    branches = {
-        "esp8266": "defined(ESP8266)",
-        "esp32-c3": "defined(CONFIG_IDF_TARGET_ESP32C3)",
-        "esp32-c6": "defined(CONFIG_IDF_TARGET_ESP32C6)",
-        "esp32-s3": "defined(CONFIG_IDF_TARGET_ESP32S3)",
-        "esp32": "defined(CONFIG_IDF_TARGET_ESP32)\n",
-    }
-    for family, condition in branches.items():
-        block = source.split(condition, 1)[1].split("#e", 1)[0]
-        assert f'kPinTable = "pins:{family}"' in block, family
-        wireable = [int(n) for n in re.search(r"kWireablePins\[\] = \{([^}]*)\}", block).group(1).split(",")]
-        input_only = [int(n) for n in re.search(r"kInputOnlyPins\[\] = \{([^}]*)\}", block).group(1).split(",")]
-        assert wireable[-1] == -1 and input_only[-1] == -1, family
-        assert set(wireable[:-1]) == WIREABLE_PINS[family], family
-        assert set(input_only[:-1]) == set(INPUT_ONLY_PINS.get(family, ())), family
+    where it drives. Two tables of one fact drift, so they are compared: the
+    firmware's, as its release publishes them, against this rig's."""
+    tables = PIN["pins"]
+    assert set(tables) == set(WIREABLE_PINS), (
+        "a family with a wiring table on the rig has one in the firmware, and no other")
+    for family, table in tables.items():
+        assert set(table["wireable"]) == WIREABLE_PINS[family], family
+        assert set(table["input_only"]) == set(INPUT_ONLY_PINS.get(family, ())), family
+        assert set(table["input_only"]) <= set(table["wireable"]), family
     # A family with no table falls through to none, never to another's.
-    fallback = source.split("#else\nstatic const char *const kPinTable", 1)[1].split("#endif", 1)[0]
-    assert '"pins:none"' in fallback and "kWireablePins[] = {-1}" in fallback
-    assert "esp32-c5" not in WIREABLE_PINS
+    assert "esp32-c5" not in tables and "esp32-c5" not in WIREABLE_PINS
 
 
 def _client(part) -> BoardClient:

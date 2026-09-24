@@ -1,7 +1,7 @@
 name: Release
 
 # A tag becomes a release people can install: the two wheels, the dashboard
-# bundle, the health check firmware for every board family, their checksums
+# bundle, the pinned health check firmware for every board family, their checksums
 # and the release.json that names them, attached to a GitHub release
 # (docs/public-release-plan.md, steps 13 and 14b).
 #
@@ -50,80 +50,39 @@ jobs:
 
       - run: python -m pip install --quiet build
 
-      # The health check firmware belongs to the commit that last changed it
-      # (canary/build_artifacts.py, farm_sha), so a release that did not touch
-      # canary/firmware/ carries the same bundle as the release before it,
-      # byte for byte. When the newest release's release.json names this
-      # source digest and version, that bundle is taken from it and checked
-      # against its digest, and nothing is compiled: a release is minutes,
-      # not the quarter hour six PlatformIO cores take -- and a rig that
-      # installs it finds the firmware it already holds.
-      - name: Is this firmware already released
+      # The Rig Health Check firmware is not built here: it has a repository
+      # of its own (Alteriom/esp32-hil-firmware) with its own releases, and
+      # this repository pins one in canary/firmware.json. The pinned tarball
+      # is fetched, checked against the digest the pin names, and unpacked
+      # to the layout the artifact loader reads. Moving the firmware forward
+      # is a one-line change to the pin, reviewed like any other.
+      - name: Fetch the pinned firmware
         id: firmware
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python -m pip install --quiet ./core >/dev/null
-          revision="$(python canary/build_artifacts.py --revision)"
-          version="$(python canary/build_artifacts.py --version)"
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "reused=false" >> "$GITHUB_OUTPUT"
-          latest="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || true)"
-          if [ -z "$latest" ]; then
-            echo "no release yet: the firmware is built"; exit 0
-          fi
-          rm -rf previous && mkdir previous
-          if ! gh release download "$latest" --repo "$GITHUB_REPOSITORY" -p release.json -D previous 2>/dev/null; then
-            echo "$latest carries no release.json: the firmware is built"; exit 0
-          fi
-          read -r held_revision held_version held_name held_sha < <(python - previous/release.json <<'PY'
-          import json, sys
-          firmware = (json.load(open(sys.argv[1])) or {}).get("firmware") or {}
-          print(firmware.get("revision", ""), firmware.get("version", ""), firmware.get("name", ""), firmware.get("sha256", ""))
+          read -r version name sha < <(python3 - <<'PY'
+          import json
+          pin = json.load(open("canary/firmware.json"))
+          print(pin["version"], pin["name"], pin["sha256"])
           PY
           )
-          if [ "$held_revision" != "$revision" ] || [ "$held_version" != "$version" ]; then
-            echo "$latest carries firmware $held_version ($held_revision); this tree is $version ($revision): the firmware is built"; exit 0
-          fi
-          gh release download "$latest" --repo "$GITHUB_REPOSITORY" -p "$held_name" -D previous
-          echo "$held_sha  previous/$held_name" | sha256sum -c -
+          url="https://github.com/Alteriom/esp32-hil-firmware/releases/download/v$version/$name"
+          echo "firmware $version from $url"
+          curl -sSfL --retry 3 -o "/tmp/$name" "$url"
+          echo "$sha  /tmp/$name" | sha256sum -c -
           rm -rf hil-canary && mkdir hil-canary
-          tar -xzf "previous/$held_name" --strip-components=1 -C hil-canary
-          test -f hil-canary/manifest.json
-          echo "reused=true" >> "$GITHUB_OUTPUT"
-          echo "firmware $version ($revision) is the one $latest carries: taken from it, not rebuilt" | tee -a "$GITHUB_STEP_SUMMARY"
-
-      # Six PlatformIO cores, each with its own Xtensa or RISC-V toolchain,
-      # against a hosted runner's ~14 GB -- the same squeeze canary-build.yml
-      # answers the same way.
-      - name: Free disk space
-        if: steps.firmware.outputs.reused != 'true'
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /usr/local/share/boost /usr/local/lib/node_modules \
-                      /opt/hostedtoolcache/CodeQL || true
-          df -h / | tail -1
-
-      - name: Cache PlatformIO packages
-        if: steps.firmware.outputs.reused != 'true'
-        uses: actions/cache@v4
-        with:
-          # One core directory per MCU family (build_artifacts.core_dir_for).
-          path: ~/.platformio-cores
-          key: canary-platformio-${{ runner.os }}-${{ hashFiles('canary/firmware/platformio.ini') }}
-
-      - name: Install the firmware tools
-        if: steps.firmware.outputs.reused != 'true'
-        run: python -m pip install --quiet platformio esptool ./core
-
-      # The health check firmware, six families. The manifest names the commit
-      # this bundle belongs to, which the build reads from the checkout: the
-      # ref this job was given, not the branch the workflow was dispatched from.
-      - name: Build the health check firmware
-        if: steps.firmware.outputs.reused != 'true'
-        run: python canary/build_artifacts.py --out hil-canary
+          tar -xzf "/tmp/$name" --strip-components=1 -C hil-canary
+          python3 - <<'PY'
+          import json
+          pin = json.load(open("canary/firmware.json"))
+          built = json.load(open("hil-canary/manifest.json"))
+          assert built["producer"] == "canary", built.get("producer")
+          assert str(built["version"]) == pin["version"], (built["version"], pin["version"])
+          assert str(built["canary_sha"]) == pin["revision"], (built["canary_sha"], pin["revision"])
+          assert sorted(built["targets"]) == sorted(pin["families"]), (sorted(built["targets"]), pin["families"])
+          print("firmware", pin["version"], "verified for", ", ".join(sorted(built["targets"])))
+          PY
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build the release
         id: build

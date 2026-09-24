@@ -25,7 +25,6 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 CANARY = REPO / "canary"
-FIRMWARE = CANARY / "firmware" / "src" / "main.cpp"
 
 sys.path.insert(0, str(REPO / "rig"))
 
@@ -35,11 +34,9 @@ from alteriom_hil import sim  # noqa: E402
 from alteriom_hil.artifacts import load_artifacts  # noqa: E402
 from alteriom_hil.profiles import load_profiles  # noqa: E402
 
-_SPEC = importlib.util.spec_from_file_location(
-    "canary_build_artifacts", CANARY / "build_artifacts.py"
-)
-build_artifacts = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(build_artifacts)
+# The firmware, its build and their tests live in Alteriom/esp32-hil-firmware;
+# this repository pins a release of it.
+PIN = json.loads((CANARY / "firmware.json").read_text(encoding="utf-8"))
 
 # The launcher: `alteriom_hil.launcher`, a console script now
 # (`alteriom-hil-service`), which composes the halves installed onto
@@ -48,219 +45,6 @@ from alteriom_hil import launcher as farm_service
 # The service itself, where `load_inventory_snapshot` is read: it is
 # `alteriom_hil.service` now and this file loads the launcher.
 from alteriom_hil import service as core_service  # noqa: E402
-
-
-def test_the_canary_builds_the_same_manifest_contract_every_producer_does(tmp_path, monkeypatch):
-    """A bundle the farm can flash, verify, list, pin and prune is one that
-    satisfies alteriom_hil.artifacts -- the canary gets all of that for free
-    precisely because it emits the same schema-2 manifest, so the loader
-    itself is the assertion here."""
-    out = tmp_path / "hil-canary"
-
-    def fake_pio(argv, check=True, env=None, **kwargs):
-        # Stand in for `pio run`: write the components a real build leaves
-        # in .pio/build/<env>, so what is under test is this script's
-        # merging, checksums and manifest rather than a toolchain.
-        if argv[0] == "pio":
-            name = argv[argv.index("-e") + 1]
-            built = build_artifacts.FIRMWARE_DIR / ".pio" / "build" / name
-            built.mkdir(parents=True, exist_ok=True)
-            for filename, body in (
-                ("firmware.bin", b"\xe9" + name.encode()),
-                ("bootloader.bin", b"\xe9boot"),
-                ("partitions.bin", b"partitions"),
-            ):
-                (built / filename).write_bytes(body)
-            assert env["CANARY_SHA"] == build_artifacts.canary_sha(), (
-                "the firmware must be built with its own digest compiled in, "
-                "or a board cannot say which canary it is running"
-            )
-            assert env["CANARY_VERSION"] == "1.0.42", (
-                "the firmware must be built with its version compiled in, or a "
-                "board cannot say which version it is running"
-            )
-            return subprocess.CompletedProcess(argv, 0)
-        # esptool merge-bin: one image with each segment at its offset,
-        # padded with erased flash between them. Faked faithfully because
-        # load_artifacts checks every component is where the manifest says.
-        rest = argv[argv.index("-o") + 1:]
-        target, pairs = Path(rest[0]), rest[1:]
-        image = bytearray()
-        for offset, source in zip(pairs[::2], pairs[1::2]):
-            at = int(offset, 16)
-            if len(image) < at:
-                image.extend(b"\xff" * (at - len(image)))
-            image[at:at + 0] = b""
-            body = Path(source).read_bytes()
-            image[at:at + len(body)] = body
-        target.write_bytes(bytes(image))
-        return subprocess.CompletedProcess(argv, 0)
-
-    monkeypatch.setattr(build_artifacts.shutil, "which", lambda name: name)
-    monkeypatch.setattr(build_artifacts.subprocess, "run", fake_pio)
-    monkeypatch.setattr(build_artifacts, "_boot_app0", lambda core: _written(tmp_path))
-    monkeypatch.setattr(build_artifacts, "farm_sha", lambda: "b" * 40)
-    monkeypatch.setattr(build_artifacts, "firmware_version", lambda: "1.0.42")
-
-    manifest_path = build_artifacts.build_artifacts(out, ["esp32", "esp32-c6", "esp8266"])
-    manifest = load_artifacts(out)  # every checksum, every component at its offset
-    assert manifest_path == out / "manifest.json"
-    assert manifest["schema"] == 2 and manifest["producer"] == "canary"
-    # The revision of record is the commit; the firmware's own identity is
-    # the digest of its source, and they answer different questions.
-    assert manifest["farm_sha"] == "b" * 40
-    assert re.fullmatch(r"[0-9a-f]{64}", manifest["canary_sha"])
-    # And the number a person reads, which the board reports too.
-    assert manifest["version"] == "1.0.42"
-    assert sorted(manifest["targets"]) == ["esp32", "esp32-c6", "esp8266"]
-    for name, entry in manifest["targets"].items():
-        assert entry["image"] == f"{name}/flash-image.bin"
-        assert entry["flash_offset"] == "0x0", "one merged image, flashed at zero"
-        assert entry["board"] and entry["chip"] and entry["platformio_env"] == name
-    # The ESP8266 has one self-contained image and nothing to merge; the
-    # ESP32 families carry their bootloader, partition table and OTA
-    # selector at the offsets the silicon expects.
-    assert manifest["targets"]["esp8266"]["segments"] == {"firmware.bin": "0x0"}
-    assert manifest["targets"]["esp32"]["segments"]["bootloader.bin"] == "0x1000"
-    assert manifest["targets"]["esp32-c6"]["segments"]["bootloader.bin"] == "0x0"
-
-
-def _written(tmp_path: Path) -> Path:
-    boot_app0 = tmp_path / "boot_app0.bin"
-    boot_app0.write_bytes(b"boot_app0")
-    return boot_app0
-
-
-def test_the_canary_revision_is_its_source_and_the_commit_it_was_built_from(monkeypatch):
-    """Two farm commits that did not touch the canary are the same canary,
-    which is what lets a deploy skip the build. A change anywhere under
-    canary/firmware/ -- the platformio.ini that picks a platform as much as
-    the firmware -- is a different one."""
-    before = build_artifacts.canary_sha()
-    assert before == build_artifacts.canary_sha(), "the digest is of the source, not the moment"
-    marker = build_artifacts.FIRMWARE_DIR / "src" / "canary_platform.h"
-    original = marker.read_bytes()
-    try:
-        marker.write_bytes(original + b"\n// a change\n")
-        assert build_artifacts.canary_sha() != before
-    finally:
-        marker.write_bytes(original)
-    assert build_artifacts.canary_sha() == before
-
-    # A build directory is not source: a rebuild in place must not change
-    # what the canary is.
-    stray = build_artifacts.FIRMWARE_DIR / ".pio" / "build" / "esp32" / "firmware.bin"
-    stray.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        stray.write_bytes(b"\xe9 built")
-        assert build_artifacts.canary_sha() == before
-    finally:
-        stray.unlink(missing_ok=True)
-
-
-def test_the_firmware_belongs_to_the_commit_that_last_changed_it(tmp_path, monkeypatch):
-    """Every release ships the health check firmware and most do not touch
-    it. Stamping HEAD gave the same firmware a new revision per release, a
-    new bundle on every rig, and a rebuild on every tag. The revision is the
-    last commit under canary/firmware/, so it holds until the firmware
-    changes -- and a release can carry the bundle before it, byte for byte."""
-    firmware = _firmware_repo(tmp_path)
-    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", firmware)
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=firmware, check=True, capture_output=True, text=True).stdout.strip()
-    last_firmware = subprocess.run(["git", "log", "-1", "--format=%H", "--", "."], cwd=firmware,
-                                   check=True, capture_output=True, text=True).stdout.strip()
-    assert build_artifacts.farm_sha() == last_firmware == head, "the newest commit changed the firmware"
-    (firmware.parent.parent / "README.md").write_text("docs again\n", encoding="utf-8")
-    subprocess.run(["git", "add", "-A"], cwd=firmware, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "--quiet", "-m", "not the firmware either"], cwd=firmware, check=True, capture_output=True)
-    moved = subprocess.run(["git", "rev-parse", "HEAD"], cwd=firmware, check=True, capture_output=True, text=True).stdout.strip()
-    assert moved != head
-    assert build_artifacts.farm_sha() == last_firmware, "HEAD moved; the firmware did not"
-
-
-def test_the_farm_commit_is_required_rather_than_invented(monkeypatch):
-    """A bundle whose revision is a guess is one nothing can reuse safely,
-    so a build that cannot name its commit fails instead."""
-    monkeypatch.setattr(
-        build_artifacts.subprocess, "run",
-        lambda *a, **k: subprocess.CompletedProcess(a[0] if a else [], 128, stdout=""),
-    )
-    monkeypatch.setenv("GITHUB_SHA", "c" * 40)
-    assert build_artifacts.farm_sha() == "c" * 40
-    monkeypatch.delenv("GITHUB_SHA")
-    with pytest.raises(RuntimeError, match="cannot determine the farm commit"):
-        build_artifacts.farm_sha()
-
-
-def _firmware_repo(tmp_path: Path, version: str = "1.0") -> Path:
-    """A repository shaped like this one: a firmware directory with a VERSION,
-    two commits that change it and one that does not."""
-    work = tmp_path / "farm"
-    firmware = work / "canary" / "firmware"
-    firmware.mkdir(parents=True)
-
-    def git(*args):
-        return subprocess.run(["git", *args], cwd=work, check=True, capture_output=True, text=True)
-
-    git("init", "--quiet", "-b", "main")
-    git("config", "user.email", "farm@example.invalid")
-    git("config", "user.name", "farm")
-    (firmware / "VERSION").write_text(version + "\n", encoding="utf-8")
-    (firmware / "main.cpp").write_text("// one\n", encoding="utf-8")
-    git("add", "-A"); git("commit", "--quiet", "-m", "firmware")
-    (work / "README.md").write_text("docs\n", encoding="utf-8")
-    git("add", "-A"); git("commit", "--quiet", "-m", "not the firmware")
-    (firmware / "main.cpp").write_text("// two\n", encoding="utf-8")
-    git("add", "-A"); git("commit", "--quiet", "-m", "firmware again")
-    return firmware
-
-
-def test_the_firmware_version_counts_only_the_commits_that_changed_it(tmp_path, monkeypatch):
-    """MAJOR.MINOR is VERSION; PATCH is the commits under canary/firmware/,
-    so a farm release that did not touch the firmware keeps its number."""
-    firmware = _firmware_repo(tmp_path)
-    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", firmware)
-    assert build_artifacts.firmware_version() == "1.0.2", "two of the three commits changed the firmware"
-
-    # A build from a tree that is not the commit is not that commit's version.
-    (firmware / "main.cpp").write_text("// uncommitted\n", encoding="utf-8")
-    assert build_artifacts.firmware_version() == "1.0.2+modified"
-    subprocess.run(["git", "checkout", "--", "main.cpp"], cwd=firmware, check=True, capture_output=True)
-    (firmware / "stray.h").write_text("// untracked\n", encoding="utf-8")
-    assert build_artifacts.firmware_version() == "1.0.2+modified"
-
-
-def test_the_firmware_version_is_refused_rather_than_guessed(tmp_path, monkeypatch):
-    """A shallow checkout counts only what it fetched, and a VERSION that is
-    not MAJOR.MINOR is not one: either would stamp a number that looks right."""
-    firmware = _firmware_repo(tmp_path)
-    shallow = tmp_path / "shallow"
-    subprocess.run(
-        ["git", "clone", "--quiet", "--depth", "1", (firmware.parents[1]).as_uri(), str(shallow)],
-        check=True, capture_output=True,
-    )
-    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", shallow / "canary" / "firmware")
-    with pytest.raises(RuntimeError, match="shallow checkout"):
-        build_artifacts.firmware_version()
-
-    bad = _firmware_repo(tmp_path / "bad", version="1")
-    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", bad)
-    with pytest.raises(RuntimeError, match="MAJOR.MINOR"):
-        build_artifacts.firmware_version()
-
-    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", tmp_path / "nowhere")
-    with pytest.raises(RuntimeError, match="VERSION is missing"):
-        build_artifacts.firmware_version()
-
-
-def test_this_checkout_numbers_its_firmware_and_the_board_reports_it():
-    """The real VERSION is MAJOR.MINOR, and the version reaches the board: the
-    build passes it to PlatformIO, and the firmware says it on boot and info."""
-    assert re.fullmatch(r"\d+\.\d+", (CANARY / "firmware" / "VERSION").read_text(encoding="utf-8").strip())
-    ini = (CANARY / "firmware" / "platformio.ini").read_text(encoding="utf-8")
-    assert "-D CANARY_VERSION=" in ini and "${sysenv.CANARY_VERSION}" in ini
-    firmware = FIRMWARE.read_text(encoding="utf-8")
-    assert firmware.count('doc["version"] = CANARY_VERSION;') == 2, "in both boot and info"
 
 
 def test_the_canary_profile_is_the_farm_checking_its_own_hardware():
@@ -302,49 +86,14 @@ def _suite_source() -> str:
     )
 
 
-def test_the_canary_carries_no_consumer_code():
-    """The reason a red canary is never somebody's regression. Asserted
-    rather than trusted: the day this firmware pulls in a consumer's library
-    is the day a canary failure starts meaning something else.
-
-    Against what it depends on, not against its prose -- the comments here
-    say "no painlessMesh" and would fail a search for the word.
-    """
-    sources = [
-        path for path in (CANARY / "firmware").rglob("*")
-        if path.is_file() and ".pio" not in path.parts
-    ]
-    assert sources, "the canary firmware source is missing"
-    code = "\n".join(
-        path.read_text(encoding="utf-8") for path in sources if path.suffix in (".cpp", ".h")
-    )
-    includes = set(re.findall(r'#include\s+[<"]([^>"]+)[>"]', code))
-    allowed = {
-        "Arduino.h", "ArduinoJson.h", "canary_platform.h",
-        "ESP8266WiFi.h", "LittleFS.h", "Preferences.h", "WiFi.h", "esp_system.h",
-    }
-    assert includes and includes <= allowed, (
-        f"unexpected dependency: {sorted(includes - allowed)}"
-    )
-    # And nothing arrives through the build either: one pinned library, no
-    # path or symlink dependency that could point at a consumer's checkout.
-    ini = (CANARY / "firmware" / "platformio.ini").read_text(encoding="utf-8")
-    declared = re.findall(r"^ {4}([A-Za-z0-9@/._-]+=?[^\r\n]*)$", ini, re.MULTILINE)
-    libraries = [
-        entry.strip() for entry in declared
-        if "/" in entry and not entry.startswith("-D") and "://" not in entry
-    ]
-    assert libraries == ["bblanchon/ArduinoJson@7.4.3"], libraries
-    assert "symlink://" not in ini and "file://" not in ini
-
-
 def test_the_firmware_the_client_and_the_simulator_agree_on_the_protocol():
     """Three copies of one protocol are three chances to disagree, and the
     rig is an expensive place to find out. The firmware is the contract; the
     client and the simulator must cover exactly what it accepts."""
-    firmware = FIRMWARE.read_text(encoding="utf-8")
-    # What the firmware dispatches on, from its own dispatch chain.
-    accepted = set(re.findall(r'strcmp\(name, "([a-z_]+)"\) == 0', firmware))
+    # What the pinned firmware dispatches on: its release says so
+    # (firmware.json `commands`, read from the firmware's own dispatch chain),
+    # so the rig holds its client and simulator to it without the source.
+    accepted = set(PIN["commands"])
     assert "info" in accepted and "echo" in accepted
     client = (REPO / "suites" / "canary" / "tests" / "canary_client.py").read_text(encoding="utf-8")
     simulator = (REPO / "rig" / "alteriom_hil" / "sim.py").read_text(encoding="utf-8")
@@ -949,58 +698,22 @@ def test_a_canary_run_that_failed_still_hands_over_its_verdicts(tmp_path):
     assert plain.result == {}
 
 
-def test_the_firmware_reads_a_whole_line_before_it_sleeps():
-    """The canary's first run lost its kilobyte-long echo command on the S3,
-    the C3 and the C5 -- each answered `bad json` to a truncated frame --
-    while the two UART-bridge families echoed all 1033 bytes. A native
-    USB-Serial/JTAG console starts with a 256-byte receive buffer, and the
-    loop slept in the middle of the command arriving. Both halves are fixed
-    and both are asserted, because a compile cannot see either."""
-    shim = (CANARY / "firmware" / "src" / "canary_platform.h").read_text(encoding="utf-8")
-    firmware = FIRMWARE.read_text(encoding="utf-8")
-    # Room for a whole line, set before begin() -- afterwards has no effect.
-    assert "setRxBufferSize" in shim and "console.begin(115200)" in shim
-    assert "canaryOpenConsole(Serial, kLineMax + 512)" in firmware
-    assert "Serial.begin(115200)" not in firmware, "the console is opened with room"
-    # And the loop drains while bytes keep coming instead of sleeping mid-line.
-    assert "bool pump(Stream &console)" in firmware
-    assert "if (!busy) delay(2);" in firmware
-
-
-def test_a_tcp_timeout_is_in_the_units_each_core_means():
-    """WiFiClient::setTimeout is seconds on the ESP32 cores and milliseconds
-    on the ESP8266, where it is Stream's. Passing seconds to the ESP8266 gave
-    a TCP connect eight milliseconds, and the canary's first run reported the
-    rig's uplink and broker unreachable from that board alone -- a rig fault
-    that was a unit bug."""
-    shim = (CANARY / "firmware" / "src" / "canary_platform.h").read_text(encoding="utf-8")
-    firmware = FIRMWARE.read_text(encoding="utf-8")
-    helper = shim.split("inline void canarySetClientTimeout", 1)[1].split(chr(10) + chr(125), 1)[0]
-    assert "defined(ESP8266)" in helper
-    assert "client.setTimeout(budgetMs);" in helper, "milliseconds on the 8266"
-    assert "budgetMs / 1000" in helper, "seconds on the ESP32 cores"
-    # And nothing divides by a thousand at the call sites any more.
-    assert "canarySetClientTimeout(client, budget)" in firmware
-    assert "client.setTimeout(" not in firmware
-
-
-def test_the_uplink_check_waits_for_the_answer_not_the_connection():
-    """The rig's probe replies HTTP/1.0 and closes at once, which leaves
-    `connected()` false with the response still buffered. A read loop gated
-    on it read nothing and gave up in 28 ms, and the canary reported the
-    rig's uplink unreachable from the ESP8266 -- `status:0, bytes:0` -- while
-    every other board got its 200 in 23 ms. A false negative from a health
-    check is worse than no check: it sends somebody to look at a working
-    rig."""
-    firmware = FIRMWARE.read_text(encoding="utf-8")
-    body = firmware.split("void replyHttpGet", 1)[1].split("namespace mqtt", 1)[0]
-    assert "client.readStringUntil" in body
-    # Nothing in the read path may depend on the peer still being there.
-    reads = body.split("client.print(", 1)[1]
-    assert "client.connected()" not in reads, (
-        "a server that answers and closes leaves connected() false with the "
-        "answer still in the buffer"
-    )
-    # The connect still reports its own failure, which is a different thing
-    # from an answer that did not arrive.
-    assert "connect failed" in body
+def test_this_repository_pins_a_firmware_release_and_says_which():
+    """The firmware is Alteriom/esp32-hil-firmware's; this repository names
+    one release of it, by version and by the digests the fetch checks, and
+    the profile that flashes it reads the revision key that release writes."""
+    assert PIN["schema"] == 1
+    assert re.fullmatch(r"\d+\.\d+\.\d+", PIN["version"]), PIN["version"]
+    assert PIN["name"] == f"alteriom-hil-canary-{PIN['version']}.tar.gz"
+    assert re.fullmatch(r"[0-9a-f]{64}", PIN["sha256"]) and re.fullmatch(r"[0-9a-f]{64}", PIN["revision"])
+    assert re.fullmatch(r"[0-9a-f]{40}", PIN["commit"])
+    assert set(PIN["families"]) == {"esp32", "esp32-c3", "esp32-c5", "esp32-c6", "esp32-s3", "esp8266"}
+    assert "info" in PIN["commands"] and "echo" in PIN["commands"]
+    spec = load_profiles(REPO)["canary"]
+    assert spec.revision_key == "farm_sha", "the key the firmware's manifest writes its commit under"
+    # Nothing here compiles it: no build script, no source, no firmware workflow.
+    assert not (CANARY / "build_artifacts.py").exists() and not (CANARY / "firmware").exists()
+    assert not (REPO / ".github" / "workflows" / "canary-build.yml").exists()
+    workflow = (REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert "Fetch the pinned firmware" in workflow and "platformio" not in workflow
+    assert "esp32-hil-firmware/releases/download" in workflow

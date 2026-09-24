@@ -20,7 +20,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "runner" / "ci" / "build-release.sh"
-CANARY_BUILD = ROOT / "canary" / "build_artifacts.py"
+FIRMWARE_PIN = ROOT / "canary" / "firmware.json"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
@@ -161,7 +161,7 @@ TARGETS = ("esp32", "esp32-c3", "esp32-c5", "esp32-c6", "esp32-s3", "esp8266")
 
 
 def _canary_bundle(directory: Path, version: str = "1.0.12") -> Path:
-    """A directory shaped like `canary/build_artifacts.py --out`."""
+    """A directory shaped like the firmware release's tarball, unpacked."""
     directory.mkdir(parents=True, exist_ok=True)
     targets = {}
     for family in TARGETS:
@@ -177,16 +177,17 @@ def _canary_bundle(directory: Path, version: str = "1.0.12") -> Path:
     return directory
 
 
-def test_the_release_build_reads_the_keys_the_canary_build_writes():
-    """Two scripts, one manifest. The release names the firmware by the
-    bundle's own version, source digest and families, so a key renamed on one
-    side and not the other is a release that says the wrong thing about what
-    it carries -- or, here, a test that goes red first."""
-    build = CANARY_BUILD.read_text(encoding="utf-8")
+def test_the_release_build_reads_the_keys_the_firmware_manifest_writes():
+    """Two repositories, one manifest. The release names the firmware by the
+    bundle's own version, source digest and families -- the keys the firmware
+    repository's build writes and this one's pin repeats -- so a key renamed
+    on one side and not the other is a test that goes red first."""
+    pin = json.loads(FIRMWARE_PIN.read_text(encoding="utf-8"))
     script = SCRIPT.read_text(encoding="utf-8")
     for key in ("version", "canary_sha", "targets"):
-        assert f'"{key}"' in build, f"the canary build no longer writes {key}"
         assert f'built["{key}"]' in script, f"the release build no longer reads {key}"
+    for key in ("version", "revision", "families", "sha256", "name"):
+        assert key in pin, f"the pin no longer carries {key}"
 
 
 @pytest.mark.skipif(not _bash(), reason="the release is built with bash")
@@ -230,18 +231,18 @@ def test_a_firmware_directory_that_is_not_a_bundle_is_said_not_guessed(tmp_path)
                            "--firmware", str(tmp_path / "empty")],
                           capture_output=True, text=True, cwd=str(ROOT))
     assert done.returncode != 0
-    assert "holds no manifest.json" in done.stderr and "build_artifacts.py" in done.stderr
+    assert "holds no manifest.json" in done.stderr and "canary/firmware.json" in done.stderr
 
 
-def test_a_tag_builds_the_firmware_before_it_builds_the_release():
-    """The workflow that cuts a release is the one that builds the firmware:
-    the toolchains, the cache and the disk it needs are all there, and the
-    build is handed the bundle rather than looking for one."""
+def test_a_tag_fetches_the_pinned_firmware_before_it_builds_the_release():
+    """The workflow that cuts a release fetches the firmware this repository
+    pins -- checked against the pin's digest, unpacked to the loader's
+    layout -- and hands the bundle to the build. No toolchain, no compiler:
+    the firmware has a repository of its own."""
     workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
-    assert "canary/build_artifacts.py --out hil-canary" in workflow
+    assert "Fetch the pinned firmware" in workflow and "canary/firmware.json" in workflow
+    assert "sha256sum -c" in workflow and "esp32-hil-firmware/releases/download" in workflow
     assert "build-release.sh --out dist --firmware hil-canary" in workflow
-    assert (workflow.index("canary/build_artifacts.py --out hil-canary")
-            < workflow.index("build-release.sh --out dist --firmware hil-canary")), \
+    assert workflow.index("Fetch the pinned firmware") < workflow.index("build-release.sh --out dist --firmware hil-canary"), \
         "the bundle has to exist before the release that carries it"
-    assert "platformio" in workflow and "esptool" in workflow, "the firmware needs its tools"
-    assert "~/.platformio-cores" in workflow, "six toolchains on a hosted runner want a cache"
+    assert "platformio" not in workflow and "build_artifacts.py" not in workflow

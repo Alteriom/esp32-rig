@@ -1,0 +1,48 @@
+site_name: Alteriom HIL Rig
+site_description: A hardware-in-the-loop rig for ESP32 firmware — the guide, the reference and an example.
+site_url: https://alteriom.github.io/esp32-rig/
+repo_url: https://github.com/Alteriom/esp32-rig
+repo_name: Alteriom/esp32-rig
+edit_uri: edit/main/docs/
+docs_dir: docs
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+  palette:
+    - scheme: slate
+      primary: teal
+      accent: lime
+      toggle:
+        icon: material/weather-sunny
+        name: Light
+    - scheme: default
+      primary: teal
+      accent: lime
+      toggle:
+        icon: material/weather-night
+        name: Dark
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Hardware: hardware.md
+  - Bring-up: bringup.md
+  - The dashboard: dashboard.md
+  - Projects and your CI: projects.md
+  - The health check firmware: health-check.md
+  - Connecting to a farm: farm.md
+  - API reference: api.md
+  - Troubleshooting: troubleshooting.md
+  - MCP: mcp.md

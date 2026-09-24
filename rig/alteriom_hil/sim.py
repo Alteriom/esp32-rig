@@ -18,7 +18,8 @@ level is whatever drives it, or its pull. That proves the check's
 orchestration -- which end drives, which reads, what a failure names -- and
 never a jumper.
 
-It answers the farm canary's commands too (canary/firmware/src/main.cpp),
+It answers the Rig Health Check firmware's commands too (the firmware has a
+repository of its own; the pinned release's firmware.json lists them),
 for the same reason and with the same limits: a green canary here says the
 suite's orchestration is sound, never that an ESP is. What the canary asks
 about — a cable that drops bytes, a radio that cannot see the rig, a flash

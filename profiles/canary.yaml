@@ -1,11 +1,12 @@
 # The Rig Health Check (profile `canary`): the farm validating itself.
 #
 # Every other profile answers "is this project's firmware good on this
-# hardware". This one answers "is this hardware good", and it is the farm's
-# own question -- so the firmware it flashes is the farm's own
-# (canary/firmware/), carrying nothing from painlessMesh and nothing from a
-# consumer. A red canary is never somebody's regression; it is an ESP, a
-# cable, a hub, the rig's AP, its broker or its uplink.
+# hardware". This one answers "is this hardware good", and it is the rig's
+# own question -- so the firmware it flashes is the rig's own
+# (Alteriom/esp32-hil-firmware, a release of which canary/firmware.json
+# pins), carrying nothing from painlessMesh and nothing from a consumer. A
+# red canary is never somebody's regression; it is an ESP, a cable, a hub,
+# the rig's AP, its broker or its uplink.
 #
 # docs/canary.md is the firmware's protocol and the suite's checks;
 # docs/artifact-first-plan.md step 3 is why it exists.
@@ -15,34 +16,31 @@ name: canary
 label: Rig Health Check
 
 source:
-  # The canary is this repository's, like painlessMesh's suite -- but unlike
-  # painlessMesh there is no library to fetch: the firmware source is here
-  # too, so a canary run builds what the deployed checkout holds.
+  # The suite is this repository's, like painlessMesh's; the firmware is
+  # not. It lives in its own repository, with its own build, tests and
+  # releases, so it can move when a family or a check changes and stay put
+  # when the rig does. Nothing is fetched for a run: the bundle is pinned.
   location: farm
-  repo: https://github.com/Alteriom/alteriom-esp32-farm
+  repo: https://github.com/Alteriom/esp32-hil-firmware
   default_ref: main
 
 build:
-  # No command: the canary does not build on the rig (step 5 of
-  # docs/artifact-first-plan.md). It is built on the simulation host at every
-  # release -- x86, with the disk for six PlatformIO cores -- installed
-  # through the same upload a consumer's CI uses, and pinned, so the bundle a
-  # board is checked against is the one the running farm was released with.
-  # `canary/build_artifacts.py` is still the script that builds it; the Pi is
-  # just no longer one of the places that runs it.
+  # No command: nothing here builds the canary. Its repository does, on
+  # every change and on each of its tags; a rig release pins one of those
+  # releases (canary/firmware.json), fetches it, checks it against the
+  # pin's digest and carries it, and `alteriom-hil-admin upgrade` installs
+  # and pins it -- so the bundle a board is checked against is the one the
+  # running rig was released with, the same for everyone on that release.
   #
   # A run therefore flashes a bundle or is refused at submit: the pinned
   # canary (what a health check names), or one an earlier run left for the
-  # same commit. The farm has never needed to build this one for itself --
-  # the deploy that installs a canary builds it first, and fails before
-  # touching the Pi if it cannot.
+  # same commit.
   #
-  # The farm commit the canary was built from. `canary_sha` -- the digest of
-  # canary/firmware/ -- travels in the manifest beside it and is what a board
-  # reports over serial, but the revision of record is the commit: it is what
-  # a bundle is reused by, what the dashboard links, and what says which
-  # release a board's verdict belongs to. Two releases that did not touch the
-  # canary share a `canary_sha`, which is what lets a deploy skip the build.
+  # The firmware repository's commit the bundle was built from. `canary_sha`
+  # -- the digest of the firmware's source -- travels in the manifest beside
+  # it and is what a board reports over serial, but the revision of record
+  # is the commit: it is what a bundle is reused by, what the dashboard
+  # links, and what says which firmware a board's verdict belongs to.
   revision_key: farm_sha
 
 flash:
@@ -68,11 +66,12 @@ flash:
 # consumer's firmware from the last run is exactly the case a health check
 # must not skip.
 
-# The canary is built on the simulation host during a farm release and handed
-# to the service through the same upload a consumer's CI uses -- so the deploy
-# exercises the supply path on every release, and the Pi build above is only
-# the fallback for a canary run made by hand before the next deploy. The farm
-# accepts a canary bundle from this repository and this workflow only.
+# The canary is built by the firmware repository's own release workflow and
+# reaches the service by two roads: a rig release carries it (installed and
+# pinned by `alteriom-hil-admin upgrade`), or it is handed over through the
+# same upload a consumer's CI uses. The hand-over is accepted from this
+# repository and this workflow only -- which is what fetched the pinned
+# bundle -- and a bundle from anywhere else is refused.
 supply:
   repo: https://github.com/Alteriom/esp32-rig
   workflow: .github/workflows/release.yml
@@ -100,7 +99,8 @@ env:
   ALTERIOM_HIL_CANARY_REVISION: "{revision}"
 
 report:
-  # {version} is the firmware's own MAJOR.MINOR.PATCH (canary/firmware/VERSION
-  # and the commits that changed it), stamped into the bundle by its build.
+  # {version} is the firmware's own MAJOR.MINOR.PATCH (firmware/VERSION in
+  # its repository and the commits that changed it), stamped into the bundle
+  # by its build and repeated by the pin.
   title: "Rig Health Check {version}"
   capabilities: suites/canary/capabilities.json
