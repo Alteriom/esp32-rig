@@ -328,6 +328,10 @@ class JobStore:
         if "config_json" not in columns:
             db.execute("ALTER TABLE workers ADD COLUMN config_json TEXT")
             db.execute("ALTER TABLE workers ADD COLUMN config_at TEXT")
+        # What the node says about its GitHub token: the summary its own page
+        # shows (connected, login, kind, expiry), never the token.
+        if "github_json" not in columns:
+            db.execute("ALTER TABLE workers ADD COLUMN github_json TEXT")
         # Drained by an operator: online, and given no new run.
         if "drained_json" not in columns:
             db.execute("ALTER TABLE workers ADD COLUMN drained_json TEXT")
@@ -411,8 +415,11 @@ class JobStore:
             )
 
     def touch_worker(self, name: str, inventory: dict | None, health: dict | None, address: str | None,
-                     update: dict | None = None, config: dict | None = None) -> bool:
+                     update: dict | None = None, config: dict | None = None, github: dict | None = None) -> bool:
         fields, values = ["seen_at=?", "address=?"], [utcnow(), address]
+        if github is not None:
+            fields.append("github_json=?")
+            values.append(json.dumps(github))
         if config is not None:
             fields += ["config_json=?", "config_at=?"]
             values += [json.dumps(config), utcnow()]
@@ -446,6 +453,8 @@ class JobStore:
             item["config"] = json.loads(raw) if raw else None
             raw = item.pop("drained_json", None)
             item["drained"] = json.loads(raw) if raw else None
+            raw = item.pop("github_json", None)
+            item["github"] = json.loads(raw) if raw else None
             found.append(item)
         return found
 

@@ -59,7 +59,7 @@ COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
 # with a new field is refused, and the farm has no worker until the portal is
 # updated (2026-09-14, the `commit` field). These are what the node can do
 # without; everything else a portal has always taken.
-OPTIONAL_FIELDS = frozenset({"commit", "update", "config"})
+OPTIONAL_FIELDS = frozenset({"commit", "update", "config", "github"})
 UNKNOWN_FIELDS = re.compile(r"unknown (?:hello|heartbeat) fields: \[([^\]]*)\]")
 # What needs the host's sudo goes through the node's control unit
 # (alteriom-hil-control.path, rig/node-control.sh); the rest the agent does.
@@ -230,6 +230,19 @@ class NodeAgent:
             "updated_at": snapshot.get("updated_at"),
         }
 
+    def _github(self) -> dict | None:
+        """What the rig's own page says about its GitHub token -- connected,
+        as whom, what kind, when it expires -- so the portal's page for this
+        rig can say the same. Never the token, never its path; None when the
+        manager is not a rig's."""
+        summary = getattr(self.manager, "github_summary", None)
+        if summary is None:
+            return None
+        try:
+            return summary()
+        except Exception:  # noqa: BLE001 -- a fact for a page, never a reason to miss a heartbeat
+            return None
+
     def _health(self) -> dict | None:
         # A node attached beside a standalone service keeps its own state
         # directory inside the host's; the host's health check writes beside
@@ -295,6 +308,7 @@ class NodeAgent:
                         "profiles": sorted(self.manager.profiles),
                         "inventory": self._inventory(),
                         "health": self._health(),
+                        "github": self._github(),
                     }
                     if self._update is not None:
                         hello["update"] = self._update
@@ -308,6 +322,7 @@ class NodeAgent:
                     beat = {
                         "inventory": self._inventory(),
                         "health": self._health(),
+                        "github": self._github(),
                         "running": self._reported(),
                     }
                     if self._update is not None:
