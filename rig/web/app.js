@@ -35,7 +35,11 @@ let workers = [];
 let currentRelease = null;
 let portalUrl = null;
 const UPDATING = ["pending", "staged", "installing"];
-function isPortal() { return farmMode === "portal"; }
+// Which application this is, said by the document itself: the portal's page
+// declares data-app="portal", the rig's declares "rig". Known at parse time,
+// so nothing has to wait for the first status to find out which shell it
+// runs in -- which is where a whole family of first-route bugs came from.
+function isPortal() { return document.body.dataset.app === "portal"; }
 
 // ---- The shell ---------------------------------------------------------------
 // The rig's pages -- a rig, its boards, its runs, its health -- are the same
@@ -77,6 +81,8 @@ const RIG_SHELL = {
   // which rig, is a portal's question.
   settingsTabs: [],
   settingsPanel: id => {},
+  // A rig has no accounts: its key is the way in, and it signs nobody in.
+  accounts: false,
   // Settings -> Projects for a signed-in person: their workspaces and the
   // projects in each. A rig has no people and no workspaces; it shows what
   // it runs. A portal's shell answers with /api/v1/workspaces.
@@ -119,8 +125,8 @@ function sessionEnded() {
   token = "";
   clearTimeout(pollTimer);
   $("dashboard").hidden = true; $("login").hidden = false; $("overall").textContent = "LOCKED";
-  $("sign-out").hidden = true;
-  $("signin-methods").hidden = false;
+  if ($("sign-out")) $("sign-out").hidden = true;
+  if ($("signin-methods")) $("signin-methods").hidden = false;
   $("signin-key").hidden = false;
   showSignInNote("Your session has ended. Sign in again to continue.");
   loadSignInOptions();
@@ -832,6 +838,7 @@ function renderYou(identity) {
     showPanel("overview");
   }
   const badge = $("you");
+  if (!badge) return;
   badge.hidden = !you;
   badge.textContent = you ? `${you.name} · ${you.role}` : "";
   badge.title = !you ? "" : you.account
@@ -1668,7 +1675,7 @@ function showRigsTab(tab, updateHash = true) {
     name => !(name === "releases" && workspaceOnly()));
   rigsTab = offered.includes(tab) ? tab : "rigs";
   $("rigs-list").hidden = rigsTab !== "rigs";
-  if (rigsTab !== "rigs") $("add-rig-card").hidden = true;
+  if (rigsTab !== "rigs" && $("add-rig-card")) $("add-rig-card").hidden = true;
   $("boards-list").hidden = rigsTab !== "boards";
   $("releases").hidden = rigsTab !== "releases";
   document.querySelectorAll("#rigs-tabs a").forEach(link => link.classList.toggle("active", link.dataset.tab === rigsTab));
@@ -1695,7 +1702,7 @@ function renderFleet() {
   // Adding a rig is what a portal is for, and it is everybody's: a person
   // brings their own, and it is theirs from the moment it is made. An
   // address with no account and no key is nobody yet.
-  $("add-rig").hidden = !shell().addRig || !(isAdmin() || you?.account);
+  if ($("add-rig")) $("add-rig").hidden = !shell().addRig || !(isAdmin() || you?.account);
   const checkAll = $("check-all");
   checkAll.hidden = !canaryAvailable();
   checkAll.disabled = !((lastInventory || {}).boards || []).length;
@@ -4623,7 +4630,8 @@ let farmNotifyKind = null;
 
 function renderConfig(config) {
   const portal = Boolean(config?.portal);
-  $("config-title").textContent = portal ? "What the portal decides with" : "What this farm decides with";
+  $("config-title").textContent = portal ? "What the portal decides with" : "What this rig decides with";
+  renderFarmLink((config || {}).farm || {});
   const file = config?.portal?.config_file;
   $("config-source").innerHTML = portal
     ? (file ? `Set in <code>${escapeHtml(file)}</code>, read on each decision, without a restart.` : "No configuration is mounted on the portal: these are its defaults.")
@@ -4690,6 +4698,22 @@ function renderConfig(config) {
 // the status says who is looking, and would draw the farm's view for a
 // person; the status handler redraws once it knows.
 let projectsShownAs;
+
+// Settings -> Farm connection, on a rig: whether this rig is connected to a
+// farm portal, and how it would be. A rig works on its own; connecting it is
+// the portal's Add rig, which hands back one command to run on this host.
+function renderFarmLink(farm) {
+  const card = $("farm-link");
+  if (!card) return;
+  const mode = farm.mode || "standalone";
+  const portal = farm.portal_url ? `<a href="${escapeHtml(farm.portal_url)}" target="_blank" rel="noopener">${escapeHtml(farm.portal_url)}</a>` : "a farm";
+  const body = mode === "standalone"
+    ? `<p><span class="state">standalone</span> This rig is not connected to a farm. It runs its own suites, keeps its own history, and answers only here.</p>
+       <p class="muted">To connect it: on your farm portal, <strong>Rigs → Add rig</strong> names this rig and hands you one command. Run that command on this host, as the user the rig runs as. The rig then takes runs from the portal as well, and its page there follows it. It keeps working here either way.</p>`
+    : `<p><span class="state good">${escapeHtml(mode)}</span> Connected to ${portal}${farm.worker_name ? ` as <strong>${escapeHtml(farm.worker_name)}</strong>` : ""}.</p>
+       <p class="muted">The portal hands this rig its runs and its releases; the node key that proves who it is stays on this host${farm.node_key_file ? ` (<code>${escapeHtml(farm.node_key_file)}</code>)` : ""}. To disconnect: <code>sudo alteriom-hil-admin config set farm.mode standalone && sudo alteriom-hil-admin config apply</code>; the portal's page for it shows it offline until it joins again.</p>`;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">FARM</p><h2>Connection to a farm</h2></div></div>${body}`;
+}
 
 function farmProjectsMarkup(build) {
   const families = (build.targets || []).map(target => `<span class="artifact">${escapeHtml(target)}</span>`).join("");
@@ -4819,8 +4843,8 @@ async function loadConfig() {
   // A host's controls are its file's; on a portal they are each rig's, and
   // changed on its page.
   $("planned-card").hidden = portal;
-  $("portal-config").hidden = !portal;
-  if (portal && config) renderPortalConfig(config);
+  if ($("portal-config")) $("portal-config").hidden = !portal;
+  if (portal && config && $("portal-config")) renderPortalConfig(config);
 }
 
 // The three the dashboard has, plus whatever the shell adds -- Access
@@ -4933,6 +4957,7 @@ async function loadAudit() {
 async function loadAccount() {
   const identity = you;
   const account = identity && identity.account;
+  if (!$("account-identity")) return;  // a rig's document has no account page
   if (!account) {
     // A pasted key is a key, not a person: it has no account behind it and
     // nothing here would be true of it.
@@ -5128,7 +5153,9 @@ function scheduleRefresh() {
 // it changes when an operator changes it, not every fifteen seconds.
 document.querySelectorAll(".nav-item,.go-panel").forEach(button => button.addEventListener("click", () => {
   showPanel(button.dataset.panel);
-  if (button.dataset.panel === "rigs") showRigsTab(rigsTab);
+  // A nav item may name the tab it opens: the rig's Boards is the rigs
+  // page on its boards tab.
+  if (button.dataset.panel === "rigs") showRigsTab(button.dataset.tab || rigsTab);
   if (button.dataset.panel === "configuration") showSettingsTab(settingsTab);
   if (button.dataset.panel === "artifacts" && token) showFirmwareTab(firmwareTab);
   if (button.dataset.panel === "statistics" && token) loadStatistics(statsDays);
@@ -5242,18 +5269,19 @@ async function bootSession() {
     sessionStorage.removeItem("farmToken");
     showSignInNote("The key this tab had is no longer accepted. Sign in, or connect with another key.");
   }
+  if (!shell().accounts) return;
   try {
     const answer = await fetch("/api/v1/whoami", {credentials: "same-origin"});
     if (!answer.ok) throw new Error("nobody");
     const who = await answer.json();
-    $("sign-out").hidden = false;
+    if ($("sign-out")) $("sign-out").hidden = false;
     if (who.role === "guest") {
       // Signed in, and not let in: the farm has not opened this account.
       // The card stays, with the ways in hidden and the reason said, so
       // the person knows where they stand rather than seeing a locked
       // dashboard fail to load.
       renderYou(who);
-      $("signin-methods").hidden = true;
+      if ($("signin-methods")) $("signin-methods").hidden = true;
       $("signin-key").hidden = true;
       showSignInNote(`You are signed in as ${who.name}. This farm has not opened your account yet: the person who runs it can, and you are in on your next sign-in.`);
       return;
@@ -5268,6 +5296,7 @@ async function bootSession() {
 
 function showSignInNote(text) {
   const note = $("signin-note");
+  if (!note) return;
   note.textContent = text || "";
   note.hidden = !text;
 }
@@ -5275,6 +5304,9 @@ function showSignInNote(text) {
 // Which ways in this portal offers: GitHub and email when they are set up,
 // the key always, opened on its own when it is the only way.
 async function loadSignInOptions() {
+  // A rig signs nobody in: its key is the way, and its document has no
+  // other. The portal's document has GitHub and email.
+  if (!shell().accounts || !$("signin-methods")) return;
   let options = {github: false, email: false};
   try { options = await (await fetch("/auth/options")).json(); } catch {}
   const back = location.pathname + location.hash;
@@ -5297,7 +5329,7 @@ async function askForCode(email) {
   if (!answer.ok) throw new Error(body.error || answer.statusText);
 }
 
-$("signin-email-form").addEventListener("submit", async event => {
+$("signin-email-form")?.addEventListener("submit", async event => {
   event.preventDefault();
   const email = $("signin-email").value.trim();
   const button = event.target.querySelector("button");
@@ -5317,13 +5349,13 @@ $("signin-email-form").addEventListener("submit", async event => {
   }
 });
 
-$("signin-code-again").addEventListener("click", async () => {
+$("signin-code-again")?.addEventListener("click", async () => {
   const email = $("signin-code-to").textContent;
   try { await askForCode(email); showSignInNote(`Another code is on its way to ${email}.`); }
   catch (error) { showSignInNote(`The code could not be sent: ${error.message}`); }
 });
 
-$("signin-code-form").addEventListener("submit", async event => {
+$("signin-code-form")?.addEventListener("submit", async event => {
   event.preventDefault();
   const email = $("signin-code-to").textContent;
   const code = $("signin-code").value.replace(/\D/g, "");
@@ -5343,14 +5375,19 @@ $("signin-code-form").addEventListener("submit", async event => {
   }
 });
 
-$("sign-out").addEventListener("click", async () => {
+$("sign-out")?.addEventListener("click", async () => {
   try { await fetch("/auth/signout", {method: "POST", credentials: "same-origin"}); } catch {}
   token = "";
   sessionStorage.removeItem("farmToken");
   location.href = "/";
 });
 
-bootSession();
+// Booted once every script the document names has run: the portal's document
+// loads its shell after this file, and the boot asks the shell whether there
+// are accounts to sign in. Kicked off here, it asked before the shell existed
+// and a signed-in person was never signed in.
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => bootSession());
+else bootSession();
 
 let searchDebounce = null;
 $("job-search").addEventListener("input", event => {
