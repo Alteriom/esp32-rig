@@ -4775,8 +4775,8 @@ async function loadProjects() {
 // What this rig runs, and where a person who just installed it adds their
 // own: a project is their repository, its suite and the boards it wants.
 // The rig writes the profile document under <state>/profiles/ and reads it
-// back at once; the shipped ones (the Rig Health Check, the painlessMesh
-// reference) are listed but are the release's to change.
+// back at once; the shipped ones are listed but are the release's to
+// change.
 let rigProjectsView = null;
 let projectEditing = null;   // null, "new", or the name of the project being changed
 
@@ -4807,7 +4807,7 @@ function renderRigProjects(view) {
   const own = projects.filter(row => !row.shipped).length;
   const current = projectEditing && projectEditing !== "new" ? projects.find(row => row.name === projectEditing) : null;
   card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${projectEditing ? "" : '<button type="button" class="secondary project-add admin-only">Add project</button>'}</div></div>
-    <p class="muted">A project is a repository whose firmware this rig flashes and whose test suite it runs. The Rig Health Check and the painlessMesh reference come with the rig; add your own here. The rig does not build firmware: your project's CI builds a bundle and hands it to this rig, and a run flashes it.</p>
+    <p class="muted">A project is a repository whose firmware this rig flashes and whose test suite it runs. The projects that come with the rig are listed with yours; add your own here. The rig does not build firmware: your project's CI builds a bundle and hands it to this rig, and a run flashes it.</p>
     ${projectEditing ? projectForm(current) : ""}
     <div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="muted">Your projects are documents under <code>${escapeHtml(view.directory || "")}</code>, one per project; upgrading the rig leaves them alone.</p>`;
