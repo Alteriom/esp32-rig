@@ -76,6 +76,8 @@ const RIG_SHELL = {
   overviewIsRigPage: true,
   // Settings on a rig: the rig itself, its projects, the host, access.
   settingsOrder: ["rig", "projects", "host", "access"],
+  // A rig's Settings are all its owner's: no group is the administration's alone.
+  adminGroup: null,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -1667,12 +1669,36 @@ function visibilityFact(rig) {
   const current = rig.visibility || "private";
   const said = escapeHtml(VISIBILITY_SAID[current] || current);
   if (!ownsRig(rig)) return said;
-  const offer = [];
-  if (current !== "public") offer.push(["public", "Make public"]);
-  if (current !== "private") offer.push(["private", "Make private"]);
-  if (isAdmin() && current !== "shared") offer.push(["shared", "Share"]);
-  return `${said}<span class="inline-actions">${offer.map(([value, label]) =>
-    `<button type="button" class="secondary rig-visibility" data-visibility="${value}">${label}</button>`).join("")}</span>`;
+  // A labelled control, not a badge with buttons: the levels to choose
+  // from, and what the chosen one shows said beside it. Sharing is the
+  // farm's to decide, so only an admin is offered it.
+  const levels = [["private", "Private"], ["public", "Public"]];
+  if ((isAdmin() && current !== "shared") || current === "shared") levels.push(["shared", "Shared"]);
+  return `<label class="visibility-control"><select class="rig-visibility-select" aria-label="Who sees this rig">${levels.map(([value, label]) =>
+    `<option value="${value}"${value === current ? " selected" : ""}>${label}</option>`).join("")}</select><small class="muted">${said}</small></label>`;
+}
+
+// Change who sees a rig, after saying what that means: its description and
+// its location go on the world page as written on its page, so they are
+// named, with what they say now -- a location is a fact about somebody's
+// home. Never its keys, its addresses, its boards' identities or its runs.
+async function changeVisibility(rig, wanted, control = null) {
+  const name = rig.name;
+  const written = [rig.description ? `its description ("${rig.description}")` : "",
+                   rig.location ? `its location ("${rig.location}")` : ""].filter(Boolean).join(" and ");
+  const asks = {
+    public: `Make ${name} public? Anyone can then see its name${written ? `, ${written}` : ""}, what it can do, whether it is up and how busy it is — never its keys, its addresses, its boards' identities or its runs.`,
+    shared: `Share ${name}? It is public — its name${written ? `, ${written}` : ""}, what it can do, whether it is up — and other accounts may run on it.`,
+  };
+  if (asks[wanted] && !confirm(asks[wanted])) {
+    if (control) control.value = rig.visibility || "private";
+    return;
+  }
+  try {
+    await api(`/api/v1/rigs/${encodeURIComponent(name)}/visibility`,
+              {method: "POST", body: JSON.stringify({visibility: wanted})});
+  } catch (error) { alert(`Could not change who sees ${name}: ${error.message}`); }
+  return refresh(true);
 }
 
 function renderNodeBanner() {
@@ -2063,6 +2089,7 @@ function renderRig() {
   renderSection($("rig-capabilities"), pending ? "" : capabilityChips(rig.setup, {clickable: true}));
   renderSection($("rig-actions"), pending ? shell().pendingActions(rig) : rigActions(rig));
   if (rigPage.editing !== "details") renderSection($("rig-summary"), pending ? shell().pendingSummary(rig) : rigSummary(rig));
+  $("rig-summary")?.querySelector(".rig-visibility-select")?.addEventListener("change", event => changeVisibility(rig, event.target.value, event.target));
   // From the page rather than from a list here, for the same reason as the
   // failure path: a section added to index.html would otherwise have to be
   // remembered in two places. The summary carries a pending rig's join
@@ -3205,22 +3232,7 @@ function installRigPageHandlers() {
     }
     const visibility = target.closest?.(".rig-visibility");
     if (visibility) {
-      const wanted = visibility.dataset.visibility;
-      // Its description and its location go on the world page as written
-      // here, so they are named, with what they say now: a location is a
-      // fact about somebody's home, and "what it can do" did not say so.
-      const written = [rig.description ? `its description ("${rig.description}")` : "",
-                       rig.location ? `its location ("${rig.location}")` : ""].filter(Boolean).join(" and ");
-      const asks = {
-        public: `Make ${name} public? Anyone can then see its name${written ? `, ${written}` : ""}, what it can do, whether it is up and how busy it is — never its keys, its addresses, its boards' identities, its settings or its runs.`,
-        shared: `Share ${name}? It is public — its name${written ? `, ${written}` : ""}, what it can do, whether it is up — and other accounts may run on it.`,
-      };
-      if (asks[wanted] && !confirm(asks[wanted])) return;
-      try {
-        await api(`/api/v1/rigs/${encodeURIComponent(name)}/visibility`,
-                  {method: "POST", body: JSON.stringify({visibility: wanted})});
-      } catch (error) { alert(`Could not change who sees ${name}: ${error.message}`); }
-      return refresh(true);
+      return changeVisibility(rig, visibility.dataset.visibility);
     }
     const capability = target.closest?.(".rig-capability");
     if (capability) {
@@ -5714,6 +5726,23 @@ function buildSettingsTabs() {
     panel.id = `settings-${tab.id}`;
     panel.hidden = true;
     $("settings-access").parentNode.insertBefore(panel, $("settings-access"));
+  }
+  // The shell may say the order outright: a person's own tabs first, the
+  // administration last -- and the administration named as a group, so a
+  // platform's settings, a person's settings on it and a rig's own are
+  // never confused for one another.
+  const order = shell().settingsOrder;
+  if (order) {
+    const links = [...nav.querySelectorAll("a[data-tab]")];
+    links.sort((a, b) => order.indexOf(a.dataset.tab) - order.indexOf(b.dataset.tab)).forEach(link => nav.appendChild(link));
+  }
+  const group = shell().adminGroup || [];
+  const first = group.map(id => nav.querySelector(`[data-tab="${id}"]`)).find(Boolean);
+  if (first && !nav.querySelector(".tabs-group")) {
+    const label = document.createElement("span");
+    label.className = "tabs-group admin-only";
+    label.textContent = "Administration";
+    nav.insertBefore(label, first);
   }
 }
 
