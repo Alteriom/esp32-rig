@@ -2972,3 +2972,51 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
             shadowing.shutdown()
     finally:
         server.shutdown()
+
+
+def test_a_standalone_rig_answers_its_own_dashboard_without_a_portal_half(tmp_path):
+    """The dashboard opens with /api/v1/status and /api/v1/inventory, then a
+    rig's page and a board's history. Each asked the manager which rigs the
+    caller may see -- a portal's question -- and on a standalone rig the
+    base's __getattr__ raised NotThisHalf out of the handler, so every one of
+    them dropped the connection. Nothing had ever served a standalone rig
+    over HTTP in a test; every host we had was a portal or its node (found
+    installing rig-2 from the v1.0.157 release)."""
+    import json
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    repo = Path(__file__).resolve().parents[1]
+    manager = farm_service.manager_for("standalone")(
+        repo, tmp_path / "rig", tmp_path / "none.yaml", tmp_path / "none-map.yaml",
+        Path(sys.executable), mode="standalone")
+    token = "t" * 40
+    server = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, tmp_path))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+
+    def get(path):
+        # A dropped connection raises out of urlopen as something other than
+        # HTTPError; an HTTP answer of any status is what this asks for.
+        try:
+            with urlopen(Request(base + path, headers={"Authorization": f"Bearer {token}"}), timeout=5) as response:
+                return response.status, json.loads(response.read())
+        except HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    try:
+        status, body = get("/api/v1/status")
+        assert status == 200 and body["mode"] == "standalone"
+        assert "boards" in body["inventory"] and body.get("pending_rigs") == []
+        status, body = get("/api/v1/inventory")
+        assert status == 200 and isinstance(body, dict)
+        # A rig's page and a board's history: not on this host, and said so
+        # in HTTP rather than by hanging up.
+        status, body = get("/api/v1/rigs/rig02")
+        assert status in (404, 409) and "error" in body
+        status, body = get("/api/v1/inventory/esp32-01/history")
+        assert status in (200, 404) and isinstance(body, dict)
+    finally:
+        server.shutdown()
