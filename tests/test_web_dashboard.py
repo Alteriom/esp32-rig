@@ -79,7 +79,7 @@ def test_a_run_is_a_page_with_a_url_of_its_own():
     assert 'window.addEventListener("popstate"' in script
     assert 'showPanel("run", updateHash, `/${route.id}`)' in script
     # The run page has no nav item, so the list it belongs to stays lit.
-    assert 'target === "run" ? "runs"' in script
+    assert 'shown === "run" ? "runs"' in script
     # A link to a run the farm no longer has says so, rather than leaving the
     # last run's details under someone else's id.
     assert '"No such run"' in script
@@ -88,7 +88,7 @@ def test_a_run_is_a_page_with_a_url_of_its_own():
 def test_dashboard_exposes_pipeline_navigation_and_simulator_evidence():
     page = (WEB / "index.html").read_text(encoding="utf-8")
     assert 'data-panel="runs"' in page
-    assert 'id="active-run"' in page
+    assert 'id="rig-live"' in page, "the live run, on the rig's own page"
     assert 'id="simulation"' in page
     assert 'id="last-updated"' in page
 
@@ -379,7 +379,7 @@ def test_a_bundle_is_a_page_and_says_whose_it_is():
     assert 'data-page="artifact"' in page
     assert 'id="bundle-detail"' not in page, "the detail is a page, not a card under the list"
     assert 'showPanel("artifact", updateHash, `/${route.id}`)' in script
-    assert '["artifact", "storage"].includes(target) ? "artifacts"' in script, "its list stays lit"
+    assert '["artifact", "storage"].includes(shown) ? "artifacts"' in script, "its list stays lit"
     for fact in ("<small>Repository</small>", "<small>Branch</small>", "<small>Started by</small>", "<small>Source</small>"):
         assert fact in script, fact
     assert "function actorLink" in script and "function producerRunLink" in script
@@ -1127,6 +1127,11 @@ def test_settings_is_a_persons_page_too_and_only_the_farm_wide_tabs_are_an_opera
 
 
 PORTAL_ONLY_IDS = {
+    # The fleet overview: rigs online, boards across them, the queue, the
+    # attention list, the live run and recent runs across the fleet. A rig's
+    # overview is its own page (renderRig), so these are the portal's.
+    "rigs-online", "rigs-note", "connected", "boards-note", "busy", "running-note", "queued", "queue-note",
+    "overview-rigs", "overview-attention", "active-run", "overview-recent", "overview-new-run",
     # The portal's: accounts, sessions and sign-in; adding a rig; the
     # portal's own configuration; what its shell draws into.
     "account-identity", "account-sessions", "add-rig", "add-rig-card", "add-rig-form", "close-add-rig",
@@ -1225,6 +1230,40 @@ def test_every_project_on_a_rig_is_the_operators_to_change():
     assert "No project on this rig yet" in script and 'const names = shell().projectsAreOwn ? every.filter(name => name !== "canary") : every;' in script
 
 
+def test_nothing_the_script_does_at_load_needs_an_element_the_rigs_document_lacks():
+    """A top-level `$("id").something` runs as the script loads; if the id is
+    the portal's, the rig's page throws there and nothing after it runs --
+    no routing, no sign-in, a page that says "Loading…" for ever. That is
+    how the fleet overview's button broke the rig's landing page. Top-level
+    dereferences name elements the rig's document has, or are optional."""
+    import re
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = dashboard()
+    ids = set(re.findall(r'id="([^"]+)"', page))
+    offenders = [line for line in script.splitlines()
+                 if (found := re.match(r'\$\("([a-z0-9-]+)"\)\.', line)) and found.group(1) not in ids]
+    assert not offenders, offenders
+
+
+def test_on_a_rig_overview_is_the_rigs_own_page():
+    """The rig serves the rig-view contract and the library renders a rig from
+    it -- the same renderer the portal uses for that rig. On a rig, Overview
+    is that page: the route opens the rig page for `local`, Overview stays
+    lit, links to the local rig land there, the fleet renderers step aside,
+    and the page follows every status like the fleet overview did."""
+    script = dashboard()
+    rig_shell = script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
+    assert "overviewIsRigPage: true," in rig_shell
+    assert 'if (route.name === "overview" && shell().overviewIsRigPage) {' in script
+    assert 'showPanel("rig", updateHash, "", {as: "overview"});' in script and 'if (token) showRig("local");' in script
+    assert 'return name === "local" && shell().overviewIsRigPage ? "#overview" : `#rig/${encodeURIComponent(name)}`;' in script
+    assert 'if (!$("rigs-online")) { renderRecentRuns(data.jobs || []); return; }' in script
+    assert 'if (!$("active-run")) return;' in script and 'if (!$("overview-recent")) return;' in script
+    assert 'if (shell().overviewIsRigPage && rigPage.name === "local" && document.querySelector(\'.page[data-page="rig"].active\')) showRig("local");' in script
+    # The rig's name is the view's: its host, or what Settings gave it.
+    assert 'label: view.name && view.name !== "local" ? view.name : shell().localRigLabel,' in script
+
+
 def test_the_rigs_document_is_the_rigs_application():
     """A rig served the farm's page -- "ESP32 Farm", "Farm overview", a
     fleet, Insights, Sign in with GitHub, an Add rig card, and a script tag
@@ -1245,7 +1284,14 @@ def test_the_rigs_document_is_the_rigs_application():
     nav = page.split('<nav id="nav"', 1)[1].split("</nav>", 1)[0]
     assert [m for m in __import__("re").findall(r'data-panel="([a-z]+)"', nav)] == ["overview", "runs", "rigs", "artifacts", "configuration"]
     assert 'data-panel="rigs" data-tab="boards">Boards</button>' in nav
-    assert '<p class="eyebrow">THIS RIG</p><h1>Rig overview</h1>' in page
+    # The rig's document opens on the rig's own page -- the same sections the
+    # portal shows for a rig -- and has no fleet overview.
+    assert 'data-page="overview"' not in page
+    assert '<section class="page active" data-page="rig">' in page
+    for rig_only in ('<section id="farm-world" class="card" data-tab="overview" hidden></section>',
+                     '<section id="overview-stats" class="card stats-band" data-tab="overview" hidden></section>',
+                     '<section id="node-banner" class="card" data-tab="overview" hidden></section>'):
+        assert rig_only in page, rig_only
     # And nothing on it speaks of "the farm service" or "the farm" holding
     # things: the rig's page says what the rig does. The one farm it names
     # is the public one it could report to, in its own card.
@@ -1255,7 +1301,7 @@ def test_the_rigs_document_is_the_rigs_application():
     assert '<label>Project<select name="profile" id="profile-select">' in page
     assert '<div id="project-strip" class="project-strip" hidden></div>' in page
     assert '<section id="github-card" class="card" hidden></section>' in page
-    assert '<section id="farm-world" class="card" hidden></section>' in page
+    assert '<section id="farm-world" class="card" data-tab="overview" hidden></section>' in page
     assert '<section id="farm-link" class="card">' in page and "Connection to a farm" in page
     assert "function renderFarmLink(farm)" in script and 'config set farm.mode standalone' in script
     # Every element the library reaches for is there, except the portal's own,

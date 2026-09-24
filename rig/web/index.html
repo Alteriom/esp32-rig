@@ -39,24 +39,6 @@
       </details>
     </section>
     <div id="dashboard" hidden>
-      <section class="page active" data-page="overview">
-        <div class="page-heading"><div><p class="eyebrow">THIS RIG</p><h1>Rig overview</h1></div><div class="row-actions"><button id="overview-new-run" class="secondary farm-wide">New run</button></div></div>
-        <section id="node-banner" class="card" hidden></section>
-        <section class="metrics">
-          <article><span>Rig</span><strong id="rigs-online">–</strong><small id="rigs-note" class="muted"></small></article>
-          <article><span>Boards available</span><strong id="connected">–</strong><small id="boards-note" class="muted"></small></article>
-          <article><span>Running</span><strong id="busy">–</strong><small id="running-note" class="muted"></small></article>
-          <article><span>Queued</span><strong id="queued">–</strong><small id="queue-note" class="muted"></small></article>
-        </section>
-        <section id="overview-stats" class="card stats-band farm-wide" hidden></section>
-        <section class="grid overview-grid">
-          <article id="overview-rigs" class="card"><p class="muted">Connecting…</p></article>
-          <article id="overview-attention" class="card"><p class="muted">Connecting…</p></article>
-        </section>
-        <section id="active-run" class="card hero-run"><p class="muted">Connecting…</p></section>
-        <section id="overview-recent" class="card"></section>
-        <section id="farm-world" class="card" hidden></section>
-      </section>
       <section class="page" data-page="runs" hidden>
         <div class="page-heading"><div><p class="eyebrow">EVIDENCE</p><h1>Pipeline runs</h1></div><p class="muted">Start a run, follow its stages, read what it left.</p></div>
         <details id="run-card" class="card new-run farm-wide"><summary><span class="eyebrow">NEW EXECUTION</span><strong>Run a validation pipeline</strong><small class="muted">Flash a bundle a project's CI built, on the boards it needs</small></summary><form id="suite-form"><label>Project<select name="profile" id="profile-select"><option value="">Loading the projects this rig runs…</option></select></label><div id="project-strip" class="project-strip" hidden></div><label>Firmware bundle <small class="muted" id="bundle-hint"></small><select name="artifact" id="bundle-select"><option value="">Loading the bundles this rig holds…</option></select></label><p id="bundle-note" class="muted">This rig does not build firmware: a run flashes a bundle its project's CI built.</p><fieldset id="artifact-families"><legend>Artifact families</legend><span class="muted">Loading families…</span></fieldset><details id="test-selection"><summary>Test selection <span id="test-selection-note" class="muted">whole suite</span></summary><fieldset id="test-files"><legend>Test files</legend><span class="muted">Loading the suite…</span></fieldset><label>Keyword expression <small class="muted">(pytest -k, e.g. <code>failover or soak</code>)</small><input name="keyword" autocomplete="off" placeholder="run everything matching…"></label></details><button id="suite-submit">Flash this bundle and test</button></form></details>
@@ -113,7 +95,7 @@
       </section>
       <!-- A rig is a page: what it is, what it holds, and everything an operator
            does to it -- the portal is how a rig is managed, not an ssh session. -->
-      <section class="page" data-page="rig" hidden>
+      <section class="page active" data-page="rig">
         <div class="page-heading"><div><p class="eyebrow">RIG</p><h1 id="rig-title">Rig</h1><p id="rig-subtitle" class="muted"></p><div id="rig-capabilities" class="setup-chips heading-chips"></div></div><div class="row-actions"><span id="rig-actions" class="actions"></span><button id="close-rig" class="secondary">All rigs</button></div></div>
         <nav id="rig-tabs" class="tabs" aria-label="This rig"></nav>
         <!-- Which tab each section belongs to. The tab is applied in CSS from
@@ -121,6 +103,8 @@
              was chosen -- the runs arriving, a command finishing -- cannot put
              its section back on a tab it does not belong to. -->
         <section id="rig-summary" class="card" data-tab="overview"><p class="muted">Loading…</p></section>
+        <section id="node-banner" class="card" data-tab="overview" hidden></section>
+        <section id="overview-stats" class="card stats-band" data-tab="overview" hidden></section>
         <section id="rig-live" class="card hero-run" data-tab="overview runs" hidden></section>
         <!-- What this rig is set up to do: most of a rig is decided on the
              rig, and a page that shows a run and a board but not the access
@@ -152,6 +136,7 @@
              has to be re-rendered when the rig is, not when a list arrives. -->
         <section id="rig-run-controls" data-tab="runs"></section>
         <section id="rig-runs" class="card" data-tab="runs"></section>
+        <section id="farm-world" class="card" data-tab="overview" hidden></section>
       </section>
       <section class="page" data-page="board" hidden>
         <div class="page-heading"><div><p class="eyebrow">BOARD</p><h1 id="board-title">Board</h1><p id="board-subtitle" class="muted"></p></div><div class="row-actions"><span id="board-actions" class="actions"></span><button id="close-board" class="secondary">Back to its rig</button></div></div>

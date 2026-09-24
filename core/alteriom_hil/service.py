@@ -1587,6 +1587,10 @@ class BaseManager:
         "description", "location", "owner", "visibility", "config", "setup", "commands", "inventory",
     })
 
+    def _own_name(self) -> str:
+        import socket
+        return (socket.gethostname() or "local").split(".")[0] or "local"
+
     def rig_view(self) -> dict:
         """This rig, as a portal would describe it: what `worker_detail` says
         of a connected rig, from this host's own configuration, health
@@ -1606,7 +1610,9 @@ class BaseManager:
         version = service_version()
         return {
             "contract": self.RIG_VIEW_CONTRACT,
-            "name": os.environ.get("ALTERIOM_HIL_WORKER_NAME") or "local",
+            # A node is the name its portal knows it by; a rig on its own is
+            # its host, until Settings gives it a name of its own.
+            "name": os.environ.get("ALTERIOM_HIL_WORKER_NAME") or self._own_name(),
             "kind": "hardware",
             "version": version.get("version"),
             "commit": version.get("commit"),
