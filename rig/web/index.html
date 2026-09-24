@@ -55,14 +55,15 @@
         </section>
         <section id="active-run" class="card hero-run"><p class="muted">Connecting…</p></section>
         <section id="overview-recent" class="card"></section>
+        <section id="farm-world" class="card" hidden></section>
       </section>
       <section class="page" data-page="runs" hidden>
         <div class="page-heading"><div><p class="eyebrow">EVIDENCE</p><h1>Pipeline runs</h1></div><p class="muted">Start a run, follow its stages, read what it left.</p></div>
-        <details id="run-card" class="card new-run farm-wide"><summary><span class="eyebrow">NEW EXECUTION</span><strong>Run a validation pipeline</strong><small class="muted">Flash a bundle a project's CI built, on the boards it needs</small></summary><form id="suite-form"><label>Validation profile<select name="profile" id="profile-select"><option value="">Loading profiles from the farm service…</option></select></label><label>Firmware bundle <small class="muted" id="bundle-hint"></small><select name="artifact" id="bundle-select"><option value="">Loading the bundles the farm holds…</option></select></label><p id="bundle-note" class="muted">The farm does not build firmware: a run flashes a bundle its project's CI built.</p><fieldset id="artifact-families"><legend>Artifact families</legend><span class="muted">Loading families from the farm service…</span></fieldset><details id="test-selection"><summary>Test selection <span id="test-selection-note" class="muted">whole suite</span></summary><fieldset id="test-files"><legend>Test files</legend><span class="muted">Loading the suite…</span></fieldset><label>Keyword expression <small class="muted">(pytest -k, e.g. <code>failover or soak</code>)</small><input name="keyword" autocomplete="off" placeholder="run everything matching…"></label></details><button id="suite-submit">Flash this bundle and test</button></form></details>
+        <details id="run-card" class="card new-run farm-wide"><summary><span class="eyebrow">NEW EXECUTION</span><strong>Run a validation pipeline</strong><small class="muted">Flash a bundle a project's CI built, on the boards it needs</small></summary><form id="suite-form"><label>Project<select name="profile" id="profile-select"><option value="">Loading the projects this rig runs…</option></select></label><label>Firmware bundle <small class="muted" id="bundle-hint"></small><select name="artifact" id="bundle-select"><option value="">Loading the bundles this rig holds…</option></select></label><p id="bundle-note" class="muted">This rig does not build firmware: a run flashes a bundle its project's CI built.</p><fieldset id="artifact-families"><legend>Artifact families</legend><span class="muted">Loading families…</span></fieldset><details id="test-selection"><summary>Test selection <span id="test-selection-note" class="muted">whole suite</span></summary><fieldset id="test-files"><legend>Test files</legend><span class="muted">Loading the suite…</span></fieldset><label>Keyword expression <small class="muted">(pytest -k, e.g. <code>failover or soak</code>)</small><input name="keyword" autocomplete="off" placeholder="run everything matching…"></label></details><button id="suite-submit">Flash this bundle and test</button></form></details>
         <section class="card">
           <div class="filter-bar">
             <input id="job-search" type="search" placeholder="Search id, project, branch, revision, summary, failed stage" autocomplete="off">
-            <select id="job-kind" aria-label="Pipeline kind"><option value="">All pipelines</option><option value="suite">Suite</option><option value="build">Farm build (retired)</option><option value="inventory">Discovery</option></select>
+            <select id="job-kind" aria-label="Pipeline kind"><option value="">All pipelines</option><option value="suite">Suite</option><option value="build">Build (retired)</option><option value="inventory">Discovery</option></select>
             <div id="job-status-filters" class="chips" role="group" aria-label="Status"></div>
           </div>
           <div class="table-wrap"><table><thead><tr><th>Created</th><th>Project</th><th>Branch</th><th>Revision</th><th>Targets</th><th>Status</th><th>Duration</th><th>Result</th><th></th></tr></thead><tbody id="jobs"></tbody></table></div>
@@ -84,7 +85,7 @@
            collected for it. Every job already records when it was asked for,
            started and finished, what it was for, and each stage's outcome. -->
       <section class="page farm-wide" data-page="statistics" hidden>
-        <div class="page-heading"><div><p class="eyebrow">HISTORY</p><h1>Farm statistics</h1></div><div class="row-actions"><div id="stats-window" class="chips" role="group" aria-label="Window"></div><button id="stats-refresh" class="secondary">Refresh</button></div></div>
+        <div class="page-heading"><div><p class="eyebrow">HISTORY</p><h1>Statistics</h1></div><div class="row-actions"><div id="stats-window" class="chips" role="group" aria-label="Window"></div><button id="stats-refresh" class="secondary">Refresh</button></div></div>
         <section id="stats-headline" class="metrics stats-metrics"></section>
         <section class="card"><div class="title-row"><div><p class="eyebrow">ACTIVITY</p><h2>Runs per day</h2></div><span id="stats-legend" class="muted"></span></div><div id="stats-chart" class="stats-chart"><p class="muted">Loading…</p></div></section>
         <section class="card"><div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>By project</h2></div><span class="muted">Pass rate leaves out cancelled runs</span></div><div id="stats-projects"></div></section>
@@ -159,7 +160,7 @@
         <section id="board-history" class="card"></section>
       </section>
       <section class="page farm-wide" data-page="artifacts" hidden>
-        <div class="page-heading"><div><p class="eyebrow">FIRMWARE</p><h1>Firmware</h1></div><div class="row-actions"><span id="artifacts-note" class="muted">What the farm flashes: each project's builds by branch, and the disk they fill.</span><button id="artifacts-refresh" class="secondary">Refresh</button></div></div>
+        <div class="page-heading"><div><p class="eyebrow">FIRMWARE</p><h1>Firmware</h1></div><div class="row-actions"><span id="artifacts-note" class="muted">What this rig flashes: each project's builds by branch, and the disk they fill.</span><button id="artifacts-refresh" class="secondary">Refresh</button></div></div>
         <section id="firmware-metrics" class="metrics"></section>
         <nav id="firmware-tabs" class="tabs" aria-label="Firmware"><a href="#artifacts" data-tab="library" class="active">Library</a><a href="#artifacts/all" data-tab="all">All builds</a><a href="#artifacts/storage" data-tab="storage">Storage and clean-up</a></nav>
         <div id="firmware-library"><section class="card"><p class="muted">Loading…</p></section></div>

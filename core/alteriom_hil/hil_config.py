@@ -47,7 +47,8 @@ ALLOWED_KEYS = {
                "format": None, "events": None, "token_file": None, "chat_id": None},
     "queue": {"concurrency": None},
     "quarantine": {"enabled": None, "after_failures": None},
-    "farm": {"mode": None, "portal_url": None, "worker_name": None, "node_key_file": None},
+    "farm": {"mode": None, "portal_url": None, "worker_name": None, "node_key_file": None,
+             "public_url": None},
     "backup": {"enabled": None, "directory": None, "keep": None, "target": None},
     "retention": {
         "enabled": None,
@@ -337,6 +338,13 @@ def validate_config(payload: dict) -> list[str]:
             mode = farm.get("mode")
             if mode not in FARM_MODES:
                 errors.append(f"farm.mode must be one of {', '.join(FARM_MODES)}")
+            # The farm whose public page this rig shows on its overview,
+            # whether or not it reports to one. Unset: the Alteriom farm;
+            # "off": none.
+            public = farm.get("public_url")
+            if public is not None and public != "off" and not (
+                    isinstance(public, str) and re.fullmatch(r"https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?", public)):
+                errors.append("farm.public_url must be a farm's https:// URL, or off")
             if mode in ("attached", "node"):
                 url = farm.get("portal_url")
                 if not isinstance(url, str) or not re.fullmatch(r"https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?", url):
@@ -562,6 +570,8 @@ def runtime_env(payload: dict) -> str:
         values["ALTERIOM_HIL_NODE_KEY_FILE"] = farm["node_key_file"]
     elif farm and farm.get("mode") == "portal":
         values["ALTERIOM_HIL_FARM_MODE"] = "portal"
+    if farm and farm.get("public_url") is not None:
+        values["ALTERIOM_HIL_FARM_PUBLIC_URL"] = farm["public_url"]
     if values.get("HIL_RUNNER_UNIT") is None:
         values.pop("HIL_RUNNER_UNIT")
     queue = payload.get("queue")
