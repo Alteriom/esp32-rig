@@ -105,3 +105,30 @@ def test_a_registry_is_read_by_the_loader_not_by_a_regular_expression(tmp_path):
     ran = subprocess.run(["bash", str(script), "--quick"], capture_output=True, text=True, env=env)
     assert "FAIL  board map not found" in ran.stdout, ran.stdout
     assert ran.returncode == 1
+
+
+def test_the_board_map_and_registry_are_where_the_host_configuration_says(tmp_path):
+    """A rig whose boards the service registered keeps its board map and its
+    registry where the host configuration says (paths.board_map,
+    paths.inventory). The preflight looked in $HOME instead, and told a rig
+    that had just passed its health check on four boards that its board
+    map was not found (a standalone rig, 2026-09-24)."""
+    script = REPO / "rig" / "verify-rig.sh"
+    state = tmp_path / "state"
+    state.mkdir()
+    registered = "boards:\n  - {id: esp32-01, port: /dev/ttyUSB9, target: esp32, chip: esp32}\n"
+    (state / "inventory.yaml").write_text(registered, encoding="utf-8")
+    (state / "board-map.active.yaml").write_text(registered, encoding="utf-8")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"schema: 2\npaths:\n  inventory: {state / 'inventory.yaml'}\n  board_map: {state / 'board-map.active.yaml'}\n",
+        encoding="utf-8",
+    )
+    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "ALTERIOM_HIL_CONFIG": str(config)}
+    ran = subprocess.run(["bash", str(script), "--quick"], capture_output=True, text=True, env=env)
+    assert "board map not found" not in ran.stdout, ran.stdout
+    assert "esp32-01" in ran.stdout, ran.stdout
+    # The environment still wins over the configuration.
+    env["ALTERIOM_HIL_BOARD_MAP"] = str(tmp_path / "elsewhere.yaml")
+    ran = subprocess.run(["bash", str(script), "--quick"], capture_output=True, text=True, env=env)
+    assert "FAIL  board map not found" in ran.stdout, ran.stdout

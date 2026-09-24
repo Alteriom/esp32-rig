@@ -16,9 +16,10 @@
 # trunk; this stamps the full number into them for the build and puts them
 # back, so a checkout is never left saying it is a release it is not.
 #
-# The firmware is built separately, because it needs six PlatformIO cores and
-# most builds of this do not: `canary/build_artifacts.py --out hil-canary`
-# writes the bundle, and `--firmware hil-canary` packs it into the release.
+# The firmware is not built here: it has a repository of its own
+# (Alteriom/esp32-hil-firmware) and this one pins a release of it in
+# canary/firmware.json. The release workflow fetches that bundle into a
+# directory, and `--firmware <dir>` packs it into the release.
 # Without it the release is the wheels and the dashboard, which is what every
 # pull request builds and what a host with no toolchain can build
 # (docs/public-release-plan.md, step 14b).
@@ -87,7 +88,7 @@ done
 # the way the artifact loader reads it. The bundle's own manifest says which
 # version and which families; this only carries them.
 if [ -n "$FIRMWARE" ]; then
-  [ -f "$FIRMWARE/manifest.json" ] || { echo "build-release: $FIRMWARE holds no manifest.json (canary/build_artifacts.py --out $FIRMWARE)" >&2; exit 1; }
+  [ -f "$FIRMWARE/manifest.json" ] || { echo "build-release: $FIRMWARE holds no manifest.json (the pinned firmware, canary/firmware.json, unpacked there)" >&2; exit 1; }
   FW_VERSION="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$FIRMWARE/manifest.json")"
   FW_STAGE="$(mktemp -d)"
   cp -R "$FIRMWARE" "$FW_STAGE/hil-canary"

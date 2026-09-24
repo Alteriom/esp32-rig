@@ -27,8 +27,34 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # two distributions filling one package, and this script runs from a
 # checkout where neither need be installed.
 HAL_DIR="$HERE/../core:$HERE/../rig"
-BOARD_MAP="${ALTERIOM_HIL_BOARD_MAP:-$HOME/board-map.yaml}"
-REGISTRY="${ALTERIOM_HIL_INVENTORY:-/var/lib/alteriom-hil/inventory.yaml}"
+# The rig's own Python when the host has one: setup-runner.sh installs
+# esptool and both halves of alteriom_hil into the rig's venv, not into the
+# system interpreter. Asked of the system Python, this preflight said
+# "esptool missing" on a rig that had just flashed four boards (a standalone
+# rig, 2026-09-24). A checkout with no venv yet still gets python3.
+VENV_PY="${ALTERIOM_HIL_HOME:-$HOME/.local/share/alteriom-hil}/venv/bin/python"
+PY=python3
+[ -x "$VENV_PY" ] && PY="$VENV_PY"
+# Where the service keeps the board map and the registry: the host
+# configuration says (paths.board_map, paths.inventory). A rig whose boards
+# the service registered has them there, not at the path in $HOME only a
+# hand-written map ever used -- which is where this looked, and why it told
+# the same rig its board map was not found. The environment still overrides.
+CONFIG="${ALTERIOM_HIL_CONFIG:-/etc/alteriom-hil/config.yaml}"
+configured_path() {
+  [ -r "$CONFIG" ] || return 1
+  "$PY" - "$CONFIG" "$1" <<'PY' 2>/dev/null
+import sys
+import yaml
+document = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+value = (document.get("paths") or {}).get(sys.argv[2])
+if not value:
+    sys.exit(1)
+print(value)
+PY
+}
+BOARD_MAP="${ALTERIOM_HIL_BOARD_MAP:-$(configured_path board_map || echo "$HOME/board-map.yaml")}"
+REGISTRY="${ALTERIOM_HIL_INVENTORY:-$(configured_path inventory || echo /var/lib/alteriom-hil/inventory.yaml)}"
 # A rig nobody has registered a board on yet is a rig in bring-up, not a
 # broken one: its boards, its udev names and its board map are steps still
 # ahead of it, and failing them fails the release install that a new rig is
@@ -38,7 +64,7 @@ REGISTRY="${ALTERIOM_HIL_INVENTORY:-/var/lib/alteriom-hil/inventory.yaml}"
 # `boards: [{id: esp32-01, ...}]` -- a registry an operator may well write --
 # as no registry at all, and then excused a missing board map on a rig that
 # has hardware registered.
-NEW_RIG=$(PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" python3 - "$REGISTRY" <<'PY' 2>/dev/null || echo 1
+NEW_RIG=$(PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" "$PY" - "$REGISTRY" <<'PY' 2>/dev/null || echo 1
 import sys
 try:
     from alteriom_hil.inventory import load_registry
@@ -91,28 +117,28 @@ else
   hint "sudo apt-get install uhubctl"
 fi
 
-if python3 -c "import esptool" >/dev/null 2>&1 || command -v esptool.py >/dev/null 2>&1; then
-  pass "esptool importable"
+if "$PY" -c "import esptool" >/dev/null 2>&1 || command -v esptool.py >/dev/null 2>&1; then
+  pass "esptool importable ($PY)"
 else
   fail "esptool missing — flashing will fail"
-  hint "python3 -m pip install --user esptool"
+  hint "run ./setup-runner.sh: it installs esptool into the rig's venv"
 fi
 
 # ------------------------------------------------------------ 2. HAL pkg
 section "2. HIL package"
 
-if PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" python3 -c "import alteriom_hil" >/dev/null 2>&1; then
+if PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" "$PY" -c "import alteriom_hil" >/dev/null 2>&1; then
   pass "alteriom_hil importable"
 else
   fail "alteriom_hil not importable"
-  hint "python3 -m pip install --user -e $HERE/../core[dev] && python3 -m pip install --user -e $HERE/../rig[hardware,dev]"
+  hint "run ./setup-runner.sh: it installs both halves of alteriom_hil into the rig's venv"
 fi
 
-if python3 -c "import serial" >/dev/null 2>&1; then
+if "$PY" -c "import serial" >/dev/null 2>&1; then
   pass "pyserial present"
 else
   fail "pyserial missing — serial capture will fail"
-  hint "python3 -m pip install --user 'pyserial>=3.5'"
+  hint "run ./setup-runner.sh: it installs pyserial into the rig's venv"
 fi
 
 # --------------------------------------------------------- 3. permissions
@@ -190,7 +216,7 @@ if [ ! -f "$BOARD_MAP" ]; then
   exit 1
 fi
 
-BOARDS=$(PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" python3 - "$BOARD_MAP" <<'PY' 2>&1
+BOARDS=$(PYTHONPATH="${PYTHONPATH:-}:$HAL_DIR" "$PY" - "$BOARD_MAP" <<'PY' 2>&1
 import sys
 try:
     from alteriom_hil.board import BoardMap
@@ -239,8 +265,8 @@ n_boards=$(printf '%s\n' "$BOARDS" | grep -c .)
 pass "board map parses — $n_boards board(s)"
 minimum_boards="${ALTERIOM_HIL_MINIMUM_BOARDS:-2}"
 if [ "$n_boards" -lt "$minimum_boards" ]; then
-  fail "board map has $n_boards board(s); painlessMesh requires $minimum_boards"
-  hint "add another independently controllable mesh node before dispatching HIL"
+  warn "board map has $n_boards board(s); a suite that talks board to board needs $minimum_boards"
+  hint "the health check and any per-board suite run on one; the rig refuses a run whose project needs more boards than it has"
 fi
 
 if [ "$symlinks" -gt 0 ] && [ "$n_boards" -ne "$symlinks" ]; then
@@ -322,11 +348,11 @@ section "8. Board probe"
 if [ "$QUICK" = "1" ]; then
   warn "skipped (--quick)"
 else
-  if python3 -c "import esptool" >/dev/null 2>&1; then
+  if "$PY" -c "import esptool" >/dev/null 2>&1; then
     while IFS=$'\t' read -r id port hub pport; do
       [ -z "${id:-}" ] && continue
       [ -c "$port" ] || continue
-      out=$(python3 -m esptool --port "$port" --before default_reset chip_id 2>&1)
+      out=$("$PY" -m esptool --port "$port" --before default_reset chip_id 2>&1)
       if printf '%s' "$out" | grep -qi "chip is\|Chip type"; then
         chip=$(printf '%s' "$out" | grep -i "chip is\|chip type" | head -n1 | sed 's/^ *//')
         pass "$id: responds — ${chip:-ok}"

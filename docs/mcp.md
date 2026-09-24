@@ -6,17 +6,17 @@ the farm itself, rather than from somebody pasting dashboard pages into a
 chat. `alteriom-farm-mcp` is that reader: a [Model Context
 Protocol](https://modelcontextprotocol.io) server over stdio, which turns each
 tool call into a read of the farm's API with a named key. It is step 6 of
-[`device-platform-plan.md`](device-platform-plan.md), read-only first.
+read-only first.
 
 ## Read-only, on purpose
 
 Every tool reads. None starts a run, cancels one, pins or deletes a bundle, or
 touches a board — and the client it is built on
-([`alteriom_hil.farm_client`](../hal/alteriom_hil/farm_client.py)) cannot
+(`alteriom_hil.farm_client`, in the rig's core package) cannot
 build a request that would. Tools that change the farm come after this has
 been used, and will need a key whose role allows them: the farm refuses those
 routes to a `user` key whatever a client asks
-([`farm-service.md`](farm-service.md#keys-and-roles)). A **`user` key is all
+([keys and roles](dashboard.md#keys-and-roles)). A **`user` key is all
 this needs**, and it is the key to give it — never the farm's token.
 
 ## Set it up
@@ -45,7 +45,7 @@ claude mcp add alteriom-farm \
 ```
 
 `ALTERIOM_FARM_URL` is where the dashboard is served — through the TLS proxy
-or the tailnet of [`farm-service.md`](farm-service.md#secure-access). The
+or a tailnet ([reaching the dashboard](bringup.md#7-reach-the-dashboard)). The
 client refuses plain `http` to anything but loopback, since a key sent in the
 clear is a key given away. `ALTERIOM_FARM_KEY` works in place of the file, for
 a client that injects secrets as environment.

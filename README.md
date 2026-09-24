@@ -40,9 +40,13 @@ disagree with your CI about what "the same commit" means.
 ## Getting started
 
 You need a Linux host (a Raspberry Pi 4 or 5 is what this was built on), at
-least two dev boards, and a powered USB hub. See
-[`docs/hardware.md`](docs/hardware.md) for what to buy and why, and
-[`docs/bringup.md`](docs/bringup.md) for the order to do it in.
+least two dev boards, and a powered USB hub. **The guide** is at
+[alteriom.github.io/esp32-rig](https://alteriom.github.io/esp32-rig/): [getting started](https://alteriom.github.io/esp32-rig/getting-started/)
+in six steps, [what to buy and why](https://alteriom.github.io/esp32-rig/hardware/), [bring-up](https://alteriom.github.io/esp32-rig/bringup/)
+in order, [the dashboard](https://alteriom.github.io/esp32-rig/dashboard/), [projects and your CI](https://alteriom.github.io/esp32-rig/projects/)
+with [an example project](https://github.com/Alteriom/esp32-rig-example) to copy,
+and [the API](https://alteriom.github.io/esp32-rig/api/). Its source is `docs/` here; a change to it is
+published by `docs.yml`.
 
 ```bash
 git clone https://github.com/Alteriom/esp32-rig
@@ -69,7 +73,9 @@ Both on one command line: that is what satisfies `alteriom-hil`'s dependency on
 `alteriom-hil-core` without a package index.
 
 The firmware comes with it, one bundle for every board family the rig supports,
-so bringing a rig up needs no compiler and no toolchain. `alteriom-hil-admin
+so bringing a rig up needs no compiler and no toolchain. The firmware itself has
+a repository of its own, [esp32-hil-firmware][firmware], with its own releases;
+a rig release pins one (`canary/firmware.json`) and carries it. `alteriom-hil-admin
 upgrade` installs and pins it, and the health check flashes what is pinned: the
 same build for everyone who installs that release, which is what makes one
 rig's health check comparable to another's. `--no-firmware` leaves a canary you
@@ -91,6 +97,7 @@ which checks every file against `release.json` and installs nothing if one
 disagrees.
 
 [releases]: https://github.com/Alteriom/esp32-rig/releases
+[firmware]: https://github.com/Alteriom/esp32-hil-firmware
 
 ## Writing a suite
 

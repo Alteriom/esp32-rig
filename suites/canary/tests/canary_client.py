@@ -8,7 +8,8 @@ recovery are the HAL's and are worth having here too.
 It lives beside the suite rather than in the HAL because these commands are
 the canary's, not the farm's contract with every project -- the same reason
 painlessMesh's mesh helpers live in `BoardClient`'s painlessMesh half. Keep
-it in lockstep with canary/firmware/src/main.cpp and alteriom_hil/sim.py.
+it in lockstep with the firmware (Alteriom/esp32-hil-firmware; the pinned
+release's firmware.json lists the commands it answers) and alteriom_hil/sim.py.
 """
 
 from __future__ import annotations
