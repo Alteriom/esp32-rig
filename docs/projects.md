@@ -24,8 +24,20 @@ sudo alteriom-hil-admin github check    # who the token is, and that GitHub acce
 ```
 
 The token is kept on the rig (`/var/lib/alteriom-hil/github-token`, readable
-by the rig's user only) and is never shown back. Without one, **Add project**
-is not offered: a rig cannot add a project it cannot read.
+by the rig's user only) and is never shown back. What the rig does show, on
+that card, is everything else about it: who GitHub says it is, what kind of
+token it is (fine-grained or classic), **when it expires** (with a warning on
+the Overview two weeks ahead), where it came from (this page, or the host's
+file), **which repositories it reaches**, and, per project, whether it can
+see the repository, read its code, and list its Actions artifacts. **Check
+again** asks GitHub now, after you changed the token there. Without a token,
+**Add project** is not offered: a rig cannot add a project it cannot read.
+
+!!! tip "A fine-grained token reaches only the repositories you gave it"
+    When adding a project is refused, the refusal names the repositories the
+    token reaches and where on GitHub to add the new one (the token's
+    *Repository access*). Widening the token is done on GitHub; the rig then
+    sees it on the next check.
 
 ## 2. Add the project
 

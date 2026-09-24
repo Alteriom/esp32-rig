@@ -73,9 +73,11 @@ Four pages on a rig, one purpose each.
 
 **Rig** — the rig's name, description and location (what its page shows,
 here and on a farm); **GitHub**, the token the rig reads projects and their
-bundles with, who it is according to GitHub, and a way to replace or forget
-it; **Connection to a farm**, connect, what is shared, disconnect; the
-version installed.
+bundles with: who it is according to GitHub, what kind it is, when it
+expires, where it came from, which repositories it reaches and what it may
+do with each project's, with **Check again**, **Replace** and (for a token
+given from the page) **Forget**; **Connection to a farm**, connect, what is
+shared, disconnect; the version installed.
 
 **Projects** — the projects this rig runs and no other. Each has a page:
 its configuration (repository, default branch, suite path, families, the
