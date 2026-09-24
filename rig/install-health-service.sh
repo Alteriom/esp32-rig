@@ -328,7 +328,7 @@ EOF
 sudo install -d -m 0750 -o "$RUN_USER" -g "$RUN_USER" /var/lib/alteriom-hil/update
 sudo tee /etc/systemd/system/alteriom-hil-update.service >/dev/null <<EOF
 [Unit]
-Description=Alteriom ESP32 farm node: install the release the portal names
+Description=Alteriom HIL rig: install a staged release of the rig software
 After=network-online.target
 
 [Service]
@@ -341,7 +341,7 @@ TimeoutStartSec=3600
 EOF
 sudo tee /etc/systemd/system/alteriom-hil-update.path >/dev/null <<'EOF'
 [Unit]
-Description=Install a farm release when the node agent stages one
+Description=Install a rig release when one is staged
 
 [Path]
 PathExists=/var/lib/alteriom-hil/update/request.json
@@ -452,11 +452,16 @@ if sudo grep -qx 'ALTERIOM_HIL_FARM_ATTACHED=1' "$RUNTIME_ENV"; then
 else
   sudo systemctl disable --now alteriom-hil-node.service 2>/dev/null || true
 fi
-# Only a node installs releases from its portal; any other host is deployed.
+# Every rig installs the releases its owner asks for -- from its page, or
+# on its own when automatic installs are on -- through the update unit; the
+# service stages a release and this unit, which may restart the service and
+# use sudo, installs it. The control unit carries out a portal's requests
+# and is a node's alone.
+sudo systemctl enable --now alteriom-hil-update.path
 if sudo grep -qx 'ALTERIOM_HIL_FARM_MODE=node' "$RUNTIME_ENV"; then
-  sudo systemctl enable --now alteriom-hil-update.path alteriom-hil-control.path
+  sudo systemctl enable --now alteriom-hil-control.path
 else
-  sudo systemctl disable --now alteriom-hil-update.path alteriom-hil-control.path 2>/dev/null || true
+  sudo systemctl disable --now alteriom-hil-control.path 2>/dev/null || true
 fi
 # The gateway probe runs from the same snapshot directory, but until now only
 # setup-gateway-network.sh — a one-time bring-up script — ever wrote it. A probe

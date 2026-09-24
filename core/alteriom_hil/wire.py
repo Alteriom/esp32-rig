@@ -64,7 +64,10 @@ RELEASES_KEPT = 10
 # Where a node is with the portal's current release (alteriom_hil.farm_node).
 # While pending, staged or installing, the portal gives it no work: it is
 # finishing what it has, or about to restart.
-UPDATE_STATES = ("pending", "staged", "installing", "installed", "failed")
+# `available`: the portal named a release and the rig's owner has not asked
+# for it (nor turned automatic installs on); `downloading`: the rig is
+# fetching one it was asked for.
+UPDATE_STATES = ("available", "pending", "downloading", "staged", "installing", "installed", "failed")
 
 
 UPDATING_STATES = ("pending", "staged", "installing")

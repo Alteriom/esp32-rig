@@ -3,6 +3,10 @@ let token = sessionStorage.getItem("farmToken") || "";
 let you = null;
 // What the rig last said about its GitHub token (the view, or the card), for the attention list.
 let lastGithubSummary = null;
+// What the rig last said about updates (GET /api/v1/update), for the card and the attention list.
+let lastUpdateView = null;
+let updateLoadedAt = 0;
+let updateTimer = null;
 let selectedJobId = null;
 let selectedJob = null;
 let pollTimer = null;
@@ -36,7 +40,7 @@ let farmMode = "standalone";
 let workers = [];
 let currentRelease = null;
 let portalUrl = null;
-const UPDATING = ["pending", "staged", "installing"];
+const UPDATING = ["pending", "downloading", "staged", "installing"];
 // Which application this is, said by the document itself: the portal's page
 // declares data-app="portal", the rig's declares "rig". Known at parse time,
 // so nothing has to wait for the first status to find out which shell it
@@ -82,6 +86,13 @@ const RIG_SHELL = {
   // This rig's GitHub, which every project depends on: not connected, no
   // longer accepted, or a token about to expire.
   attention: (items, rigs) => {
+    const update = lastUpdateView;
+    if (update) {
+      const state = update.status?.state;
+      if (state === "failed") items.push(["bad", "The last update failed", shortDetail(update.status.detail || "See Settings → Rig."), "#configuration"]);
+      else if (UPDATING.includes(state) || update.staging) items.push(["warn", `Installing rig software ${update.status?.version || ""}`.trim(), "The service restarts when it is done.", "#configuration"]);
+      else if (update.available) items.push(["muted", `Rig software ${update.available.version || ""} is available`.trim(), update.auto ? "It installs on its own when the rig is idle." : "Install it from Settings → Rig, or turn automatic installs on.", "#configuration"]);
+    }
     const github = lastGithubSummary;
     if (!github) return;
     const days = github.expires_in_days;
@@ -1437,6 +1448,78 @@ function renderHardwareOverview(inv) {
 // Which revision of this farm is actually running, stamped into the install
 // rather than read from a clone that may have moved on. An operator reading a
 // run report needs to know what produced it — and where to read the code.
+// ---- updates, on the owner's terms ---------------------------------------------------
+function updateStateLine(view) {
+  const status = view.status || {};
+  const tone = status.state === "failed" ? "bad" : UPDATING.includes(status.state) ? "warn" : status.state === "installed" ? "good" : "muted";
+  const words = {
+    downloading: `Downloading ${status.version || "the release"}${status.detail ? ` — ${status.detail}` : ""}`,
+    staged: `${status.version || "The release"} is staged; the update unit is installing it`,
+    installing: `Installing ${status.version || "the release"}: the service restarts when it is done`,
+    installed: `${status.version || "The release"} installed ${status.at ? relativeWhen(status.at) : ""}`,
+    failed: `The last install failed${status.detail ? `: ${status.detail}` : ""}`,
+    available: status.detail || `${status.version || "A release"} is available`,
+    pending: status.detail || "Waiting for the rig to be idle",
+  }[status.state];
+  return words ? `<p class="${tone === "bad" ? "failure-summary" : tone === "muted" ? "muted" : ""} update-state">${escapeHtml(words)}</p>` : "";
+}
+
+function renderUpdate(view) {
+  const block = $("update-block");
+  if (!block || !view) return;
+  lastUpdateView = view;
+  const busy = view.staging || UPDATING.includes(view.status?.state);
+  const available = view.available;
+  const source = view.source === "portal" ? "the farm this rig is a node of" : "GitHub, the rig software's releases";
+  const newest = available
+    ? `<span class="state warn">${escapeHtml(available.version || "a newer release")}</span>${available.published_at ? ` <small class="muted">published ${escapeHtml(relativeWhen(available.published_at))}</small>` : ""}${available.html_url ? ` <a href="${escapeHtml(available.html_url)}" target="_blank" rel="noopener">release notes</a>` : ""}`
+    : view.error
+      ? `<span class="warn">${escapeHtml(view.error)}</span>`
+      : view.checked_at || view.source === "portal"
+        ? `<span class="state good">up to date</span>${view.checked_at ? ` <small class="muted">checked ${escapeHtml(relativeWhen(view.checked_at))}</small>` : ""}`
+        : '<span class="muted">not checked yet</span>';
+  const facts = [
+    ["Installed", `<strong>${escapeHtml(view.installed?.version || "unknown")}</strong>`],
+    ["Newest", newest],
+    ["From", escapeHtml(source)],
+  ];
+  const admin = isAdmin() && shell().projectsAreOwn;
+  block.innerHTML = `<div class="live-facts worker-facts update-facts">${facts.map(([label, value]) => `<div><small>${label}</small><span>${value}</span></div>`).join("")}</div>
+    ${updateStateLine(view)}
+    ${admin ? `<div class="row-actions update-actions">
+      <button type="button" class="secondary update-check"${busy ? " disabled" : ""}>Check for updates</button>
+      ${available && !busy ? `<button type="button" class="update-install">Install ${escapeHtml(available.version || "it")}</button>` : ""}
+      <label class="check"><input type="checkbox" class="update-auto"${view.auto ? " checked" : ""}> Install updates automatically <small class="muted">when the rig is idle; the install restarts the service</small></label>
+    </div>` : ""}`;
+  block.querySelector(".update-check")?.addEventListener("click", async event => {
+    event.currentTarget.disabled = true;
+    try { renderUpdate((await api("/api/v1/update/check", {method: "POST", body: "{}"})).update); }
+    catch (error) { alert(`This rig refused: ${error.message}`); loadUpdate(true); }
+  });
+  block.querySelector(".update-install")?.addEventListener("click", async event => {
+    if (!confirm(`Install ${available?.version || "the newer release"} now? The service restarts when it is done; a run in progress would end.`)) return;
+    event.currentTarget.disabled = true;
+    try { renderUpdate((await api("/api/v1/update/install", {method: "POST", body: "{}"})).update); }
+    catch (error) { alert(`This rig refused: ${error.message}`); loadUpdate(true); }
+  });
+  block.querySelector(".update-auto")?.addEventListener("change", async event => {
+    try { renderUpdate((await api("/api/v1/update/auto", {method: "POST", body: JSON.stringify({auto: event.target.checked})})).update); }
+    catch (error) { alert(`This rig refused: ${error.message}`); loadUpdate(true); }
+  });
+  // While something is being fetched or installed, follow it.
+  clearTimeout(updateTimer);
+  if (busy) updateTimer = setTimeout(() => loadUpdate(true), 4000);
+}
+
+async function loadUpdate(force = false) {
+  if (!shell().projectsAreOwn || !$("update-block")) return;
+  if (!force && Date.now() - updateLoadedAt < 60000) return;
+  try {
+    renderUpdate(await api("/api/v1/update"));
+    updateLoadedAt = Date.now();   // only a load that worked holds the next one back
+  } catch { /* a key that may not read it, or a rig before updates: the card stays as it was, and the next status poll tries again */ }
+}
+
 function renderVersion(version, repos) {
   const number = version?.version || "unknown";
   const known = number !== "unknown";
@@ -1469,6 +1552,7 @@ function renderVersion(version, repos) {
   $("version-detail").innerHTML = known
     ? `<div class="detail-grid">${rows.map(([label, value]) => `<div><small>${escapeHtml(label)}</small><span>${label === "Commit" ? shaLink(value, repos.farm) : escapeHtml(value)}</span></div>`).join("")}</div>${version.subject ? `<p class="muted">${escapeHtml(version.subject)}</p>` : ""}${repos.farm ? `<p class="muted">${shell().projectsAreOwn ? "Rig software" : "Source"}: <a href="${escapeHtml(repos.farm)}" target="_blank" rel="noopener">${escapeHtml(repos.farm)}</a>${underTest.length ? ` · ${shell().projectsAreOwn ? "projects" : "under validation"}: ${underTest.map(url => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url.replace(/^https:\/\/github\.com\//, ""))}</a>`).join(", ")}` : shell().projectsAreOwn ? ' · <a href="#configuration/projects">no project yet</a>' : ""}</p>` : ""}`
     : `<p class="muted">This host reports no version stamp. It is running code installed before the farm recorded one, or installed by hand; re-run <code>install-health-service.sh</code> (the deploy workflow does) to stamp it.</p>`;
+  loadUpdate();
 }
 
 // ---- Workers ------------------------------------------------------------------
@@ -1487,6 +1571,7 @@ function releaseName(commit) {
 function releaseState(worker, current = currentRelease?.commit) {
   const update = worker.update || {};
   const target = currentRelease?.version || String(current || "").slice(0, 9);
+  if (update.state === "available") return {tone: "warn", label: "update available", detail: update.detail || `${target} is available; its owner installs it, or turns automatic installs on.`};
   if (UPDATING.includes(update.state)) return {tone: "warn", label: `updating · ${update.state}`, detail: update.detail || `to ${releaseName(update.commit)}`};
   if (update.state === "failed" && (!current || update.commit === current)) return {tone: "bad", label: "update failed", detail: update.detail || "the install failed"};
   if (!current) return {tone: "muted", label: "no release published", detail: ""};
@@ -2061,7 +2146,9 @@ function rigActions(rig) {
   const buttons = [];
   if (canaryAvailable() && rig.online) buttons.push(`<button class="secondary rig-canary">Check every board</button>`);
   buttons.push(`<button class="secondary admin-only rig-command" data-kind="rediscover"${busy("rediscover")}>Rediscover</button>`);
-  if (release.tone !== "good" || rig.update?.state === "failed") buttons.push(`<button class="secondary admin-only rig-command" data-kind="update_now"${busy("update_now")}>Update now</button>`);
+  // A rig is its owner's: the portal offers the install, it does not force it.
+  if (release.tone !== "good" || rig.update?.state === "failed") buttons.push(`<button class="secondary admin-only rig-command" data-kind="update_install"${busy("update_install")} title="Install the release this farm names on the rig, now">Install update</button>`);
+  if (release.tone !== "good") buttons.push(`<button class="secondary admin-only rig-command" data-kind="update_now"${busy("update_now")} title="Ask the rig to look at the farm's release again">Check now</button>`);
   buttons.push(rig.drained
     ? `<button class="secondary admin-only rig-resume">Resume</button>`
     : `<button class="secondary admin-only rig-drain">Drain</button>`);

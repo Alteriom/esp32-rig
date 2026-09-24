@@ -43,7 +43,7 @@ from alteriom_hil.board_registry import (
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
 from alteriom_hil.inventory import discover, probe_details, publish_inventory
 from alteriom_hil.jobstore import JobCancelled, utcnow
-from alteriom_hil import github_access
+from alteriom_hil import github_access, updates
 from alteriom_hil.profiles import NAME_PATTERN, parse_profile
 from alteriom_hil.providers import Redactor, scrub_tree
 from alteriom_hil.farm_shared import BOARD_ID_PATTERN, DEFAULT_PROFILE, ElsewhereError, PipelineError, RigBusyError, TARGETS
@@ -143,6 +143,12 @@ class RigMixin:
         ("GET", r"/api/v1/rig/details", "user", "rig_details_view"),
         ("POST", r"/api/v1/rig/details", "admin", "set_rig_details"),
         ("GET", r"/api/v1/farm/public", "user", "farm_public_view"),
+        # Updates on the owner's terms: what is installed and what is newer,
+        # a look now, an install now, and whether installs happen on their own.
+        ("GET", r"/api/v1/update", "user", "update_view"),
+        ("POST", r"/api/v1/update/check", "admin", "check_update"),
+        ("POST", r"/api/v1/update/install", "admin", "install_update"),
+        ("POST", r"/api/v1/update/auto", "admin", "set_update_auto"),
     )
 
     # Where a rig looks when nothing names a farm: the public farm the rig
@@ -178,6 +184,143 @@ class RigMixin:
         credential file, which `alteriom-hil-admin github set` writes."""
         own = Path(self.state) / "github-token"
         return own if own.is_file() else Path(self.CONSUMER_TOKEN_PATH)
+
+    # ---- updates, on the owner's terms ----------------------------------------------------
+    UPDATE_CHECK_DELAY = 180          # seconds after the service starts before its first look
+    UPDATE_CHECK_EVERY = 6 * 3600     # and then this often
+
+    def _update_dir(self) -> Path:
+        return Path(self.state) / "update"
+
+    def _update_source(self) -> str:
+        """Where newer releases come from: the farm this rig is a node of,
+        or GitHub's releases of the rig software."""
+        return "portal" if self.__dict__.get("mode") == "node" else "github"
+
+    def update_auto(self) -> bool:
+        return updates.settings(Path(self.state))["auto"]
+
+    def update_view(self, identity=None) -> dict:
+        """What this rig runs, what is newer and where from, what was last
+        done about it, and whether installs happen on their own."""
+        from alteriom_hil.service import service_version
+        installed = service_version()
+        checked = self.__dict__.get("_update_checked") or {}
+        agent = self.__dict__.get("_node_agent")
+        if self._update_source() == "portal":
+            offered = getattr(agent, "_last_release", None) or {}
+            available = None
+            if offered.get("commit") and offered.get("commit") != installed.get("commit"):
+                available = {"version": offered.get("version"), "commit": offered.get("commit"), "from": "the farm"}
+            status = getattr(agent, "_update", None) or updates.status(self._update_dir())
+            checked_at, error = None, None
+        else:
+            available = checked.get("available")
+            status = updates.status(self._update_dir())
+            checked_at, error = checked.get("at"), checked.get("error")
+        return {"installed": {"version": installed.get("version"), "commit": installed.get("commit")},
+                "source": self._update_source(), "available": available, "checked_at": checked_at,
+                "error": error, "auto": self.update_auto(), "status": status,
+                "staging": bool(self.__dict__.get("_update_staging"))}
+
+    def _latest_release(self) -> dict:
+        """GitHub's newest release of the rig software; its own method so a
+        test stands in for GitHub."""
+        return updates.latest_release(token=self._github().token())
+
+    def _fetch_release_file(self, url: str) -> bytes:
+        return updates.download(url)
+
+    def _check_update_now(self) -> dict:
+        from alteriom_hil.service import service_version
+        installed = service_version()
+        try:
+            latest = self._latest_release()
+            available = latest if updates.newer(installed.get("version"), latest["version"]) else None
+            checked = {"at": updates.utcnow(), "available": available, "latest": latest, "error": None}
+        except updates.UpdateError as error:
+            checked = {"at": updates.utcnow(), "available": None, "latest": None, "error": str(error)}
+        self.__dict__["_update_checked"] = checked
+        return checked
+
+    def check_update(self, body=None, identity=None) -> dict:
+        """Look now rather than at the watch's pace."""
+        if self._update_source() == "portal":
+            agent = self.__dict__.get("_node_agent")
+            if agent is not None:
+                agent.look_again()
+        else:
+            self._check_update_now()
+        return {"update": self.update_view()}
+
+    def install_update(self, body=None, identity=None) -> dict:
+        """Install the newer release: staged by this rig, installed by the
+        update unit, which restarts the service. Refused while runs are in
+        progress -- the restart would end them."""
+        if self._update_source() == "portal":
+            agent = self.__dict__.get("_node_agent")
+            if agent is None:
+                raise ValueError("this rig takes releases from its farm, and its agent is not running")
+            agent.install_offered()
+            return {"update": self.update_view()}
+        if self.__dict__.get("_update_staging"):
+            raise ValueError("a release is being downloaded already")
+        checked = self.__dict__.get("_update_checked") or self._check_update_now()
+        available = checked.get("available")
+        if not available:
+            raise ValueError(checked.get("error") or "no newer release: this rig runs the newest one")
+        if self.running_job_ids():
+            raise ValueError("runs are in progress; install when the rig is idle (the install restarts the service)")
+        self._stage_update(available)
+        return {"update": self.update_view()}
+
+    def _stage_update(self, available: dict) -> None:
+        self.__dict__["_update_staging"] = True
+        updates.write_status(self._update_dir(), "downloading", available.get("version"), None,
+                             f"downloading {available.get('version')}")
+
+        def run():
+            try:
+                updates.stage(self._update_dir(), available, fetch=self._fetch_release_file)
+            except Exception as error:  # noqa: BLE001 -- said in status.json, where the page reads it
+                updates.write_status(self._update_dir(), "failed", available.get("version"), None,
+                                     f"could not stage the release: {error}")
+            finally:
+                self.__dict__["_update_staging"] = False
+
+        threading.Thread(target=run, name="rig-update-stage", daemon=True).start()
+
+    def set_update_auto(self, body, identity=None) -> dict:
+        auto = (body or {}).get("auto")
+        if not isinstance(auto, bool):
+            raise ValueError("auto is true or false")
+        updates.set_auto(Path(self.state), auto)
+        return {"update": self.update_view()}
+
+    def _update_watch(self) -> None:
+        """Looks for a newer release now and then. Installs it on its own
+        only when the owner turned that on and the rig is idle."""
+        time.sleep(self.UPDATE_CHECK_DELAY)
+        while True:
+            try:
+                if self._update_source() == "github":
+                    available = (self._check_update_now() or {}).get("available")
+                    last = updates.status(self._update_dir()) or {}
+                    if (available and self.update_auto() and not self.running_job_ids()
+                            and not self.__dict__.get("_update_staging")
+                            and last.get("version") != available.get("version")):
+                        self._stage_update(available)
+            except Exception:  # noqa: BLE001 -- one bad look never ends the watch
+                pass
+            time.sleep(self.UPDATE_CHECK_EVERY)
+
+    def start_update_watch(self) -> None:
+        """Started by the service once it serves; never by a test's manager
+        (ALTERIOM_HIL_UPDATE_WATCH=0 keeps it off)."""
+        if os.environ.get("ALTERIOM_HIL_UPDATE_WATCH", "1") == "0" or self.__dict__.get("_update_watching"):
+            return
+        self.__dict__["_update_watching"] = True
+        threading.Thread(target=self._update_watch, name="rig-update-watch", daemon=True).start()
 
     def _github(self) -> "github_access.Status":
         status = self.__dict__.get("_github_status")

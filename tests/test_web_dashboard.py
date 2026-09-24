@@ -1242,6 +1242,15 @@ def test_every_project_on_a_rig_is_the_operators_to_change():
     assert "function githubFact(github)" in script and '["GitHub", githubFact(worker.github || lastGithubSummary)]' in script
     assert '["GitHub", githubFact(worker.github)]' in script
     assert 'Open GitHub settings</a>' in script, "a refusal that names GitHub links to where it is fixed"
+    # Updates on the owner's terms: the Software card checks, installs when
+    # asked, and offers automatic installs; the portal's page offers Install.
+    assert "function renderUpdate(view)" in script and 'await api("/api/v1/update")' in script
+    assert 'await api("/api/v1/update/check", {method: "POST"' in script and 'await api("/api/v1/update/install", {method: "POST"' in script
+    assert 'await api("/api/v1/update/auto", {method: "POST"' in script and "Install updates automatically" in script
+    assert 'data-kind="update_install"' in script and ">Install update</button>" in script
+    assert 'label: "update available"' in script and "Rig software ${update.available.version" in script
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    assert '<div id="update-block"></div>' in page and "<h2>Software</h2>" in page
     assert "Repository access</em>" in script and "from this page" in script
     assert "Private repositories it was given" in script and "Public repositories it sees" in script, "public repositories are counted apart"
     assert "This rig's GitHub token expires in" in script and "GitHub no longer accepts this rig's token" in script

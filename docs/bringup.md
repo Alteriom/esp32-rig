@@ -147,11 +147,21 @@ was not and why. Then [connect GitHub and add a project](projects.md).
 
 ## Later: upgrading
 
+From the dashboard: **Settings → Rig → Software** says what is installed and
+what is newer; **Check for updates** asks now; **Install** fetches the
+release, checks every file against the release's own document, and hands it
+to the rig's update unit, which installs the wheels, the dashboard and the
+pinned health check firmware, moves the checkout to the release's tag,
+re-runs the installer and restarts the service. **Install updates
+automatically** does the same on its own when the rig is idle, and is off
+until you turn it on. What happened is in
+`/var/lib/alteriom-hil/update/update.log`.
+
+By hand, the same thing:
+
 ```bash
 alteriom-hil-admin upgrade --from <directory with the release's files>    # a release you downloaded
 alteriom-hil-admin upgrade                                                # the one your farm names, if connected
 ```
 
-The installer scripts in the checkout are re-run when a release says they
-changed; the release notes say so. `--no-firmware` leaves a health check
-firmware you pinned yourself alone.
+`--no-firmware` leaves a health check firmware you pinned yourself alone.

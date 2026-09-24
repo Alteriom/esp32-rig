@@ -6151,6 +6151,11 @@ def serve(argv=None, *, classes: dict, agent=None, web_root: Path | None = None)
             raise SystemExit("a node needs the rig's agent; alteriom-hil is not installed")
         agent(manager, args)
     threading.Thread(target=manager.retention_loop, name="retention", daemon=True).start()
+    # A rig looks for newer releases of its software now and then (RigMixin);
+    # a portal has nothing to look for.
+    start_watch = getattr(manager, "start_update_watch", None)
+    if start_watch is not None:
+        start_watch()
     server = ThreadingHTTPServer((args.bind, args.port), make_handler(manager, keys, args.web_root))
     print(f"Alteriom farm API ({args.mode}) listening on {args.bind}:{args.port}", flush=True)
     server.serve_forever()

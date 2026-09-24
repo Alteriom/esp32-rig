@@ -25,10 +25,12 @@ main() {
   [ -f "$request" ] || exit 0
   mv -f "$request" "$taken"
 
-  local commit sha256 bundle
+  local commit sha256 bundle release_dir version
   commit="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commit", ""))' "$taken")"
   sha256="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("sha256", ""))' "$taken")"
   bundle="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("bundle", ""))' "$taken")"
+  release_dir="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("release_dir", ""))' "$taken")"
+  version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version", ""))' "$taken")"
 
   status() {
     python3 - "$status_file" "$1" "$commit" "$2" <<'PY'
@@ -49,6 +51,52 @@ PY
     exit 1
   }
 
+  local runtime_env=/etc/alteriom-hil/runtime.env repo
+  repo="${ALTERIOM_HIL_REPO:-$(sed -n 's/^ALTERIOM_HIL_REPO=//p' "$runtime_env" 2>/dev/null | tail -n 1)}"
+
+  # A wheel release the rig staged itself (alteriom_hil.updates): its
+  # document names every file, `alteriom-hil-admin upgrade` checks each
+  # against it and installs nothing if one disagrees. The dashboard goes to
+  # the web root as root; the checkout moves to the release's tag when it
+  # has it, and the installer of that tag stamps the version and restarts
+  # the service. A clone without the tag (a farm's own) gets a restart.
+  if [ -n "$release_dir" ]; then
+    case "$release_dir" in "$dir"/release-*) ;; *) fail "the request names a release outside $dir" ;; esac
+    [ -f "$release_dir/release.json" ] || fail "the staged release $release_dir holds no release.json"
+    local venv
+    venv="${ALTERIOM_HIL_VENV:-$(sed -n 's/^ALTERIOM_HIL_VENV=//p' "$runtime_env" 2>/dev/null | tail -n 1)}"
+    [ -x "$venv/bin/alteriom-hil-admin" ] || fail "no alteriom-hil-admin under ALTERIOM_HIL_VENV=${venv:-(unset)}"
+    [ -n "$version" ] || version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version", ""))' "$release_dir/release.json")"
+    status installing "installing $version"
+    local web=${ALTERIOM_HIL_WEB_ROOT:-/usr/local/lib/alteriom-hil/web} dashboard
+    dashboard="$(ls "$release_dir"/alteriom-hil-dashboard-*.tar.gz 2>/dev/null | head -n 1)"
+    if {
+      "$venv/bin/alteriom-hil-admin" upgrade --from "$release_dir" \
+      && { [ -z "$dashboard" ] || { sudo -n install -d -m 0755 "$web" && sudo -n tar -xzf "$dashboard" --strip-components=1 -C "$web" && sudo -n chown -R root:root "$web"; }; } \
+      && if [ -n "$repo" ] && [ -d "$repo/.git" ] \
+            && { git -C "$repo" rev-parse -q --verify "refs/tags/v$version" >/dev/null 2>&1 \
+                 || { git -C "$repo" fetch -q --tags origin >/dev/null 2>&1 && git -C "$repo" rev-parse -q --verify "refs/tags/v$version" >/dev/null 2>&1; }; }; then
+           git -C "$repo" -c advice.detachedHead=false checkout -q "v$version" && "$repo/rig/install-health-service.sh"
+         else
+           sudo -n python3 - "$version" "$commit" <<'PY'
+import json, sys, time
+version, commit = sys.argv[1], sys.argv[2] or None
+record = {"version": version, "short": version, "commit": commit,
+          "installed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+with open("/usr/local/lib/alteriom-hil/version.json", "w", encoding="utf-8") as handle:
+    json.dump(record, handle)
+PY
+           sudo -n systemctl restart alteriom-hil-farm.service
+         fi
+    } > "$log" 2>&1; then
+      status installed "installed $version"
+      rm -f "$taken"
+      find "$dir" -maxdepth 1 -type d -name 'release-*' ! -path "$release_dir" -exec rm -rf {} +
+      exit 0
+    fi
+    fail "the release install failed: $(tail -n 40 "$log")"
+  fi
+
   [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || fail "the request names no commit"
   # Only a bundle the agent staged, where it stages them.
   [ "$bundle" = "$dir/$commit.bundle" ] || fail "the request names a bundle outside $dir"
@@ -56,8 +104,7 @@ PY
   printf '%s  %s\n' "$sha256" "$bundle" | sha256sum --check --status \
     || fail "the staged bundle does not match the digest the portal gave"
 
-  local runtime_env=/etc/alteriom-hil/runtime.env repo
-  repo="${ALTERIOM_HIL_REPO:-$(sed -n 's/^ALTERIOM_HIL_REPO=//p' "$runtime_env" 2>/dev/null | tail -n 1)}"
+  # The clone, read from runtime.env above.
   [ -n "$repo" ] && [ -d "$repo/.git" ] || fail "no clone at ALTERIOM_HIL_REPO=${repo:-(unset)}"
   git -C "$repo" bundle verify "$bundle" > /dev/null 2>&1 || fail "git does not accept $bundle as a bundle"
 
