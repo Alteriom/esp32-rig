@@ -680,8 +680,12 @@ def command_upgrade(args: argparse.Namespace) -> int:
     if carried and not args.no_firmware:
         # Installed and pinned, not flashed: flashing a board is a run, and a
         # run is the service's to place. Once it is up, this is the one.
-        print("Then check the boards against it:")
-        print("  alteriom-hil-admin health check")
+        # The Rig Health Check is a run, and runs are asked for through the
+        # service: the dashboard's Boards page has the button, and the API
+        # is the same call. There is no `alteriom-hil-admin health check`;
+        # this used to say there was.
+        print("Then check the boards against it: the dashboard's Boards page, 'Run the Rig Health Check',")
+        print("  or  curl -X POST -H \"Authorization: Bearer $(sudo cat /etc/alteriom-hil/api-token)\" http://127.0.0.1:8090/api/v1/health")
     elif carried:
         print(f"the health check firmware {carried['version']} came with it and was not installed.")
     return 0

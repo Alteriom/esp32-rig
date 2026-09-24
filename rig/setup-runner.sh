@@ -45,7 +45,13 @@ fi
 echo "==> HAL package"
 "$VENV/bin/python" -m pip install -e "$(dirname "$0")/../core[dev]"
 "$VENV/bin/python" -m pip install -e "$(dirname "$0")/../rig[hardware,dev]"
-"$VENV/bin/python" -m pip install -e "$(dirname "$0")/../portal[dev]"
+# The portal is the farm's own half and is not in the rig's repository: a
+# checkout that has it is the farm's; a rig's has core and rig and that is
+# the whole of it. Installing it unconditionally failed every fresh install
+# from the public repository at this line.
+if [ -d "$(dirname "$0")/../portal" ]; then
+  "$VENV/bin/python" -m pip install -e "$(dirname "$0")/../portal[dev]"
+fi
 
 RUNNER_ENV="$HIL_HOME/runner.env"
 touch "$RUNNER_ENV"

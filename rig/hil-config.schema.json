@@ -33,7 +33,7 @@
             },
             {
               "type": "null",
-              "description": "a node (farm.mode: node) has no Actions runner"
+              "description": "this host has no GitHub Actions runner: a standalone rig, or a node (farm.mode: node) that takes its work from a portal"
             }
           ]
         }

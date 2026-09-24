@@ -184,16 +184,29 @@ def test_a_portal_reads_the_configuration_its_deployment_names(tmp_path, monkeyp
     assert fresh().CONFIG_PATH == Path("/etc/alteriom-hil/config.yaml")
 
 
-def test_a_node_needs_no_actions_runner_and_every_other_host_does(tmp_path):
-    """A node takes its work and its releases from its portal; its runner is
-    removed. Anything else is still deployed through one."""
+def test_a_github_actions_runner_is_optional_and_named_correctly_when_there_is_one(tmp_path):
+    """A standalone rig has no GitHub runner and never needed one; a node takes
+    its work from its portal. Requiring one refused every standalone install on
+    a machine without GitHub, at `config apply`, after the installer had
+    written the units and the token (found installing rig-2 from the v1.0.156
+    release on a clean host)."""
     payload = valid_config(tmp_path)
     payload["runner"] = {"unit": None}
-    assert "runner.unit must be an actions.runner.*.service unit (or null on a node)" in hil_config.validate_config(payload)
+    assert hil_config.validate_config(payload) == [], "standalone, no runner"
+    assert "HIL_RUNNER_UNIT" not in hil_config.runtime_env(payload)
+
     payload["farm"] = {"mode": "node", "portal_url": "https://espfarm.alteriom.net",
                        "worker_name": "esp32-hil", "node_key_file": "/etc/alteriom-hil/node-key"}
+    assert hil_config.validate_config(payload) == [], "a node, no runner"
+
+    # When a host does have one, it is named so it can be watched and
+    # restarted -- and then it has to be a unit that could exist.
+    payload = valid_config(tmp_path)
+    payload["runner"] = {"unit": "gitlab-runner.service"}
+    errors = hil_config.validate_config(payload)
+    assert len(errors) == 1 and errors[0].startswith("runner.unit must be an actions.runner.*.service unit")
+    payload["runner"] = {"unit": "actions.runner.Alteriom.rig-2.service"}
     assert hil_config.validate_config(payload) == []
-    assert "HIL_RUNNER_UNIT" not in hil_config.runtime_env(payload)
 
 
 def test_quarantine_is_off_until_a_host_turns_it_on(tmp_path):
