@@ -255,10 +255,25 @@ class RigMixin:
         on the run's clock, and a board whose reading is on file needs no
         second one. None reads nothing.
         """
-        inventory = publish_inventory(self.registry, self.board_map, self.state)
+        inventory = publish_inventory(self.registry, self.board_map, self.state,
+                                      auto_register=self.auto_register())
         if details:
             self.read_chip_details(inventory, details, log)
         return inventory
+
+    @staticmethod
+    def auto_register() -> bool:
+        """Whether a board found on a port is registered by the finding.
+
+        `inventory.auto_register` in the host configuration, which is true
+        unless somebody turned it off. hil_config writes it into runtime.env
+        as ALTERIOM_HIL_AUTO_REGISTER and every unit sources that file; the
+        admin CLI reads the same setting from the file itself. The service
+        used to read neither and passed nothing, so a rig whose operator
+        never ran `boards discover` listed its boards as unregistered for
+        ever -- while verify-rig told them the boards register themselves.
+        """
+        return os.environ.get("ALTERIOM_HIL_AUTO_REGISTER", "1") != "0"
 
     def read_chip_details(self, inventory: dict, which: str = "all", log=None) -> int:
         """Read the silicon of the connected boards; how many answered.

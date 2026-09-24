@@ -23,6 +23,11 @@ requires-python = ">=3.9"
 dependencies = [
     "alteriom-hil-core",
     "pyyaml>=6",
+    # A suite is pytest, and so is the Rig Health Check: a rig that cannot
+    # run one is not a rig. This was in [dev] only, and the package install
+    # the README describes left it out -- build, discover and flash passed
+    # and the test stage failed on every board.
+    "pytest>=7",
 ]
 
 [project.optional-dependencies]

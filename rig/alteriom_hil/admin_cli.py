@@ -1331,9 +1331,9 @@ def command_boards_discover(args: argparse.Namespace) -> int:
         for board_id in report.get("registered") or []:
             # Registered by this discovery, so say the one thing an operator
             # may still need to correct: an instrument looks like a board.
-            print(f"  registered {board_id} -- it was plugged in and nobody had")
-            print(f"      an instrument? sudo alteriom-hil-admin instruments add --id <id> "
-                  f"--mac <its mac> --port <its port> --kind esp32-io --replace-board")
+            print(f"  registered {board_id} as a board (it was on a port and nobody had it).")
+            print(f"      If it is an instrument, not a board: sudo alteriom-hil-admin instruments add "
+                  f"--id {board_id} --mac <its mac> --port <its port> --kind esp32-io --replace-board")
         for board_id in report["missing"]:
             print(f"  {board_id:20} MISSING    registered, not found on any port")
         for item in report.get("instruments") or []:
