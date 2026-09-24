@@ -94,15 +94,32 @@ def canary_sha() -> str:
 
 
 def farm_sha() -> str:
-    """The farm commit this build ran from: the bundle's revision of record.
+    """The commit this firmware belongs to: the bundle's revision of record.
 
-    From the checkout, because that is the source: the canary lives in this
-    repository and a `farm` profile builds in the deployed tree. GITHUB_SHA
-    is the fallback for a CI build on the simulation host, where the checkout
-    may be a detached one git will still answer for -- and if neither can
-    say, the build fails rather than recording a revision it invented, since
-    a bundle whose revision is a guess is one nothing can reuse safely.
+    The last commit that changed `canary/firmware/`, not the checkout's HEAD.
+    Every release ships the health check firmware, and most releases do not
+    touch it: stamping HEAD gave the same firmware a new revision on every
+    release, a new bundle on every rig that installed it, and a rebuild on
+    every tag. The firmware belongs to the commit that last changed it, and
+    so it has the same revision until it changes again -- which is what lets
+    a release reuse the bundle before it, a rig keep the one it holds, and a
+    run ask for the commit by name (it is in the history either way).
+
+    From the checkout, because that is the source. A shallow checkout whose
+    history stops before that commit, and a tree git cannot answer for at
+    all, fall back to HEAD and then GITHUB_SHA; if nothing can say, the
+    build fails rather than recording a revision it invented, since a bundle
+    whose revision is a guess is one nothing can reuse safely.
     """
+    try:
+        found = subprocess.run(
+            ["git", "-C", str(FIRMWARE_DIR), "log", "-1", "--format=%H", "--", str(FIRMWARE_DIR)],
+            capture_output=True, text=True, timeout=20,
+        )
+        if found.returncode == 0 and found.stdout.strip():
+            return found.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
     try:
         found = subprocess.run(
             ["git", "-C", str(FIRMWARE_DIR), "rev-parse", "HEAD"],

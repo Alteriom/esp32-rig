@@ -1,0 +1,279 @@
+"""A rig's access to GitHub: the token it holds, and what it does with it.
+
+GitHub is where a project lives and where its CI builds the firmware this
+rig flashes, so a rig without a token can add no project: it could neither
+check out the repository at a run nor take a bundle from the workflow that
+built it. The token is one file, `/etc/alteriom-hil/consumer-token`, the
+same one `git` is answered with when a run clones a private repository
+(RigMixin._clone_credentials), provisioned with `alteriom-hil-admin github
+set`. It is read here and never returned: the rig says who the token is
+(`login`), never what it is.
+
+What this module does with it: asks GitHub who the token is, whether a
+repository can be read with it, and fetches the newest bundle a project's
+supply workflow uploaded -- the Actions artifact, by name -- so a rig on a
+LAN, which no CI can reach, still gets its firmware from the CI that built
+it. Every call is a small, fixed conversation with api.github.com.
+"""
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import re
+import tarfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+from pathlib import Path
+
+from alteriom_hil.signin import GITHUB_API, USER_AGENT, http_json
+
+API_VERSION = "2022-11-28"
+STATUS_TTL = 600            # who the token is, kept this long
+STATUS_RETRY = 60           # a failed ask is not repeated sooner
+ARTIFACT_LIMIT = 256 * 1024 * 1024   # a bundle zip larger than this is not a bundle
+REPO_URL = re.compile(r"https://github\.com/(?P<owner>[A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/(?P<repo>[A-Za-z0-9._-]{1,100}?)(?:\.git)?/?$")
+
+SET_COMMAND = "sudo alteriom-hil-admin github set"
+
+
+class GitHubError(ValueError):
+    """GitHub answered, and the answer is no: said in the words of the
+    request that was refused, never with the token."""
+
+
+def read_token(path: Path) -> str | None:
+    """The token, or None when there is none. Unreadable is an error the
+    caller says in its own words: a file that exists and cannot be read is
+    the most common way a valid token fails."""
+    if not path.is_file():
+        return None
+    return path.read_text(encoding="utf-8").strip() or None
+
+
+def _headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "X-GitHub-Api-Version": API_VERSION,
+            "Accept": "application/vnd.github+json"}
+
+
+def _ask(url: str, token: str, timeout: float = 15.0):
+    try:
+        return http_json(url, headers=_headers(token), timeout=timeout)
+    except urllib.error.HTTPError as error:
+        raise GitHubError(_refusal(error, url)) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise GitHubError(f"GitHub could not be reached: {error.__class__.__name__}: {error}"[:200]) from None
+
+
+def _refusal(error: urllib.error.HTTPError, url: str) -> str:
+    what = url.replace(GITHUB_API, "")
+    if error.code == 401:
+        return "GitHub refused the token (401): it is wrong, expired or revoked"
+    if error.code == 403:
+        return f"GitHub refused {what} (403): the token has no access to it, or the rate limit is spent"
+    if error.code == 404:
+        return f"GitHub has no {what} for this token (404): a private repository the token cannot read looks like this too"
+    return f"GitHub answered {error.code} for {what}"
+
+
+def parse_repo(url: str) -> tuple[str, str]:
+    """`owner, repo` from a github.com repository URL, or a GitHubError
+    saying what a project's repository has to be."""
+    match = REPO_URL.fullmatch(str(url or "").strip())
+    if not match:
+        raise GitHubError("a project's repository is a github.com URL, as https://github.com/<owner>/<repository>")
+    return match.group("owner"), match.group("repo")
+
+
+def normalise_repo(url: str) -> str:
+    owner, repo = parse_repo(url)
+    return f"https://github.com/{owner}/{repo}"
+
+
+def whoami(token: str) -> dict:
+    """Who the token is: the login GitHub answers /user with."""
+    answer = _ask(f"{GITHUB_API}/user", token)
+    if not isinstance(answer, dict) or not answer.get("login"):
+        raise GitHubError("GitHub answered /user with no login")
+    return {"login": str(answer["login"]), "type": str(answer.get("type") or "")}
+
+
+def repository(token: str, url: str) -> dict:
+    """The repository as the token sees it: its default branch, whether it
+    is private, and its canonical URL. A repository the token cannot read
+    is a GitHubError that says so."""
+    owner, repo = parse_repo(url)
+    answer = _ask(f"{GITHUB_API}/repos/{owner}/{repo}", token)
+    if not isinstance(answer, dict) or not answer.get("full_name"):
+        raise GitHubError(f"GitHub answered for {owner}/{repo} with no repository")
+    return {
+        "url": f"https://github.com/{answer['full_name']}",
+        "default_branch": str(answer.get("default_branch") or "main"),
+        "private": bool(answer.get("private")),
+        "archived": bool(answer.get("archived")),
+    }
+
+
+class Status:
+    """Who this rig is to GitHub, asked rarely and never guessed.
+
+    One per manager. The answer is kept STATUS_TTL and keyed by a digest of
+    the token, so replacing the file is noticed at the next ask; a failure
+    is kept STATUS_RETRY so a page polling the rig does not turn into a
+    poll of GitHub."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._held: dict | None = None
+        self._key: str | None = None
+        self._at = 0.0
+
+    def token(self) -> str | None:
+        return read_token(self.path)
+
+    def view(self, ask=whoami) -> dict:
+        """{configured, connected, login, path, error, checked_at, how}."""
+        try:
+            token = self.token()
+        except OSError as error:
+            return self._answer(configured=True, connected=False, login=None,
+                                error=f"{self.path} exists but cannot be read by the service: {error.__class__.__name__}. "
+                                      f"Give it the API token's owner, group and mode (0640).")
+        if not token:
+            self._held = None
+            return self._answer(configured=False, connected=False, login=None, error=None)
+        key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        now = time.time()
+        if self._held is not None and self._key == key and now - self._at < (
+                STATUS_TTL if self._held["connected"] else STATUS_RETRY):
+            return self._held
+        try:
+            who = ask(token)
+            answer = self._answer(configured=True, connected=True, login=who["login"], error=None)
+        except GitHubError as error:
+            answer = self._answer(configured=True, connected=False, login=None, error=str(error))
+        self._held, self._key, self._at = answer, key, now
+        return answer
+
+    def _answer(self, **fields) -> dict:
+        return {**fields, "path": str(self.path), "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "how": SET_COMMAND}
+
+    def forget(self) -> None:
+        self._held = None
+
+
+# ---- the newest bundle a project's CI built -----------------------------------------
+
+def newest_artifact(token: str, repo_url: str, artifact_name: str, workflow_path: str) -> dict:
+    """The newest Actions artifact of that name whose run is the project's
+    supply workflow, with what accept_bundle needs to know about the run.
+
+    Artifacts are listed newest first; each names its run, and the run names
+    its workflow file, its commit, its branch and who started it. Expired
+    artifacts are skipped: GitHub keeps them 90 days by default and still
+    lists them."""
+    owner, repo = parse_repo(repo_url)
+    listing = _ask(f"{GITHUB_API}/repos/{owner}/{repo}/actions/artifacts?name={urllib.parse.quote(artifact_name)}&per_page=20", token)
+    artifacts = listing.get("artifacts") if isinstance(listing, dict) else None
+    if not artifacts:
+        raise GitHubError(f"{owner}/{repo} has no Actions artifact named {artifact_name!r}: has the supply workflow run and uploaded one?")
+    seen_runs: dict = {}
+    for artifact in artifacts:
+        if not isinstance(artifact, dict) or artifact.get("expired"):
+            continue
+        run = artifact.get("workflow_run") or {}
+        run_id = str(run.get("id") or "")
+        if not run_id.isdigit():
+            continue
+        if run_id not in seen_runs:
+            seen_runs[run_id] = _ask(f"{GITHUB_API}/repos/{owner}/{repo}/actions/runs/{run_id}", token)
+        details = seen_runs[run_id]
+        if str(details.get("path") or "") != workflow_path:
+            continue
+        if str(details.get("conclusion") or "") not in ("success", ""):
+            continue
+        return {
+            "artifact_id": str(artifact.get("id")),
+            "artifact_name": str(artifact.get("name") or artifact_name),
+            "size": int(artifact.get("size_in_bytes") or 0),
+            "download_url": str(artifact.get("archive_download_url") or ""),
+            "run_id": run_id,
+            "run_url": str(details.get("html_url") or ""),
+            "commit": str(details.get("head_sha") or "").lower(),
+            "branch": str(details.get("head_branch") or "") or None,
+            "actor": str(((details.get("actor") or {}).get("login")) or "") or None,
+            "created_at": str(artifact.get("created_at") or ""),
+            "repo": f"https://github.com/{owner}/{repo}",
+        }
+    raise GitHubError(f"{owner}/{repo} has artifacts named {artifact_name!r}, but none from a successful run of {workflow_path}")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401 -- urllib's hook
+        return None
+
+
+def download_artifact(token: str, url: str, limit: int = ARTIFACT_LIMIT) -> bytes:
+    """The artifact zip. GitHub answers the download with a redirect to
+    storage; the token goes to GitHub and not to wherever that is."""
+    opener = urllib.request.build_opener(_NoRedirect)
+    request = urllib.request.Request(url, headers={**_headers(token), "User-Agent": USER_AGENT})
+    try:
+        try:
+            with opener.open(request, timeout=30) as response:
+                location = None
+                body = response.read(limit + 1)
+        except urllib.error.HTTPError as error:
+            if error.code in (301, 302, 303, 307, 308) and error.headers.get("Location"):
+                location = error.headers["Location"]
+                body = b""
+            else:
+                raise GitHubError(_refusal(error, url)) from None
+        if location:
+            plain = urllib.request.Request(location, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(plain, timeout=120) as response:  # noqa: S310 -- where GitHub sent us
+                body = response.read(limit + 1)
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise GitHubError(f"the artifact could not be downloaded: {error.__class__.__name__}: {error}"[:200]) from None
+    if len(body) > limit:
+        raise GitHubError(f"the artifact is larger than {limit // (1024 * 1024)} MB, which no bundle is")
+    return body
+
+
+def tarball_from_zip(zipped: bytes, top: str = "bundle", limit: int = ARTIFACT_LIMIT) -> bytes:
+    """An Actions artifact is a zip of the directory that was uploaded; the
+    rig takes bundles as one tar.gz with a single top directory. Regular
+    files only, sizes bounded, paths kept relative."""
+    out = io.BytesIO()
+    total = 0
+    try:
+        with zipfile.ZipFile(io.BytesIO(zipped)) as archive, tarfile.open(fileobj=out, mode="w:gz") as tar:
+            names = [info for info in archive.infolist() if not info.is_dir()]
+            if not names:
+                raise GitHubError("the artifact zip is empty")
+            if not any(Path(info.filename).name == "manifest.json" for info in names):
+                raise GitHubError("the artifact holds no manifest.json: it is not a bundle a rig can flash")
+            for info in names:
+                name = info.filename.replace("\\", "/").lstrip("/")
+                if not name or ".." in name.split("/"):
+                    raise GitHubError(f"the artifact names a path outside itself: {info.filename!r}")
+                total += info.file_size
+                if total > limit:
+                    raise GitHubError("the artifact unpacks to more than a bundle can be")
+                data = archive.read(info)
+                member = tarfile.TarInfo(f"{top}/{name}")
+                member.size = len(data)
+                member.mode = 0o644
+                member.mtime = int(time.time())
+                tar.addfile(member, io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise GitHubError("the artifact is not a zip GitHub would have made") from None
+    return out.getvalue()
+
+
+def describe(fetched: dict) -> str:
+    return json.dumps({k: fetched.get(k) for k in ("artifact_id", "run_id", "commit", "branch", "created_at")}, sort_keys=True)

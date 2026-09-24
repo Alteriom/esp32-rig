@@ -64,6 +64,7 @@ const RIG_SHELL = {
   localRigLabel: "This rig",
   // Settings -> Projects, for a key: on a rig the projects are its own to keep.
   keyProjects: () => loadRigProjects(),
+  projectsAreOwn: true,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -997,7 +998,35 @@ function renderProfiles() {
       `<option value="${escapeHtml(name)}"${name === chosen ? " selected" : ""}>${escapeHtml(profiles[name].label || name)}</option>`
     ).join("");
   }
+  renderProjectStrip(chosen);
   loadBundleChoices(chosen);
+}
+
+// What the chosen project is configured with, under the picker, so the form
+// reads as that project's: its repository and default ref, where its suite
+// is, which boards a run takes, where its firmware comes from. The families
+// below follow it (renderFamilies), and the test picker says when the suite
+// is not on this host to be listed.
+let projectStripFor = null;
+function renderProjectStrip(name) {
+  const strip = $("project-strip");
+  if (!strip) return;
+  const spec = profiles[name];
+  if (!spec) { strip.hidden = true; projectStripFor = null; return; }
+  const signature = JSON.stringify([name, spec]);
+  if (projectStripFor === signature) return;
+  projectStripFor = signature;
+  strip.hidden = false;
+  const takes = (spec.needs || []).length ? profileTakes(spec) : `the whole bench (${spec.min_boards || 1}+ boards)`;
+  const supply = spec.supply_workflow ? `<code>${escapeHtml(spec.supply_workflow)}</code>${spec.supply_repo && spec.supply_repo !== spec.repo ? ` in ${repoLink(spec.supply_repo)}` : ""}` : '<span class="bad">no producer</span>';
+  strip.innerHTML = `<span>${spec.repo ? repoLink(spec.repo) : "—"} <small class="muted">default <code>${escapeHtml(spec.default_ref || "main")}</code></small></span>
+    <span><small class="muted">suite</small> <code>${escapeHtml(spec.suite_path || "")}</code>${spec.location === "consumer" ? ' <small class="muted">checked out per run</small>' : ""}</span>
+    <span><small class="muted">takes</small> ${escapeHtml(takes)}</span>
+    <span><small class="muted">firmware from</small> ${supply}</span>
+    <a href="#configuration/projects/${escapeHtml(name)}">Project page</a>`;
+  const note = $("test-selection-note");
+  if (note && spec.location === "consumer") note.title = "This project's suite arrives with its checkout, so its tests are named by hand here.";
+  renderFamilies(familyArgs.targets, familyArgs.inv);
 }
 
 // ---- The bundle a run flashes ------------------------------------------------
@@ -1110,18 +1139,24 @@ function renderFamilies(targets, inv) {
   // disabled, so the choice explains itself instead of being refused.
   const bundle = selectedBundle();
   const carried = bundle ? new Set((bundle.families || []).map(family => family.family)) : null;
-  const signature = JSON.stringify([targets, [...connected].sort(), carried && [...carried].sort()]);
+  // The project decides which boards a run takes: with `needs`, exactly
+  // those families and no other are asked of the bundle; without, the run
+  // takes the bench and every connected family is flashed.
+  const project = profiles[$("profile-select")?.value] || null;
+  const needed = project && (project.needs || []).length ? new Set(project.needs.map(need => need.target)) : null;
+  const signature = JSON.stringify([targets, [...connected].sort(), carried && [...carried].sort(), needed && [...needed].sort()]);
   if (signature === familySignature) return;
   const fieldset = $("artifact-families");
   const previous = new Map([...fieldset.querySelectorAll("input[name=target]:not(:disabled)")].map(input => [input.value, input.checked]));
   familySignature = signature;
   const boxes = targets.map(target => {
     const absent = carried && !carried.has(target);
-    const checked = !absent && (previous.has(target) ? previous.get(target) : connected.has(target));
+    const unneeded = needed && !needed.has(target);
+    const checked = !absent && !unneeded && (needed ? true : previous.has(target) ? previous.get(target) : connected.has(target));
     const count = (inv.boards || []).filter(board => board.target === target).length;
-    return `<label title="${escapeHtml(target)} · ${absent ? "not in this bundle" : `${count} connected board(s)`}"${absent ? ' class="muted"' : ""}><input type="checkbox" name="target" value="${escapeHtml(target)}"${checked ? " checked" : ""}${absent ? " disabled" : ""}> ${escapeHtml(familyLabel(target))}${count ? ` <small>×${count}</small>` : " <small class=muted>none</small>"}</label>`;
+    return `<label title="${escapeHtml(target)} · ${absent ? "not in this bundle" : unneeded ? "not a family this project takes" : `${count} connected board(s)`}"${absent || unneeded ? ' class="muted"' : ""}><input type="checkbox" name="target" value="${escapeHtml(target)}"${checked ? " checked" : ""}${absent || unneeded ? " disabled" : ""}> ${escapeHtml(familyLabel(target))}${count ? ` <small>×${count}</small>` : " <small class=muted>none</small>"}</label>`;
   });
-  fieldset.innerHTML = `<legend>Artifact families</legend>${boxes.join("") || "<span class=muted>The service reported no artifact families.</span>"}`;
+  fieldset.innerHTML = `<legend>Artifact families${needed ? ' <small class="muted">the project\'s: ' + escapeHtml([...needed].join(", ")) + "</small>" : ""}</legend>${boxes.join("") || "<span class=muted>The service reported no artifact families.</span>"}`;
 }
 
 // ---- Test selection ----------------------------------------------------------
@@ -1140,7 +1175,7 @@ function renderSuiteTests(catalogue) {
     const tests = entry.tests || [];
     const capabilities = [...new Set(tests.flatMap(test => test.capabilities || []))];
     return `<label class="test-file" title="${escapeHtml(tests.map(test => test.name).join("\n"))}"><input type="checkbox" name="test" value="${escapeHtml(entry.file)}"${previous.has(entry.file) ? " checked" : ""}> ${escapeHtml(entry.file.replace(/^test_/, "").replace(/\.py$/, "").replaceAll("_", " "))} <small>${escapeHtml(tests.length)} test${tests.length === 1 ? "" : "s"}${capabilities.length ? ` · ${escapeHtml(capabilities.join(", "))}` : ""}</small></label>`;
-  }).join("") || "<span class=muted>The service reported no suite tests.</span>"}`;
+  }).join("") || `<span class=muted>${profiles[$("profile-select")?.value]?.location === "consumer" ? "This project's suite is checked out per run, so its files are not listed here: name a test file or a keyword below, or run the whole suite." : "The service reported no suite tests."}</span>`}`;
   fieldset.querySelectorAll("input[name=test]").forEach(input => input.addEventListener("change", updateSelectionNote));
   updateSelectionNote();
 }
@@ -4779,6 +4814,8 @@ async function loadProjects() {
 // change.
 let rigProjectsView = null;
 let projectEditing = null;   // null, "new", or the name of the project being changed
+let projectOpen = null;      // the name whose page is open below the table
+let projectNotice = null;    // {tone, text} after a fetch, shown once
 
 async function loadRigProjects() {
   const card = $("config-projects");
@@ -4786,32 +4823,156 @@ async function loadRigProjects() {
   try { rigProjectsView = await api("/api/v1/projects"); }
   catch (error) { card.innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; return; }
   renderRigProjects(rigProjectsView);
+  renderGitHubCard(rigProjectsView.github);
+}
+
+async function loadGitHubCard() {
+  if (!$("github-card") || !shell().projectsAreOwn) return;
+  try { renderGitHubCard(await api("/api/v1/github")); }
+  catch (error) { /* the card is a convenience; the Projects page says the same */ }
 }
 
 function projectRepoText(url) {
   return String(url || "").replace(/^https:\/\/(www\.)?(github\.com\/)?/, "").replace(/\.git$/, "");
 }
 
+// GitHub is the gate: a project is a GitHub repository whose CI builds what
+// the rig flashes, so without a token the rig can add none, and the page
+// says so with the command rather than offering a button that would be
+// refused.
+function githubMarkup(github, {short = false} = {}) {
+  if (!github) return "";
+  if (github.connected) {
+    return `<p><span class="state good">connected</span> GitHub accepts this rig's token as <strong>${escapeHtml(github.login)}</strong>.${short ? "" : ` Projects are checked out and their bundles fetched with it. Replace it with <code>${escapeHtml(github.how)}</code>; forget it with <code>sudo alteriom-hil-admin github remove</code>.`}</p>`;
+  }
+  if (github.configured) {
+    return `<p><span class="state bad">refused</span> GitHub does not accept this rig's token${github.error ? `: ${escapeHtml(github.error)}` : ""}. Replace it: <code>${escapeHtml(github.how)}</code></p>`;
+  }
+  return `<p><span class="state warn">not connected</span> This rig has no GitHub token, so it can add no project: a project is a GitHub repository whose CI builds the firmware this rig flashes.</p>
+    <p class="muted">On the rig, as an administrator: <code>${escapeHtml(github.how)}</code> — it asks for a fine-grained token with <strong>Contents: read</strong> on the project repositories and <strong>Actions: read</strong> to fetch their bundles, checks it with GitHub, and stores it beside the API token. Nothing here shows the token afterwards, only who it is.</p>`;
+}
+
+function renderGitHubCard(github) {
+  const card = $("github-card");
+  if (!card) return;
+  if (!github) { card.hidden = true; return; }
+  card.hidden = false;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">GITHUB</p><h2>Where projects come from</h2></div>${github.connected ? "" : '<a class="button secondary" href="#configuration/projects">Projects</a>'}</div>${githubMarkup(github)}`;
+}
+
+function projectOf(name) {
+  return ((rigProjectsView || {}).projects || []).find(row => row.name === name) || null;
+}
+
 function renderRigProjects(view) {
   const card = $("config-projects");
   if (!card) return;
   const projects = view.projects || [];
-  const rows = projects.map(row => `<tr>
-    <td><strong>${escapeHtml(row.label || row.name)}</strong><small><code>${escapeHtml(row.name)}</code>${row.shipped ? ' · shipped with the rig' : ""}</small></td>
+  const github = view.github || null;
+  const canAdd = Boolean(github && github.connected) && isAdmin();
+  if (!canAdd && projectEditing === "new") projectEditing = null;
+  if (projectOpen && !projectOf(projectOpen)) projectOpen = null;
+  const rows = projects.map(row => `<tr class="clickable${projectOpen === row.name ? " selected" : ""}" data-project="${escapeHtml(row.name)}">
+    <td><a class="row-link project-open" href="#configuration/projects/${escapeHtml(row.name)}"><strong>${escapeHtml(row.label || row.name)}</strong></a><small><code>${escapeHtml(row.name)}</code>${row.shipped ? ' · shipped with the rig' : ""}</small></td>
     <td>${row.repo ? `<a href="${escapeHtml(row.repo)}" target="_blank" rel="noopener">${escapeHtml(projectRepoText(row.repo))}</a>` : '<span class="muted">—</span>'}<small>default <code>${escapeHtml(row.default_ref || "")}</code></small></td>
     <td>${escapeHtml(profileTakes(row))}</td>
     <td>${row.supply_workflow ? `<code>${escapeHtml(row.supply_workflow)}</code>` : '<span class="bad">no producer</span>'}${row.supply_repo && row.supply_repo !== row.repo ? `<small>${repoLink(row.supply_repo)}</small>` : ""}</td>
     <td><code>${escapeHtml(row.suite_path || "")}</code></td>
-    <td class="nowrap">${row.shipped ? "" : `<button type="button" class="secondary project-edit admin-only" data-name="${escapeHtml(row.name)}">Change</button> <button type="button" class="danger project-remove admin-only" data-name="${escapeHtml(row.name)}">Remove</button>`}</td>
+    <td class="nowrap"><button type="button" class="secondary project-open" data-name="${escapeHtml(row.name)}">${projectOpen === row.name ? "Close" : "Open"}</button></td>
   </tr>`).join("");
   const own = projects.filter(row => !row.shipped).length;
   const current = projectEditing && projectEditing !== "new" ? projects.find(row => row.name === projectEditing) : null;
-  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${projectEditing ? "" : '<button type="button" class="secondary project-add admin-only">Add project</button>'}</div></div>
-    <p class="muted">A project is a repository whose firmware this rig flashes and whose test suite it runs. The projects that come with the rig are listed with yours; add your own here. The rig does not build firmware: your project's CI builds a bundle and hands it to this rig, and a run flashes it.</p>
+  const gate = github && !github.connected ? `<section class="card project-gate">${githubMarkup(github)}</section>` : "";
+  const notice = projectNotice ? `<p class="${projectNotice.tone === "bad" ? "failure-summary" : "muted"}">${escapeHtml(projectNotice.text)}</p>` : "";
+  projectNotice = null;
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">PROJECTS</p><h2>What this rig runs</h2></div><div class="row-actions"><span class="muted">${own ? `${own} of your own` : "none of your own yet"}</span>${canAdd && !projectEditing ? '<button type="button" class="secondary project-add">Add project</button>' : ""}${github && github.connected ? `<span class="muted" title="GitHub accepts this rig's token">GitHub · ${escapeHtml(github.login)}</span>` : ""}</div></div>
+    <p class="muted">A project is a GitHub repository whose firmware this rig flashes and whose test suite it runs. The projects that come with the rig are listed with yours; add your own here. The rig does not build firmware: your project's CI builds a bundle, and this rig fetches it from GitHub or takes it when the CI hands it over; a run flashes it.</p>
+    ${gate}${notice}
     ${projectEditing ? projectForm(current) : ""}
     <div class="table-wrap"><table class="fleet"><thead><tr><th>Project</th><th>Repository</th><th>Takes</th><th>Firmware from</th><th>Suite</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${projectOpen ? projectPage(projectOf(projectOpen), github) : ""}
     <p class="muted">Your projects are documents under <code>${escapeHtml(view.directory || "")}</code>, one per project; upgrading the rig leaves them alone.</p>`;
   wireRigProjects(card);
+  if (projectOpen) loadProjectPage(projectOpen);
+}
+
+// A project's page: everything the rig knows about it, the bundles it holds
+// for it, its recent runs, and what can be done with it from here.
+function projectPage(row, github) {
+  if (!row) return "";
+  const field = (label, value) => `<div><small>${label}</small><span>${value}</span></div>`;
+  const needs = (row.needs || []).length
+    ? row.needs.map(need => `${need.count > 1 ? `${need.count} × ` : ""}${escapeHtml(need.target)}${need.optional ? " (optional)" : ""}`).join(", ")
+    : `the whole bench (at least ${escapeHtml(row.min_boards || 1)} board${(row.min_boards || 1) === 1 ? "" : "s"})`;
+  const supply = row.supply_workflow
+    ? `<code>${escapeHtml(row.supply_workflow)}</code> in ${row.supply_repo ? repoLink(row.supply_repo) : "its repository"}${row.supply_artifact ? `, artifact <code>${escapeHtml(row.supply_artifact)}</code>` : ""}`
+    : '<span class="bad">no producer: nothing can give it a bundle</span>';
+  const canFetch = Boolean(github && github.connected) && isAdmin() && Boolean(row.supply_workflow);
+  const actions = [
+    `<button type="button" class="secondary project-run" data-name="${escapeHtml(row.name)}">Run</button>`,
+    canFetch ? `<button type="button" class="secondary project-fetch" data-name="${escapeHtml(row.name)}" title="The newest bundle the supply workflow uploaded to GitHub">Fetch newest bundle</button>` : "",
+    !row.shipped && isAdmin() ? `<button type="button" class="secondary project-edit" data-name="${escapeHtml(row.name)}">Change</button>` : "",
+    !row.shipped && isAdmin() ? `<button type="button" class="danger project-remove" data-name="${escapeHtml(row.name)}">Remove</button>` : "",
+  ].filter(Boolean).join(" ");
+  return `<section class="card project-page" data-project="${escapeHtml(row.name)}">
+    <div class="title-row"><div><p class="eyebrow">${row.shipped ? "SHIPPED WITH THE RIG" : "YOUR PROJECT"}</p><h2>${escapeHtml(row.label || row.name)}</h2></div><div class="row-actions">${actions}</div></div>
+    <div class="detail-grid">
+      ${field("Name", `<code>${escapeHtml(row.name)}</code>`)}
+      ${field("Repository", row.repo ? `<a href="${escapeHtml(row.repo)}" target="_blank" rel="noopener">${escapeHtml(projectRepoText(row.repo))}</a>` : "—")}
+      ${field("Default ref", `<code>${escapeHtml(row.default_ref || "main")}</code>`)}
+      ${field("Suite", `<code>${escapeHtml(row.suite_path || "")}</code>${row.location === "consumer" ? " <small class=\"muted\">checked out per run</small>" : " <small class=\"muted\">on this rig</small>"}`)}
+      ${field("A run takes", needs)}
+      ${field("A run may take", `${escapeHtml(shortDuration(row.timeout_seconds))}`)}
+      ${field("Firmware from", supply)}
+      ${field("Revision key", `<code>${escapeHtml(row.revision_key || "")}</code> <small class="muted">in the bundle's manifest</small>`)}
+    </div>
+    <div class="project-bundles"><p class="muted">Loading the bundles held for it…</p></div>
+    <div class="project-runs"></div>
+  </section>`;
+}
+
+async function loadProjectPage(name) {
+  const page = document.querySelector(`.project-page[data-project="${CSS.escape(name)}"]`);
+  if (!page) return;
+  const bundlesBox = page.querySelector(".project-bundles");
+  const runsBox = page.querySelector(".project-runs");
+  const jobs = ((lastStatus || {}).jobs || []).filter(job => job.kind === "suite" && jobProfile(job) === name).slice(0, 5);
+  runsBox.innerHTML = `<h3>Recent runs</h3>${jobs.length
+    ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Run</th><th>Status</th><th>Revision</th><th>When</th></tr></thead><tbody>${jobs.map(job => `<tr class="clickable" data-href="#run/${escapeHtml(job.id)}"><td><a class="row-link" href="#run/${escapeHtml(job.id)}"><code>${escapeHtml(job.id.slice(0, 8))}</code></a></td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td>${revisionLabel(job)}</td><td class="nowrap">${whenSpan(job.created_at)}</td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="muted">No run of this project yet.</p>'}`;
+  linkRows(runsBox);
+  let found;
+  try { found = await api(`/api/v1/artifacts?profile=${encodeURIComponent(name)}&limit=5`); }
+  catch (error) { bundlesBox.innerHTML = `<p class="failure-summary">Could not list its bundles: ${escapeHtml(error.message)}</p>`; return; }
+  const bundles = found.bundles || [];
+  bundlesBox.innerHTML = `<h3>Bundles held <span class="muted">${escapeHtml(found.matched ?? bundles.length)}</span></h3>${bundles.length
+    ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Bundle</th><th>Revision</th><th>Families</th><th>From</th><th>Received</th></tr></thead><tbody>${bundles.map(bundle => `<tr class="clickable" data-href="#bundle/${escapeHtml(bundle.id)}"><td><a class="row-link" href="#bundle/${escapeHtml(bundle.id)}"><code>${escapeHtml(bundle.id.slice(0, 8))}</code></a>${bundle.pinned ? ' <span class="state good">pinned</span>' : ""}</td><td><code>${escapeHtml((bundle.revision || "").slice(0, 9))}</code>${bundle.branch ? ` <small class="muted">${escapeHtml(bundle.branch)}</small>` : ""}</td><td>${escapeHtml((bundle.families || []).map(f => f.family || f).join(", "))}</td><td class="muted">${escapeHtml(bundle.source?.kind === "release" ? "the release" : bundle.source?.run_id ? `run ${bundle.source.run_id}` : bundle.source?.kind || "")}</td><td class="nowrap">${whenSpan(bundle.received_at || bundle.modified)}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="muted">None yet. ${found.matched === 0 && projectOf(name)?.supply_workflow ? "Fetch the newest one the supply workflow built, or have that workflow hand it over." : ""}</p>`}`;
+  linkRows(bundlesBox);
+}
+
+async function fetchProjectBundle(name, button) {
+  button.disabled = true;
+  button.textContent = "Fetching…";
+  try {
+    const answer = await api(`/api/v1/projects/${encodeURIComponent(name)}/fetch`, {method: "POST", body: "{}"});
+    const which = answer.bundle?.id ? answer.bundle.id.slice(0, 8) : "";
+    projectNotice = answer.fetched
+      ? {tone: "good", text: `Fetched bundle ${which} from run ${answer.artifact?.run_id || ""} (${(answer.artifact?.commit || "").slice(0, 9)}${answer.artifact?.branch ? `, ${answer.artifact.branch}` : ""}). The run form offers it now.`}
+      : {tone: "good", text: `The newest bundle (run ${answer.artifact?.run_id || ""}) is already held as ${which}; nothing new to fetch.`};
+  } catch (error) {
+    projectNotice = {tone: "bad", text: `Could not fetch a bundle: ${error.message}`};
+  }
+  renderRigProjects(rigProjectsView);
+}
+
+function runProject(name) {
+  const select = $("profile-select");
+  if (select && [...select.options].some(option => option.value === name)) select.value = name;
+  navigateTo("#runs");
+  $("run-card").open = true;
+  renderProfiles();
+  bringIntoView($("run-card"));
 }
 
 function projectForm(current) {
@@ -4821,8 +4982,8 @@ function projectForm(current) {
     <div class="title-row"><div><p class="eyebrow">${current ? "CHANGE PROJECT" : "NEW PROJECT"}</p><h3>${current ? escapeHtml(current.label || current.name) : "Your repository, its suite, its boards"}</h3></div></div>
     <label>Name <small class="muted">lowercase letters, digits and dashes; what a run names</small><input name="name" value="${value("name")}"${current ? " readonly" : ""} required pattern="[a-z0-9][a-z0-9-]{0,63}" placeholder="my-sensor"></label>
     <label>Label <small class="muted">how it reads on this page and in reports</small><input name="label" value="${value("label")}" placeholder="My sensor firmware"></label>
-    <label>Repository <small class="muted">https://; checked out fresh for every run</small><input name="repo" type="url" value="${value("repo")}" required placeholder="https://github.com/you/my-sensor"></label>
-    <label>Default ref <small class="muted">the branch or tag a run is for when none is named</small><input name="default_ref" value="${value("default_ref", "main")}"></label>
+    <label>Repository <small class="muted">on GitHub, read with this rig's token; checked out fresh for every run</small><input name="repo" type="url" value="${value("repo")}" required pattern="https://github\\.com/.+" placeholder="https://github.com/you/my-sensor"></label>
+    <label>Default ref <small class="muted">the branch or tag a run is for when none is named; empty takes the repository's default branch</small><input name="default_ref" value="${value("default_ref", "")}" placeholder="the repository's default branch"></label>
     <label>Suite path <small class="muted">a pytest suite, relative to the repository</small><input name="suite_path" value="${value("suite_path", "tests")}"></label>
     <label>Chip families <small class="muted">comma-separated; a run takes one board of each. Empty: the whole bench</small><input name="families" value="${escapeHtml(families.join(", "))}" placeholder="esp32, esp32-c3"></label>
     <label>Minimum boards <input name="min_boards" type="number" min="1" max="64" value="${value("min_boards", 1)}"></label>
@@ -4846,6 +5007,15 @@ function wireRigProjects(card) {
     redraw();
     $("project-form")?.querySelector("input[name=name]")?.focus();
   });
+  card.querySelectorAll(".project-open").forEach(element => element.addEventListener("click", event => {
+    event.preventDefault();
+    const name = element.dataset.name || element.closest("tr")?.dataset.project;
+    projectOpen = projectOpen === name && element.tagName === "BUTTON" ? null : name;
+    history.replaceState(null, "", projectOpen ? `#configuration/projects/${projectOpen}` : "#configuration/projects");
+    redraw();
+  }));
+  card.querySelectorAll(".project-run").forEach(button => button.addEventListener("click", () => runProject(button.dataset.name)));
+  card.querySelectorAll(".project-fetch").forEach(button => button.addEventListener("click", () => fetchProjectBundle(button.dataset.name, button)));
   card.querySelectorAll(".project-edit").forEach(button => button.addEventListener("click", () => { projectEditing = button.dataset.name; redraw(); }));
   card.querySelector(".project-cancel")?.addEventListener("click", () => { projectEditing = null; redraw(); });
   card.querySelectorAll(".project-remove").forEach(button => button.addEventListener("click", async () => {
@@ -4856,6 +5026,7 @@ function wireRigProjects(card) {
       rigProjectsView = {...rigProjectsView, projects: answer.projects};
     } catch (error) { alert(`This rig refused: ${error.message}`); return; }
     projectEditing = null;
+    if (projectOpen === name) projectOpen = null;
     redraw();
   }));
   const form = $("project-form");
@@ -4868,7 +5039,7 @@ function wireRigProjects(card) {
       min_boards: Number(fields.min_boards) || 1,
       timeout_seconds: Number(fields.timeout_seconds) || 1800,
     };
-    for (const key of ["supply_repo", "revision_key", "label"]) if (!body[key]) delete body[key];
+    for (const key of ["supply_repo", "revision_key", "label", "default_ref"]) if (!body[key]) delete body[key];
     const name = form.dataset.name;
     const path = name ? `/api/v1/projects/${encodeURIComponent(name)}` : "/api/v1/projects";
     const submit = form.querySelector("button[type=submit]");
@@ -4877,6 +5048,7 @@ function wireRigProjects(card) {
       const answer = await api(path, {method: "POST", body: JSON.stringify(body)});
       rigProjectsView = {...rigProjectsView, projects: answer.projects};
       projectEditing = null;
+      projectOpen = answer.project?.name || projectOpen;
       redraw();
     } catch (error) {
       const note = $("project-error");
@@ -5086,7 +5258,7 @@ function showSettingsTab(tab, updateHash = true) {
     lastRouted = location.hash;
   }
   if (!token) return;
-  if (settingsTab === "general") loadConfig();
+  if (settingsTab === "general") { loadConfig(); loadGitHubCard(); }
   if (settingsTab === "projects") loadProjects();
   if (settingsTab === "access" && isAdmin()) { loadAudit(); loadKeys(); }
   shell().settingsPanel(settingsTab);

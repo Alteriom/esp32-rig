@@ -110,17 +110,32 @@ reproducible and a second project does not mean a second rig.
 
 ## Your project on the rig
 
-A *project* is a repository whose firmware the rig flashes and whose test
-suite it runs. Two come with the rig -- the Rig Health Check and the
-painlessMesh reference -- and yours is added from the dashboard: **Settings →
-Projects → Add project** asks for the repository, the branch a run is for by
-default, where the pytest suite lives in it, which chip families a run takes,
-and the CI workflow that builds the firmware bundle. The rig writes the
-profile document under its state directory (`/var/lib/alteriom-hil/profiles/`
-on a standard install), reads it back at once, and an upgrade leaves it
-alone. The same is done over the API (`GET`/`POST /api/v1/projects`) with an
-admin key. The rig does not build firmware: your CI builds a bundle and hands
-it to the rig (`POST /api/v1/artifacts`), and a run flashes it.
+A *project* is a GitHub repository whose firmware the rig flashes and whose
+test suite it runs. Two come with the rig -- the Rig Health Check and the
+painlessMesh reference -- and yours needs GitHub first: the rig checks a
+project's repository out for every run and fetches the firmware its CI
+built, and it can do neither without a token. On the rig:
+
+```bash
+sudo alteriom-hil-admin github set     # a fine-grained token: Contents read, Actions read
+sudo alteriom-hil-admin github check   # who the token is, and that GitHub accepts it
+```
+
+Until then Settings → Projects says so and offers no Add project. With it,
+**Settings → Projects → Add project** asks for the repository (checked with
+GitHub before anything is written), the branch a run is for by default
+(empty takes the repository's own), where the pytest suite lives in it,
+which chip families a run takes, and the CI workflow that builds the firmware
+bundle. The rig writes the profile document under its state directory
+(`/var/lib/alteriom-hil/profiles/` on a standard install), reads it back at
+once, and an upgrade leaves it alone. Each project has a page there: its
+configuration, the bundles the rig holds for it, its recent runs, and
+**Fetch newest bundle**, which takes the newest artifact the supply workflow
+uploaded to GitHub -- how a rig on a LAN, which no CI can reach, gets its
+firmware. The same is done over the API (`GET`/`POST /api/v1/projects`,
+`POST /api/v1/projects/<name>/fetch`) with an admin key. The rig does not
+build firmware: your CI builds a bundle, the rig fetches it or takes it when
+the CI hands it over (`POST /api/v1/artifacts`), and a run flashes it.
 
 The rig's overview also shows the public page of the farm its software comes
 from -- how many rigs and boards, how they are doing -- with a way to connect

@@ -671,9 +671,10 @@ def command_upgrade(args: argparse.Namespace) -> int:
             print(f"dashboard bundle unpacked into {args.web_root}")
         carried = release_document.firmware(manifest)
         if carried and not args.no_firmware:
+            already = _held_firmware(state_dir(payload) / "artifacts", carried)
             bundle_id = _install_firmware(payload, staged / carried["name"], manifest, carried)
-            print(f"health check firmware {carried['version']} installed as {bundle_id} and pinned, "
-                  f"for {', '.join(carried['families'])}")
+            print(f"health check firmware {carried['version']} {'already held as' if already else 'installed as'} "
+                  f"{bundle_id} and pinned, for {', '.join(carried['families'])}")
 
     print(f"installed {manifest.get('version')}. The service runs the old code until it restarts:")
     print("  sudo systemctl restart alteriom-hil-farm.service")
@@ -716,6 +717,21 @@ def _canary_revision_key(payload: dict) -> str:
     return spec.revision_key
 
 
+def _held_firmware(root: Path, carried: dict) -> str | None:
+    """A bundle already in the store that is this exact firmware: same canary
+    digest, same version. A release that did not change the firmware carries
+    the one before, and installing it again would only make a second copy."""
+    from alteriom_hil import artifact_store
+    if not root.is_dir():
+        return None
+    for bundle in artifact_store.scan(root).bundles.values():
+        built = bundle.manifest or {}
+        if (built.get("producer") == CANARY_PROFILE and str(built.get("version")) == str(carried.get("version"))
+                and str(built.get("canary_sha")) == str(carried.get("revision"))):
+            return bundle.id
+    return None
+
+
 def _install_firmware(payload: dict, tarball: Path, manifest: dict, carried: dict) -> str:
     """Unpack the release's firmware into the rig's artifact store, and pin it.
 
@@ -731,6 +747,13 @@ def _install_firmware(payload: dict, tarball: Path, manifest: dict, carried: dic
     """
     revision_key = _canary_revision_key(payload)
     root = state_dir(payload) / "artifacts"
+    held = _held_firmware(root, carried)
+    if held is not None:
+        # Pinned again, under this release's name: pinned is what makes it
+        # current, and the note says which release last asked for it.
+        JobStore(state_dir(payload) / "farm.sqlite3").pin_artifact(
+            held, f"the health check of release {manifest.get('version')}"[:200])
+        return held
     bundle_id = uuid.uuid4().hex
     # Staged under a name the store ignores -- it lists 32-hex ids only -- so a
     # half-unpacked bundle is never scanned, flashed or pruned.
@@ -892,6 +915,74 @@ def read_secret_line(prompt: str) -> str:
 
         return getpass.getpass(prompt)
     return sys.stdin.readline()
+
+
+def _github_token_path() -> Path:
+    from alteriom_hil.service import BaseManager
+    return Path(os.environ.get("ALTERIOM_HIL_CONSUMER_TOKEN_FILE") or BaseManager.CONSUMER_TOKEN_PATH)
+
+
+def command_github_set(args) -> int:
+    """The one token this rig uses for GitHub: to clone a project's repository
+    at a run and to fetch the bundle its CI built. Read from the terminal or
+    stdin, written root:<service group> 0640 like the API token, and checked
+    with GitHub before it is kept."""
+    from alteriom_hil import github_access
+    payload = hil_config.load_config()
+    token = read_secret_line("GitHub token (fine-grained; Contents: read, Actions: read on the project repositories): ").strip()
+    if not token:
+        raise SystemExit("no token given; nothing changed")
+    try:
+        who = github_access.whoami(token)
+    except github_access.GitHubError as exc:
+        raise SystemExit(f"not stored: {exc}")
+    path = _github_token_path()
+    write_secret_file(payload, path, token + "\n")
+    print(f"GitHub token stored at {path} as {who['login']}. The service reads it at its next use; no restart needed.")
+    return 0
+
+
+def command_github_check(args) -> int:
+    from alteriom_hil import github_access
+    path = _github_token_path()
+    try:
+        token = github_access.read_token(path)
+    except OSError as exc:
+        raise SystemExit(f"{path} exists but cannot be read: {exc.__class__.__name__}")
+    if not token:
+        answer = {"configured": False, "connected": False, "path": str(path), "how": github_access.SET_COMMAND}
+        if args.json:
+            print(json.dumps(answer, indent=2))
+        else:
+            print(f"no GitHub token at {path}: this rig can add no project. {github_access.SET_COMMAND}")
+        return 1
+    try:
+        who = github_access.whoami(token)
+        answer = {"configured": True, "connected": True, "login": who["login"], "path": str(path)}
+        if args.repo:
+            answer["repository"] = github_access.repository(token, args.repo)
+    except github_access.GitHubError as exc:
+        answer = {"configured": True, "connected": False, "path": str(path), "error": str(exc)}
+    if args.json:
+        print(json.dumps(answer, indent=2, sort_keys=True))
+    elif answer["connected"]:
+        print(f"GitHub accepts this rig's token as {answer['login']}"
+              + (f"; {answer['repository']['url']} is readable (default branch {answer['repository']['default_branch']})"
+                 if answer.get("repository") else ""))
+    else:
+        print(f"GitHub does not accept this rig's token: {answer['error']}")
+    return 0 if answer["connected"] else 1
+
+
+def command_github_remove(args) -> int:
+    path = _github_token_path()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        print(f"no token at {path}")
+        return 0
+    print(f"removed {path}; this rig can add no project until `{'alteriom-hil-admin github set'}` is run again")
+    return 0
 
 
 def write_secret_file(payload: dict, path: Path, text: str) -> None:
@@ -1650,6 +1741,17 @@ def parser() -> argparse.ArgumentParser:
     service = commands.add_parser("service", help="control the Actions runner service")
     service.add_argument("action", choices=("status", "start", "stop", "restart"))
     service.set_defaults(func=command_service)
+
+    github = commands.add_parser("github", help="the GitHub token this rig reads projects and their bundles with")
+    github_commands = github.add_subparsers(dest="github_command", required=True)
+    github_set = github_commands.add_parser("set", help="store a token, read from the terminal or stdin; never from argv")
+    github_set.set_defaults(func=command_github_set)
+    github_check = github_commands.add_parser("check", help="who the token is, and whether GitHub accepts it")
+    github_check.add_argument("--repo", help="also check that this repository can be read")
+    github_check.add_argument("--json", action="store_true")
+    github_check.set_defaults(func=command_github_check)
+    github_remove = github_commands.add_parser("remove", help="forget the token; the rig can then add no project")
+    github_remove.set_defaults(func=command_github_remove)
 
     keys = commands.add_parser("keys", help="named API keys and their roles")
     key_commands = keys.add_subparsers(dest="keys_command", required=True)

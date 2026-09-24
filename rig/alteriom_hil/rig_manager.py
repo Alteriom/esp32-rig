@@ -42,6 +42,7 @@ from alteriom_hil.board_registry import (
 from alteriom_hil.instrument_registry import instruments_path_for, load_instruments, wired_to
 from alteriom_hil.inventory import discover, probe_details, publish_inventory
 from alteriom_hil.jobstore import JobCancelled, utcnow
+from alteriom_hil import github_access
 from alteriom_hil.profiles import NAME_PATTERN, parse_profile
 from alteriom_hil.providers import Redactor, scrub_tree
 from alteriom_hil.farm_shared import BOARD_ID_PATTERN, DEFAULT_PROFILE, ElsewhereError, PipelineError, RigBusyError, TARGETS
@@ -118,6 +119,12 @@ class RigMixin:
         ("POST", r"/api/v1/projects", "admin", "create_project"),
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})", "admin", "update_project"),
         ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/delete", "admin", "delete_project"),
+        # The newest bundle the project's supply workflow uploaded, fetched
+        # by the rig from GitHub: how a rig no CI can reach gets its firmware.
+        ("POST", r"/api/v1/projects/(?P<name>[a-z0-9][a-z0-9-]{0,63})/fetch", "admin", "fetch_project_bundle"),
+        # Who this rig is to GitHub (never the token), and whether it can add
+        # a project at all.
+        ("GET", r"/api/v1/github", "user", "github_view"),
         ("GET", r"/api/v1/farm/public", "user", "farm_public_view"),
     )
 
@@ -138,6 +145,44 @@ class RigMixin:
         # one base, and the portal's routes come after these.
         inherited = super().api_routes() if hasattr(super(), "api_routes") else ()
         return mine + tuple(inherited)
+
+    # ---- GitHub: the token this rig holds, and what it lets it do ------------------
+    #
+    # A project is a GitHub repository whose CI builds the firmware this rig
+    # flashes. Without a token the rig could neither check the repository out
+    # at a run nor take a bundle from the workflow that built it, so it adds
+    # no project until it has one. The token is the consumer credential git
+    # is already answered with (`_clone_credentials`); `alteriom-hil-admin
+    # github set` writes it. The rig says who the token is, never what it is.
+
+    def _github(self) -> "github_access.Status":
+        status = self.__dict__.get("_github_status")
+        if status is None or status.path != self.CONSUMER_TOKEN_PATH:
+            status = github_access.Status(Path(self.CONSUMER_TOKEN_PATH))
+            self.__dict__["_github_status"] = status
+        return status
+
+    def github_view(self, identity=None) -> dict:
+        return self._github().view()
+
+    def _require_github(self) -> str:
+        """The token, when GitHub is connected; otherwise why a project cannot
+        be added, as a refusal (403) that names the command."""
+        view = self._github().view()
+        if not view["configured"]:
+            raise PermissionError(
+                f"GitHub is not connected on this rig, so it cannot take a project: a project is a GitHub "
+                f"repository whose CI builds what the rig flashes. Connect it with `{github_access.SET_COMMAND}` "
+                f"(a fine-grained token with Contents: read on the project's repositories, and Actions: read "
+                f"to fetch its bundles).")
+        if not view["connected"]:
+            raise PermissionError(f"GitHub does not accept this rig's token: {view['error']}. Replace it with `{github_access.SET_COMMAND}`.")
+        return self._github().token() or ""
+
+    def _github_repository(self, token: str, url: str) -> dict:
+        """The repository as GitHub shows it to this rig's token. Its own
+        method so a test can stand in for GitHub."""
+        return github_access.repository(token, url)
 
     # ---- projects: what this rig runs -----------------------------------------------
 
@@ -172,6 +217,8 @@ class RigMixin:
             "projects": [self._project_row(name) for name in sorted(self.profiles)],
             "directory": str(self._local_profiles_dir()),
             "default_profile": self.default_profile,
+            # Whether a project can be added here at all, and as whom.
+            "github": self._github().view(),
         }
 
     def _project_document(self, fields: dict) -> dict:
@@ -185,9 +232,7 @@ class RigMixin:
         name = text("name").lower()
         if not NAME_PATTERN.fullmatch(name):
             raise ValueError("a project's name is lowercase letters, digits and dashes, up to 64")
-        repo = text("repo")
-        if not re.fullmatch(r"https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/[^\s]+", repo):
-            raise ValueError("repo must be the project's https:// repository URL")
+        repo = github_access.normalise_repo(text("repo"))   # GitHubError is a ValueError: a 400 with the reason
         label = text("label", name)[:80] or name
         default_ref = text("default_ref", "main")[:120]
         if not default_ref or any(ch.isspace() for ch in default_ref):
@@ -196,7 +241,7 @@ class RigMixin:
         revision_key = text("revision_key", f"{name.replace('-', '_')}_sha")
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", revision_key):
             raise ValueError("revision_key is the manifest key that holds the commit: letters, digits and underscores")
-        supply_repo = text("supply_repo", repo)
+        supply_repo = github_access.normalise_repo(text("supply_repo", repo))
         supply_workflow = text("supply_workflow", ".github/workflows/hil.yml")
         supply_artifact = text("supply_artifact", "hil-artifacts")
         try:
@@ -262,8 +307,31 @@ class RigMixin:
         return {"project": self._project_row(doc["name"]), "path": str(path),
                 "projects": self.projects_view()["projects"]}
 
+    def _checked_with_github(self, fields: dict) -> dict:
+        """The fields, once GitHub has been asked about the repository with
+        this rig's token: refused when the token cannot read it, and given
+        the repository's own default branch when none was named."""
+        token = self._require_github()
+        fields = dict(fields or {})
+        repo = github_access.normalise_repo(str(fields.get("repo") or ""))
+        try:
+            seen = self._github_repository(token, repo)
+        except github_access.GitHubError as error:
+            raise ValueError(f"this rig's GitHub token cannot read {repo}: {error}") from None
+        fields["repo"] = seen.get("url") or repo
+        if not str(fields.get("default_ref") or "").strip():
+            fields["default_ref"] = seen.get("default_branch") or "main"
+        supply = str(fields.get("supply_repo") or "").strip()
+        if supply and github_access.normalise_repo(supply) != fields["repo"]:
+            try:
+                self._github_repository(token, github_access.normalise_repo(supply))
+            except github_access.GitHubError as error:
+                raise ValueError(f"this rig's GitHub token cannot read the supply repository {supply}: {error}") from None
+        return fields
+
     def create_project(self, body, identity=None) -> dict:
-        doc = self._project_document(body or {})
+        fields = self._checked_with_github(body or {})
+        doc = self._project_document(fields)
         if doc["name"] in self.profiles:
             shipped = doc["name"] in self.shipped_profiles
             raise ValueError(f"{doc['name']} is already a project on this rig"
@@ -272,7 +340,62 @@ class RigMixin:
 
     def update_project(self, body, name, identity=None) -> dict:
         self._own_project(name)
-        return self._write_project(self._project_document({**(body or {}), "name": name}))
+        fields = self._checked_with_github({**(body or {}), "name": name})
+        return self._write_project(self._project_document(fields))
+
+    # ---- the newest bundle a project's CI built -------------------------------------
+
+    def _github_newest_artifact(self, token: str, spec) -> dict:
+        return github_access.newest_artifact(token, spec.supply_repo, spec.supply_artifact or "hil-artifacts",
+                                             spec.supply_workflow)
+
+    def _github_download(self, token: str, url: str) -> bytes:
+        return github_access.download_artifact(token, url)
+
+    def fetch_project_bundle(self, body, name, identity=None) -> dict:
+        """Take the newest bundle the project's supply workflow uploaded to
+        GitHub, as if that CI had handed it over: the same acceptance, the
+        same provenance, so a run can flash it. A bundle the rig already
+        holds for that run is not taken twice."""
+        spec = self.profiles.get(name)
+        if spec is None:
+            raise LookupError(f"no project named {name} on this rig")
+        if not spec.accepts_supplied_bundles:
+            raise ValueError(f"{name} declares no supply workflow to fetch a bundle from")
+        token = self._require_github()
+        try:
+            found = self._github_newest_artifact(token, spec)
+            held = self._held_bundle(name, found["commit"], found["run_id"])
+            if held is not None:
+                return {"fetched": False, "held": True, "bundle": held, "artifact": found}
+            zipped = self._github_download(token, found["download_url"])
+            body = github_access.tarball_from_zip(zipped)
+        except github_access.GitHubError as error:
+            raise ValueError(str(error)) from None
+        accepted = self.accept_bundle({
+            "profile": name, "repo": found["repo"], "workflow": spec.supply_workflow,
+            "run_id": found["run_id"], "run_url": found["run_url"], "commit": found["commit"],
+            "branch": found["branch"], "actor": found["actor"],
+        }, body)
+        return {"fetched": not accepted.get("reused", False), "held": bool(accepted.get("reused", False)),
+                "bundle": accepted, "artifact": found}
+
+    def _held_bundle(self, profile: str, commit: str, run_id: str) -> dict | None:
+        """A bundle already in the store from that run of that project."""
+        from alteriom_hil import artifact_store
+        for bundle in artifact_store.scan(self.artifact_root).bundles.values():
+            provenance = self._provenance_of(bundle)
+            if (provenance.get("profile") == profile and str(provenance.get("run_id") or "") == run_id
+                    and str(provenance.get("commit") or "").lower() == commit.lower()):
+                return {"id": bundle.id, "profile": profile, "revision": commit, "source": provenance}
+        return None
+
+    @staticmethod
+    def _provenance_of(bundle) -> dict:
+        try:
+            return json.loads((bundle.path / "provenance.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
 
     def delete_project(self, body, name, identity=None) -> dict:
         path = self._own_project(name)
