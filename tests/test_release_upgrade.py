@@ -280,6 +280,25 @@ def test_the_firmware_a_release_carries_is_installed_and_pinned(tmp_path, pip, c
     assert record["pinned_at"] and "release 1.0.7" in record["pin_note"]
 
 
+def test_the_same_firmware_is_not_installed_twice(tmp_path, pip, capsys):
+    """Most releases do not change the health check firmware, and carry the
+    one before. Installing such a release finds the bundle already in the
+    store -- same canary digest, same version -- pins it again under the
+    new release's name, and makes no second copy. A rig that takes every
+    release no longer collects one health check bundle per release."""
+    source = _built(tmp_path, firmware=True)
+    assert admin_cli.command_upgrade(_args(tmp_path, source=source)) == 0
+    first = capsys.readouterr().out
+    assert admin_cli.command_upgrade(_args(tmp_path, source=source)) == 0
+    second = capsys.readouterr().out
+    assert "installed as" in first and "already held as" in second and "and pinned" in second
+    state = Path(yaml.safe_load(_config(tmp_path).read_text(encoding="utf-8"))["paths"]["state"])
+    bundles = [path for path in (state / "artifacts").iterdir() if len(path.name) == 32]
+    assert len(bundles) == 1, "one bundle, however many releases carried it"
+    record = JobStore(state / "farm.sqlite3").artifact_records()[bundles[0].name]
+    assert record["pinned_at"] and "release 1.0.7" in record["pin_note"]
+
+
 @pytest.mark.parametrize("bundle, says", [
     (_canary_bundle(producer="painlessmesh"), "not the canary"),
     (_canary_bundle(version="9.9.9"), "not the build release.json describes"),

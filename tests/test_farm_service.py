@@ -2233,11 +2233,11 @@ def _supply_manager(tmp_path, monkeypatch=None, remote_sha="9" * 40):
     return manager
 
 
-def _built_elsewhere(tmp_path, manager, sha, families=("esp32", "esp32-c3")):
+def _built_elsewhere(tmp_path, manager, sha, families=("esp32", "esp32-c3"), bundle="e" * 32):
     """A bundle as a producer's CI leaves it, agreeing with this farm's agent."""
     import json
 
-    path = _bundle(tmp_path, "e" * 32, sha, families=families)
+    path = _bundle(tmp_path, bundle, sha, families=families)
     manifest = json.loads((path / "manifest.json").read_text())
     manifest["hil_agent_sha"] = manager.agent_source_sha()
     (path / "manifest.json").write_text(json.dumps(manifest))
@@ -2560,10 +2560,18 @@ def test_a_branch_or_user_a_bundle_claims_is_checked_where_it_arrives(tmp_path):
     with pytest.raises(ValueError, match="actor must be"):
         manager.accept_bundle(_supply_fields(sha, actor="<script>"), _archive(path))
     # A bot is somebody too, and an unnamed producer is still a producer.
-    bot = manager.accept_bundle(_supply_fields(sha, actor="github-actions[bot]"), _archive(path))
+    body = _archive(path)
+    bot = manager.accept_bundle(_supply_fields(sha, actor="github-actions[bot]"), body)
     assert manager.bundle_provenance(bot["id"])["actor"] == "github-actions[bot]"
-    plain = manager.accept_bundle(_supply_fields(sha), _archive(path))
+    # The same bundle sent again is the one already held (accept_bundle
+    # answers it, marked reused), so a second provenance needs a second
+    # bundle: another commit. (_built_elsewhere writes in place, so the
+    # first archive is kept as bytes.)
+    other = "8" * 40
+    plain = manager.accept_bundle(_supply_fields(other), _archive(_built_elsewhere(tmp_path, manager, other, bundle="f" * 32)))
     assert manager.bundle_provenance(plain["id"])["actor"] is None
+    again = manager.accept_bundle(_supply_fields(sha, actor="github-actions[bot]"), body)
+    assert again["id"] == bot["id"] and again["reused"] is True
 
 
 def test_a_run_records_who_started_it(tmp_path, monkeypatch):

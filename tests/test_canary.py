@@ -158,6 +158,26 @@ def test_the_canary_revision_is_its_source_and_the_commit_it_was_built_from(monk
         stray.unlink(missing_ok=True)
 
 
+def test_the_firmware_belongs_to_the_commit_that_last_changed_it(tmp_path, monkeypatch):
+    """Every release ships the health check firmware and most do not touch
+    it. Stamping HEAD gave the same firmware a new revision per release, a
+    new bundle on every rig, and a rebuild on every tag. The revision is the
+    last commit under canary/firmware/, so it holds until the firmware
+    changes -- and a release can carry the bundle before it, byte for byte."""
+    firmware = _firmware_repo(tmp_path)
+    monkeypatch.setattr(build_artifacts, "FIRMWARE_DIR", firmware)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=firmware, check=True, capture_output=True, text=True).stdout.strip()
+    last_firmware = subprocess.run(["git", "log", "-1", "--format=%H", "--", "."], cwd=firmware,
+                                   check=True, capture_output=True, text=True).stdout.strip()
+    assert build_artifacts.farm_sha() == last_firmware == head, "the newest commit changed the firmware"
+    (firmware.parent.parent / "README.md").write_text("docs again\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=firmware, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "--quiet", "-m", "not the firmware either"], cwd=firmware, check=True, capture_output=True)
+    moved = subprocess.run(["git", "rev-parse", "HEAD"], cwd=firmware, check=True, capture_output=True, text=True).stdout.strip()
+    assert moved != head
+    assert build_artifacts.farm_sha() == last_firmware, "HEAD moved; the firmware did not"
+
+
 def test_the_farm_commit_is_required_rather_than_invented(monkeypatch):
     """A bundle whose revision is a guess is one nothing can reuse safely,
     so a build that cannot name its commit fails instead."""

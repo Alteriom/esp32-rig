@@ -1056,7 +1056,7 @@ def test_settings_projects_is_a_persons_workspaces_and_the_farms_build_for_a_rig
     workspaces and the projects in each, drawn by the rig's bundle from
     whatever the shell answers; a rig, or a key, sees what this farm runs."""
     script = dashboard()
-    assert 'if (settingsTab === "general") loadConfig();' in script
+    assert 'if (settingsTab === "general") { loadConfig(); loadGitHubCard(); }' in script
     assert 'if (settingsTab === "projects") loadProjects();' in script
     loader = script.split("async function loadProjects()", 1)[1].split("\n}", 1)[0]
     assert "if (!(you?.account && shell().workspaceProjects)) return shell().keyProjects();" in loader
@@ -1071,6 +1071,19 @@ def test_settings_projects_is_a_persons_workspaces_and_the_farms_build_for_a_rig
     assert "function renderRigProjects(view)" in script and "function projectForm(current)" in script
     assert "<h2>What this rig runs</h2>" in script and "Add project" in script
     assert "`/api/v1/projects/${encodeURIComponent(name)}/delete`" in script
+    # GitHub is the gate: without a token the page says so, with the command,
+    # and offers no Add project; with one it says who the rig is to GitHub.
+    assert "const canAdd = Boolean(github && github.connected) && isAdmin();" in script
+    assert "canAdd && !projectEditing ? '<button type=\"button\" class=\"secondary project-add\">Add project</button>' : \"\"" in script
+    assert "function githubMarkup(github" in script and "This rig has no GitHub token, so it can add no project" in script
+    assert "Contents: read" in script and "Actions: read" in script
+    # A project has a page: fields, bundles held, recent runs, run / fetch /
+    # change / remove.
+    assert "function projectPage(row, github)" in script and "async function loadProjectPage(name)" in script
+    assert "`/api/v1/projects/${encodeURIComponent(name)}/fetch`" in script and "Fetch newest bundle" in script
+    assert 'await api(`/api/v1/artifacts?profile=${encodeURIComponent(name)}&limit=5`)' in script
+    # And Settings -> General says where projects come from.
+    assert "function renderGitHubCard(github)" in script and 'await api("/api/v1/github")' in script
     # The portal's registry stays what a key sees there.
     assert "function renderFarmProjects(build)" in script and "What the farm runs" in script
     # The first route can run before the status knows who is looking.
@@ -1177,6 +1190,18 @@ def test_a_rig_shows_the_public_farm_it_could_report_to():
     assert "    loadOverviewStats();\n    loadFarmWorld();\n" in script
 
 
+def test_the_run_form_follows_the_project():
+    """Under the picker the form says what the chosen project is configured
+    with; the families a run takes are the project's `needs` when it has
+    them, the rest offered disabled and said why; and a suite that arrives
+    with a per-run checkout is not pretended to be listable."""
+    script = dashboard()
+    assert "function renderProjectStrip(name)" in script and "renderProjectStrip(chosen);" in script
+    assert 'const needed = project && (project.needs || []).length ? new Set(project.needs.map(need => need.target)) : null;' in script
+    assert 'unneeded ? "not a family this project takes"' in script
+    assert "This project's suite is checked out per run, so its files are not listed here" in script
+
+
 def test_the_rigs_document_is_the_rigs_application():
     """A rig served the farm's page -- "ESP32 Farm", "Farm overview", a
     fleet, Insights, Sign in with GitHub, an Add rig card, and a script tag
@@ -1205,6 +1230,8 @@ def test_the_rigs_document_is_the_rigs_application():
                  "What the farm flashes", "Validation profile"):
         assert gone not in page, gone
     assert '<label>Project<select name="profile" id="profile-select">' in page
+    assert '<div id="project-strip" class="project-strip" hidden></div>' in page
+    assert '<section id="github-card" class="card" hidden></section>' in page
     assert '<section id="farm-world" class="card" hidden></section>' in page
     assert '<section id="farm-link" class="card">' in page and "Connection to a farm" in page
     assert "function renderFarmLink(farm)" in script and 'config set farm.mode standalone' in script

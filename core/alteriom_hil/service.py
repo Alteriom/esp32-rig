@@ -3212,6 +3212,18 @@ class BaseManager:
             families = sorted(self._manifest_targets(manifest))
             if not families:
                 raise ValueError("the bundle carries no families")
+            # The same bundle, sent again -- a deploy that did not change the
+            # firmware, a CI re-run of the same commit -- is the one already
+            # held, not a second copy with a second id. Same profile, same
+            # commit and the same manifest, byte for byte, is the same
+            # bundle: every image's digest is in the manifest. Checked after
+            # everything else, so a claim that would be refused is refused
+            # whether or not the bundle is already here.
+            already = self._same_bundle_held(
+                profile, json.loads((staging / "manifest.json").read_text(encoding="utf-8")))
+            if already is not None and str(already.get("source", {}).get("commit") or "").lower() == commit:
+                shutil.rmtree(staging, ignore_errors=True)
+                return {**already, "reused": True}
             provenance = {
                 "kind": "supplied",
                 "profile": profile,
@@ -3239,6 +3251,34 @@ class BaseManager:
             "families": families,
             "source": provenance,
         }
+
+    def _same_bundle_held(self, profile: str, manifest: dict) -> dict | None:
+        """A held bundle of this profile with this exact manifest, as
+        accept_bundle would have answered for it, or None."""
+        wanted = json.dumps(manifest, sort_keys=True)
+        spec = self.profiles.get(profile)
+        for bundle in artifact_store.scan(self.artifact_root).bundles.values():
+            # The manifest as written, not as the loader decorates it.
+            try:
+                stored = json.loads((bundle.path / "manifest.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if json.dumps(stored, sort_keys=True) != wanted:
+                continue
+            try:
+                provenance = json.loads((bundle.path / "provenance.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                provenance = {}
+            if provenance.get("profile") != profile:
+                continue
+            return {
+                "id": bundle.id,
+                "profile": profile,
+                "revision": str(manifest.get(spec.revision_key) or "") if spec else "",
+                "families": sorted(self._manifest_targets(manifest)),
+                "source": provenance,
+            }
+        return None
 
     def _check_supplied_bundle(self, bundle_id: str, spec, sha: str | None, targets: list) -> None:
         """Is this bundle the one this run may flash?"""
