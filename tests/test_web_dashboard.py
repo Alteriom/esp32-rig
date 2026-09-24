@@ -343,7 +343,7 @@ def test_the_configuration_page_covers_every_parameter_the_host_can_set():
 def test_header_keeps_its_title_and_links_to_the_repository_and_deployed_commit():
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    assert "<title>Alteriom ESP32 Farm</title>" in page
+    assert "<title>Alteriom HIL Rig</title>" in page, "the rig's document is the rig's"
     assert "document.title" not in script, "the tab title never changes"
     assert 'id="repo-link"' in page and 'id="version"' in page
     assert "repositories" in script and "/commit/" in script
@@ -451,7 +451,9 @@ def test_the_farm_shows_what_it_has_done_not_only_what_it_holds():
     the service's content security policy allows no inline style."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    assert 'data-panel="statistics"' in page and 'data-page="statistics"' in page
+    # Insights are the farm's; the rig's document keeps the page for the
+    # library and offers no way to it.
+    assert 'data-page="statistics"' in page and 'data-panel="statistics"' not in page
     assert 'id="overview-stats"' in page
     assert 'if (route.name === "statistics") loadStatistics(' in script
     assert "/api/v1/stats?days=${days}&tz_offset_minutes=${tzOffsetMinutes()}" in script
@@ -985,18 +987,18 @@ def test_the_login_card_offers_github_and_email_and_keeps_the_key_for_programs()
     shows the card, and sends the key only when it has one."""
     page = (WEB / "index.html").read_text(encoding="utf-8")
     script = (WEB / "app.js").read_text(encoding="utf-8")
-    assert '<a id="signin-github" class="button signin-github" href="/auth/github" hidden>' in page
-    assert '<form id="signin-email-form" hidden>' in page and 'id="signin-email" type="email"' in page
-    # Two steps in one card: ask for a code, then type it here. The code
-    # field is a one-time-code field so a phone offers it from the mail,
-    # and the second step posts JSON with the browser's own cookies -- the
-    # nonce the first step set is what makes it the browser that asked.
-    assert '<form id="signin-code-form" hidden>' in page and 'autocomplete="one-time-code"' in page
-    assert "Send code" in page and "link that signs you in" not in page
+    # GitHub and email are the portal's ways in; the rig's document has its
+    # key and nothing else (test_the_rigs_document_is_the_rigs_application).
+    assert 'id="signin-github"' not in page and 'id="signin-email-form"' not in page
+    assert '<details id="signin-key" open>' in page
+    # The two-step email sign-in is the portal's card (tests/farm); the
+    # library still carries it, gated on the shell having accounts.
+    assert "link that signs you in" not in page
     assert 'fetch("/auth/email/code", {method: "POST", credentials: "same-origin"' in script
     assert 'location.href = body.next || "/app"' in script, "and goes where the farm says"
-    assert '<details id="signin-key">' in page and 'id="token-form"' in page
-    assert '<button id="sign-out" class="secondary sign-out" hidden>Sign out</button>' in page
+    # The rig's card is the key alone, open, with nothing to sign out of.
+    assert '<details id="signin-key" open>' in page and 'id="token-form"' in page
+    assert 'id="sign-out"' not in page
     call = script.split("async function api(path, options = {})", 1)[1].split("\n}\n", 1)[0]
     assert 'token && token !== "session"' in call, "a session sends no Authorization header; the cookie goes with the request"
     files = script.split("async function fetchFromApi(path)", 1)[1].split("\n}\n", 1)[0]
@@ -1101,3 +1103,62 @@ def test_settings_is_a_persons_page_too_and_only_the_farm_wide_tabs_are_an_opera
     assert 'workspaceOnly() ? tabs.filter(name => name !== "general" && name !== "access") : tabs' in tabs
     assert "settingsTab = known ? tab : settingsTabs()[0];" in script
     assert 'settingsTab = known ? tab : "general"' not in script
+
+
+PORTAL_ONLY_IDS = {
+    # The portal's: accounts, sessions and sign-in; adding a rig; the
+    # portal's own configuration; what its shell draws into.
+    "account-identity", "account-sessions", "add-rig", "add-rig-card", "add-rig-form", "close-add-rig",
+    "farm-webhooks", "join-command", "portal-config", "sign-out",
+    "signin-code", "signin-code-again", "signin-code-form", "signin-code-to", "signin-email",
+    "signin-email-form", "signin-github", "signin-methods", "signin-none",
+    "settings-fleet", "settings-people", "settings-workspaces", "workspace-form", "you",
+}
+
+# What the library builds into the page as it goes, rather than finds there.
+BUILT_AT_RUNTIME = {"rig-details-form", "settings-changes", "storage-next", "storage-prev", "join-command"}
+
+
+def _ids_touched(script: str) -> set[str]:
+    import re
+    return set(re.findall(r'\$\("([A-Za-z0-9_-]+)"\)', script))
+
+
+def test_the_rigs_document_is_the_rigs_application():
+    """A rig served the farm's page -- "ESP32 Farm", "Farm overview", a
+    fleet, Insights, Sign in with GitHub, an Add rig card, and a script tag
+    for a shell it does not have -- with a rig-shaped variant switched on.
+    The rig's document is its own now: this rig, its boards, its runs, its
+    firmware, its settings, and a card that says whether it is connected to
+    a farm. The document says which application it is, and the library asks
+    the document, not the first status."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = dashboard()
+    assert '<body data-app="rig">' in page
+    assert "<title>Alteriom HIL Rig</title>" in page and "<strong>HIL Rig</strong>" in page
+    assert 'function isPortal() { return document.body.dataset.app === "portal"; }' in script
+    for gone in ("ESP32 Farm", "Farm overview", 'id="signin-github"', 'id="signin-email-form"', 'id="add-rig"',
+                 'data-page="account"', 'data-panel="account"', 'data-panel="statistics"', "portal-shell.js",
+                 'id="farm-webhooks"', 'id="portal-config"', 'data-tab="releases"'):
+        assert gone not in page, gone
+    nav = page.split('<nav id="nav"', 1)[1].split("</nav>", 1)[0]
+    assert [m for m in __import__("re").findall(r'data-panel="([a-z]+)"', nav)] == ["overview", "runs", "rigs", "artifacts", "configuration"]
+    assert 'data-panel="rigs" data-tab="boards">Boards</button>' in nav
+    assert '<p class="eyebrow">THIS RIG</p><h1>Rig overview</h1>' in page
+    assert '<section id="farm-link" class="card">' in page and "Connection to a farm" in page
+    assert "function renderFarmLink(farm)" in script and 'config set farm.mode standalone' in script
+    # Every element the library reaches for is there, except the portal's own,
+    # which the library reaches for only when the document is the portal's.
+    missing = {i for i in _ids_touched(script) - PORTAL_ONLY_IDS - BUILT_AT_RUNTIME if f'id="{i}"' not in page}
+    assert not missing, f"the rig's document lacks {sorted(missing)}"
+    for portal_only in ("signin-email-form", "signin-code-form", "signin-code-again", "sign-out"):
+        assert f'$("{portal_only}")?.addEventListener' in script, portal_only
+    # Whether there are accounts here is the shell's to say; only the shell
+    # asks which application this is.
+    assert "accounts: false," in script.split("const RIG_SHELL = {", 1)[1].split("\n};", 1)[0]
+    assert 'if (!shell().accounts || !$("signin-methods")) return;' in script
+    # And the boot waits for the document's scripts -- the portal's shell
+    # loads after this file, and the boot asks it.
+    assert 'document.addEventListener("DOMContentLoaded", () => bootSession());' in script
+    assert "\nbootSession();\n" not in script, "booted only once the document's scripts have run"
+    assert 'if (!shell().accounts) return;\n  try {\n    const answer = await fetch("/api/v1/whoami", {credentials: "same-origin"});' in script

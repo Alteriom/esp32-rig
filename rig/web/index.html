@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Alteriom ESP32 Farm</title>
+  <title>Alteriom HIL Rig</title>
   <meta name="theme-color" content="#080d0c">
   <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
@@ -11,60 +11,39 @@
   <link rel="stylesheet" href="/app.css">
   <link rel="stylesheet" href="/pipeline.css">
 </head>
-<body>
+<body data-app="rig">
   <header class="app-header">
-    <a class="brand" href="#overview"><img class="brand-mark" src="/brand/mark.svg" width="34" height="34" alt=""><span><small>ALTERIOM</small><strong>ESP32 Farm</strong></span></a>
+    <a class="brand" href="#overview"><img class="brand-mark" src="/brand/mark.svg" width="34" height="34" alt=""><span><small>ALTERIOM</small><strong>HIL Rig</strong></span></a>
     <nav id="nav" aria-label="Dashboard">
       <button class="nav-item active" data-panel="overview">Overview</button>
       <button class="nav-item" data-panel="runs">Runs</button>
-      <button class="nav-item" data-panel="rigs">Rigs</button>
-      <button class="nav-item farm-wide" data-panel="artifacts">Firmware</button>
-      <button class="nav-item farm-wide" data-panel="statistics">Insights</button>
+      <button class="nav-item" data-panel="rigs" data-tab="boards">Boards</button>
+      <button class="nav-item" data-panel="artifacts">Firmware</button>
       <button class="nav-item" data-panel="configuration">Settings</button>
-      <!-- The header's .connection block carries the same name and the same
-           sign out, and is display:none below 850px. The nav is not, so on a
-           phone this is where you see who you are and stop being it. -->
-      <button class="nav-item" data-panel="account">Account</button>
     </nav>
     <div class="connection">
-      <a id="repo-link" class="repo-link" href="#" target="_blank" rel="noopener" hidden title="Farm repository on GitHub"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span id="repo-name">GitHub</span></a>
+      <a id="repo-link" class="repo-link" href="#" target="_blank" rel="noopener" hidden title="The rig software on GitHub"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span id="repo-name">GitHub</span></a>
       <a id="version" class="version" href="#" target="_blank" rel="noopener" title="Deployed revision">–</a>
-      <span id="you" class="badge you" hidden></span><button id="sign-out" class="secondary sign-out" hidden>Sign out</button><span id="live-dot" class="live-dot"></span><span id="last-updated">Connecting</span><span id="overall" class="badge">CONNECTING</span>
+      <span id="you" class="badge you" hidden></span><span id="live-dot" class="live-dot"></span><span id="last-updated">Connecting</span><span id="overall" class="badge">CONNECTING</span>
     </div>
   </header>
   <main>
     <section id="login" class="card login-card">
-      <p class="eyebrow">SIGN IN</p><h1>Your rigs, your runs</h1>
+      <p class="eyebrow">THIS RIG</p><h1>Your boards, your runs</h1>
+      <p class="muted">This is a rig's own dashboard: its boards, the runs on them, the firmware it holds and how the host is set up. It works on its own, and it can be connected to a farm portal from Settings.</p>
       <p id="signin-note" class="signin-note" hidden></p>
-      <div id="signin-methods" class="signin-methods">
-        <a id="signin-github" class="button signin-github" href="/auth/github" hidden>Sign in with GitHub</a>
-        <form id="signin-email-form" hidden>
-          <label for="signin-email">Or by email: we send you a code to type here</label>
-          <div class="signin-row"><input id="signin-email" type="email" autocomplete="email" placeholder="you@example.org" required><button>Send code</button></div>
-        </form>
-        <!-- Shown once a code is on its way. The code is typed into this
-             page rather than followed from the mail, so it works when the
-             mail opens somewhere else -- and the farm only accepts it from
-             the browser that asked for it. -->
-        <form id="signin-code-form" hidden>
-          <label for="signin-code">The 6-digit code we mailed to <strong id="signin-code-to"></strong></label>
-          <div class="signin-row"><input id="signin-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="000000" required><button>Sign in</button></div>
-          <p class="muted">Good for 10 minutes, from this browser only. <button type="button" id="signin-code-again" class="linkish">Send another</button></p>
-        </form>
-        <p id="signin-none" class="muted" hidden>This portal offers no sign-in yet: an API key is the way in.</p>
-      </div>
-      <details id="signin-key">
-        <summary>Connect with an API key</summary>
-        <p class="muted">For a program, or an operator with a key. It remains in this browser tab only.</p>
+      <details id="signin-key" open>
+        <summary>Connect with the rig's key</summary>
+        <p class="muted">The key is on the rig: <code>sudo cat /etc/alteriom-hil/api-token</code>. It remains in this browser tab only.</p>
         <form id="token-form"><input id="token" type="password" autocomplete="current-password" placeholder="API token" required><button>Connect</button></form>
       </details>
     </section>
     <div id="dashboard" hidden>
       <section class="page active" data-page="overview">
-        <div class="page-heading"><div><p class="eyebrow">CONTROL PLANE</p><h1>Farm overview</h1></div><div class="row-actions"><button id="overview-new-run" class="secondary farm-wide">New run</button></div></div>
+        <div class="page-heading"><div><p class="eyebrow">THIS RIG</p><h1>Rig overview</h1></div><div class="row-actions"><button id="overview-new-run" class="secondary farm-wide">New run</button></div></div>
         <section id="node-banner" class="card" hidden></section>
         <section class="metrics">
-          <article><span>Rigs online</span><strong id="rigs-online">–</strong><small id="rigs-note" class="muted"></small></article>
+          <article><span>Rig</span><strong id="rigs-online">–</strong><small id="rigs-note" class="muted"></small></article>
           <article><span>Boards available</span><strong id="connected">–</strong><small id="boards-note" class="muted"></small></article>
           <article><span>Running</span><strong id="busy">–</strong><small id="running-note" class="muted"></small></article>
           <article><span>Queued</span><strong id="queued">–</strong><small id="queue-note" class="muted"></small></article>
@@ -116,20 +95,8 @@
         <p id="stats-note" class="muted"></p>
       </section>
       <section class="page" data-page="rigs" hidden>
-        <div class="page-heading"><div><p class="eyebrow">FLEET</p><h1>Rigs</h1></div><div class="row-actions"><span id="refresh-note" class="muted"></span><button id="check-all" class="secondary" hidden>Check every board</button><button id="refresh" class="secondary farm-wide">Rediscover</button><button id="add-rig" hidden>Add rig</button></div></div>
-        <nav id="rigs-tabs" class="tabs" aria-label="Fleet"><a href="#rigs" data-tab="rigs" class="active">Rigs</a><a href="#boards" data-tab="boards">Boards</a><a href="#releases" class="farm-wide" data-tab="releases">Releases</a></nav>
-        <section id="add-rig-card" class="card" hidden>
-          <div class="title-row"><div><p class="eyebrow">ADD A RIG</p><h2>Join a new rig to this portal</h2></div><button id="close-add-rig" type="button" class="secondary">Close</button></div>
-          <form id="add-rig-form">
-            <p class="muted">The rig is made here, and its page gives the one command to run on it: on Raspberry Pi OS or Debian, as the user the rig runs as. It installs the rig and joins it to this portal; its boards are then registered from its page.</p>
-            <div class="settings-form">
-              <label>Name<input name="name" required pattern="[a-z0-9][a-z0-9._\-]{0,31}" maxlength="32" autocomplete="off" spellcheck="false" placeholder="rig-2"><small class="muted">Lowercase; its key, boards and runs are named for it.</small></label>
-              <label>Description<input name="description" maxlength="200" autocomplete="off" placeholder="What it is: the host, its boards"></label>
-              <label>Location<input name="location" maxlength="100" autocomplete="off" placeholder="Where it is"></label>
-            </div>
-            <div class="row-actions"><button type="submit">Add the rig</button></div>
-          </form>
-        </section>
+        <div class="page-heading"><div><p class="eyebrow">THIS HOST</p><h1>Boards</h1></div><div class="row-actions"><span id="refresh-note" class="muted"></span><button id="check-all" class="secondary" hidden>Check every board</button><button id="refresh" class="secondary farm-wide">Rediscover</button></div></div>
+        <nav id="rigs-tabs" class="tabs" aria-label="Fleet"><a href="#rigs" data-tab="rigs" class="active">Rigs</a><a href="#boards" data-tab="boards">Boards</a></nav>
         <section id="rigs-list" class="card"><p class="muted">Loading…</p></section>
         <section id="boards-list" class="card" hidden>
           <div class="filter-bar">
@@ -235,18 +202,16 @@
         <section id="storage-detail" class="card"><p class="muted">Loading…</p></section>
       </section>
       <section class="page" data-page="configuration" hidden>
-        <div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>Settings</h1></div></div>
+        <div class="page-heading"><div><p class="eyebrow">THIS HOST</p><h1>Settings</h1></div></div>
         <nav id="settings-tabs" class="tabs" aria-label="Settings"><a href="#configuration" data-tab="general" class="active farm-wide">General</a><a href="#configuration/projects" data-tab="projects">Projects</a><a href="#configuration/access" data-tab="access" class="admin-only">Access and audit</a></nav>
         <div id="settings-general">
-          <section class="card"><div class="title-row"><div><p class="eyebrow">THIS DEPLOYMENT</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div><div id="portal-config" hidden></div></section>
-          <section class="card"><div class="title-row"><div><p class="eyebrow">DECISIONS</p><h2 id="config-title">What the farm decides with</h2></div></div><p id="config-source" class="muted"></p><div id="config"><p class="muted">Loading…</p></div><p class="muted">A rig's own settings -- runs at once, retention, host health -- are on its page under Rigs, and changed there.</p></section>
+          <section class="card"><div class="title-row"><div><p class="eyebrow">THIS RIG</p><h2>Version</h2></div></div><div id="version-detail"><p class="muted">Loading…</p></div></section>
+          <section id="farm-link" class="card"><div class="title-row"><div><p class="eyebrow">FARM</p><h2>Connection to a farm</h2></div></div><p class="muted">Loading…</p></section>
+          <section class="card"><div class="title-row"><div><p class="eyebrow">DECISIONS</p><h2 id="config-title">What this rig decides with</h2></div></div><p id="config-source" class="muted"></p><div id="config"><p class="muted">Loading…</p></div><p class="muted">A rig's own settings -- runs at once, retention, host health -- are on its page under Rigs, and changed there.</p></section>
           <!-- What the farm tells whoever looks after it: the fleet's own
                facts, which no single rig is in a position to report. A rig's
                own channel is on its page (docs/notifications.md). -->
           <section id="farm-notify" class="card"></section>
-          <!-- Where the fleet's events go: somebody else's software,
-               sent what the farm sees, signed (docs/webhooks.md). -->
-          <section id="farm-webhooks" class="card" hidden></section>
           <section id="planned-card" class="card"><div class="title-row"><div><p class="eyebrow">NOT YET CONTROLLABLE</p><h2>Planned controls</h2></div><span class="muted">Read-only today</span></div><div id="planned-controls"></div></section>
         </div>
         <div id="settings-projects" hidden><section id="config-projects" class="card"><p class="muted">Loading…</p></section></div>
@@ -254,13 +219,6 @@
           <section id="keys" class="card admin-only" hidden></section>
           <section class="card admin-only"><div class="title-row"><div><p class="eyebrow">AUDIT</p><h2>Recent changes</h2></div><span class="muted">Every request that could change something, by key</span></div><div id="audit"><p class="muted">Loading…</p></div></section>
         </div>
-      </section>
-      <!-- Your account, not the farm's settings: who you are here, and every
-           browser still signed in as you. -->
-      <section class="page" data-page="account" hidden>
-        <div class="page-heading"><div><p class="eyebrow">YOUR ACCOUNT</p><h1>Account</h1></div></div>
-        <section class="card"><div class="title-row"><div><p class="eyebrow">IDENTITY</p><h2>You, here</h2></div><span class="muted">What the farm knows you as</span></div><div id="account-identity"><p class="muted">Loading…</p></div></section>
-        <section class="card"><div class="title-row"><div><p class="eyebrow">SESSIONS</p><h2>Where you are signed in</h2></div><span class="muted">Revoking one takes effect at once</span></div><div id="account-sessions"><p class="muted">Loading…</p></div></section>
       </section>
     </div>
   </main>
@@ -283,6 +241,5 @@
   </aside>
   <script src="/chips.js"></script>
   <script src="/app.js"></script>
-  <script src="/portal-shell.js"></script>
 </body>
 </html>
