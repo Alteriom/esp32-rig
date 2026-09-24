@@ -247,3 +247,8 @@ dialog.dialog details summary{cursor:pointer;color:var(--muted);font-size:.85rem
 ul.plain{margin:6px 0;padding-left:18px}
 .settings-form[hidden]{display:none}
 .update-actions{flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:8px}.update-actions label.check{display:flex;align-items:center;gap:8px;font-size:.85rem}.update-state{margin:6px 0 0}
+
+/* Settings: the administration is one group at the end of the strip, named. */
+.tabs .tabs-group{margin-left:auto;align-self:center;padding:0 10px;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.visibility-control{display:flex;flex-direction:column;gap:4px}
+.visibility-control select{max-width:180px}
