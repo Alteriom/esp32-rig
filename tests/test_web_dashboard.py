@@ -1143,6 +1143,7 @@ PORTAL_ONLY_IDS = {
     # The portal's: accounts, sessions and sign-in; adding a rig; the
     # portal's own configuration; what its shell draws into.
     "account-github", "account-identity", "account-sessions", "add-rig", "add-rig-card", "add-rig-form", "close-add-rig",
+    "rig-select", "rig-hint",
     "farm-webhooks", "join-command", "portal-config", "sign-out",
     "signin-code", "signin-code-again", "signin-code-form", "signin-code-to", "signin-email",
     "signin-email-form", "signin-github", "signin-methods", "signin-none",
