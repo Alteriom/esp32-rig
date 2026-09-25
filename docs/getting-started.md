@@ -20,12 +20,12 @@ never.
 
 On the host, as a user with `sudo`. Pick the release you are installing on
 the [releases page](https://github.com/Alteriom/esp32-rig/releases); the
-commands below say `1.0.170`.
+commands below say `1.0.179`.
 
 ```bash
 sudo apt-get install -y python3-venv git curl
 git clone https://github.com/Alteriom/esp32-rig ~/esp32-rig
-cd ~/esp32-rig && git checkout v1.0.170
+cd ~/esp32-rig && git checkout v1.0.179
 rig/setup-runner.sh              # a virtualenv, the packages, esptool, udev rules, group memberships
 rig/install-health-service.sh    # the service, its units, the host configuration, the API key
 rig/verify-rig.sh                # what is missing, and what to do about it
@@ -39,9 +39,9 @@ Then the release's health check firmware and dashboard, checked against the
 release's checksums and pinned:
 
 ```bash
-mkdir -p ~/esp32-rig-release/1.0.170 && cd ~/esp32-rig-release/1.0.170
-base=https://github.com/Alteriom/esp32-rig/releases/download/v1.0.170
-for f in release.json SHA256SUMS alteriom_hil_core-1.0.170-py3-none-any.whl alteriom_hil-1.0.170-py3-none-any.whl alteriom-hil-dashboard-1.0.170.tar.gz alteriom-hil-canary-1.0.7.tar.gz; do curl -fsSLO "$base/$f"; done
+mkdir -p ~/esp32-rig-release/1.0.179 && cd ~/esp32-rig-release/1.0.179
+base=https://github.com/Alteriom/esp32-rig/releases/download/v1.0.179
+for f in release.json SHA256SUMS alteriom_hil_core-1.0.179-py3-none-any.whl alteriom_hil-1.0.179-py3-none-any.whl alteriom-hil-dashboard-1.0.179.tar.gz alteriom-hil-canary-1.0.7.tar.gz; do curl -fsSLO "$base/$f"; done
 sha256sum -c SHA256SUMS
 ~/.local/share/alteriom-hil/venv/bin/alteriom-hil-admin upgrade --from .
 ```

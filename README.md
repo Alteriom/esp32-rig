@@ -98,6 +98,7 @@ disagrees.
 
 [releases]: https://github.com/Alteriom/esp32-rig/releases
 [firmware]: https://github.com/Alteriom/esp32-hil-firmware
+[example]: https://github.com/Alteriom/esp32-rig-example
 
 ## Writing a suite
 
@@ -118,14 +119,16 @@ reproducible and a second project does not mean a second rig.
 ## Your project on the rig
 
 A *project* is a GitHub repository whose firmware the rig flashes and whose
-test suite it runs. A rig runs the projects it lists and no other. One comes
-with the rig, the painlessMesh reference, and it is yours to change or to
-remove from the rig (and restore later); the Rig Health Check is not a
-project but the rig's own firmware, installed with each release and run from
-Boards. Your project needs GitHub first: the rig checks a project's
-repository out for every run and fetches the firmware its CI built, and it
-can do neither without a token. Give it one from the dashboard's GitHub card
-(Settings → General, or the Projects page while it is missing), or on the rig:
+test suite it runs. A rig runs the projects it lists and no other. Two come
+with the rig: the **Rig example** ([Alteriom/esp32-rig-example][example], a
+small firmware and its suite -- the project to try a rig with, and to copy)
+and the painlessMesh reference; both are yours to change or to remove from
+the rig (and restore later). The Rig Health Check is not a project but the
+rig's own firmware, installed with each release and run from Boards. Your
+project needs GitHub first: the rig checks a project's repository out for
+every run and fetches the firmware its CI built, and it can do neither
+without a token. Give it one from the dashboard (**Settings → Rig → GitHub**,
+or the Projects page while it is missing), or on the rig:
 
 ```bash
 sudo alteriom-hil-admin github set     # a fine-grained token: Contents read, Actions read

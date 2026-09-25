@@ -489,12 +489,28 @@ class BaseManager:
             },
         ))
 
-    def _project_extras_for(self, names) -> dict:
+    def _project_extras_for(self, names, identity=None) -> dict:
         """What one half knows about projects beyond their profiles and
         their bundles: a rig, the description GitHub gives each repository;
-        a portal, whose workspace each is in and which rigs run it. The
-        base knows nothing more."""
+        a portal, whose workspace each is in and which rigs run it -- as
+        much of that as this caller may see. The base knows nothing more."""
         return {name: {} for name in names}
+
+    def visible_profiles(self, identity) -> set[str] | None:
+        """The projects this caller may see in the library, or None for
+        all of them. A rig's projects are its own, so here it is everyone's
+        answer; a portal narrows it by whose workspace a project is in."""
+        return None
+
+    def artifact_visible(self, bundle_id: str, identity=None) -> bool:
+        """Whether this caller may read this bundle at all: a bundle is
+        shown with its project, and to nobody the project is not."""
+        visible = self.visible_profiles(identity)
+        if visible is None:
+            return True
+        entries, _ = self._artifact_entries()
+        entry = next((item for item in entries if item["id"] == bundle_id), None)
+        return entry is not None and entry.get("profile") in visible
 
     def _known_profiles(self) -> dict:
         """The profiles this service runs, or none on a manager that has
@@ -3578,7 +3594,7 @@ class BaseManager:
 
     def artifact_index(self, limit: int | None = None, offset: int = 0,
                        search: str | None = None, profile: str | None = None,
-                       branch: str | None = None) -> dict:
+                       branch: str | None = None, identity=None) -> dict:
         """Every bundle the farm holds, a page at a time.
 
         The totals -- how many bundles, how many bytes, how many pinned --
@@ -3596,9 +3612,11 @@ class BaseManager:
         limit = max(1, min(limit, self.ARTIFACT_PAGE_MAX))
         offset = max(0, min(int(offset), MAX_PAGE_OFFSET))
         term = (search or "").strip().lower()
+        visible = self.visible_profiles(identity)
         chosen = [
             entry for entry in entries
-            if (not profile or entry.get("profile") == profile)
+            if (visible is None or entry.get("profile") in visible)
+            and (not profile or entry.get("profile") == profile)
             # "-" is the builds that name no branch.
             and (branch is None or (entry.get("branch") or "-") == branch)
             and (not term or any(
@@ -3659,7 +3677,7 @@ class BaseManager:
                         f"the revision key this project names: change the project's revision key to {under[0]}")
         return f"the bundle was built from {revision or 'no recorded revision'}, not {commit}"
 
-    def artifact_library(self) -> dict:
+    def artifact_library(self, identity=None) -> dict:
         """Every project's bundles by branch: the newest build of each, the
         newest one a run could flash, the last run on any of them, what they
         hold, and how much of it is older builds nothing pins or holds."""
@@ -3722,21 +3740,29 @@ class BaseManager:
                 by_name[name] = {"profile": name, "project": spec.label, "repo": spec.repo, "bundles": 0, "bytes": 0,
                                  "pinned": 0, "branches": [], "older": 0, "older_bytes": 0, "latest_at": None}
                 listed.append(by_name[name])
-        extras = self._project_extras_for([project["profile"] for project in listed])
+        # Whose library this is: a caller shown only some projects is shown
+        # only those, their bundles and their sums -- a stranger's private
+        # project is not in the count, let alone by name.
+        visible = self.visible_profiles(identity)
+        if visible is not None:
+            listed = [project for project in listed if project["profile"] in visible]
+        extras = self._project_extras_for([project["profile"] for project in listed], identity)
         for project in listed:
             project.update(self._project_card(project, known.get(project["profile"]), extras.get(project["profile"]) or {}))
         listed.sort(key=lambda project: (BUILTIN_ORDER.get(project["builtin"], len(BUILTIN_ORDER)),
                                          project["latest_at"] is None))
+        whole = visible is None
         return {
             "projects": listed,
-            "count": len(entries),
-            "bytes": sum(entry["bytes"] for entry in entries),
-            "pinned": sum(1 for entry in entries if entry.get("pinned")),
+            "count": len(entries) if whole else sum(project["bundles"] for project in listed),
+            "bytes": sum(entry["bytes"] for entry in entries) if whole else sum(project["bytes"] for project in listed),
+            "pinned": sum(1 for entry in entries if entry.get("pinned")) if whole else sum(project["pinned"] for project in listed),
             "older": sum(project["older"] for project in listed),
             "older_bytes": sum(project["older_bytes"] for project in listed),
             # A prune under way, as the list says it: the library tab follows
-            # one without a second scan of the store.
-            "pruning": self.prune_progress(),
+            # one without a second scan of the store. The platform's, so an
+            # account that sees part of the store is not told about it.
+            "pruning": self.prune_progress() if whole else None,
         }
 
     def _project_card(self, project: dict, spec, extras: dict) -> dict:
@@ -3764,12 +3790,15 @@ class BaseManager:
         card.update(extras)
         return card
 
-    def artifact_detail(self, bundle_id: str) -> dict:
+    def artifact_detail(self, bundle_id: str, identity=None) -> dict:
         if not artifact_store.BUNDLE_ID.fullmatch(bundle_id or ""):
             raise ValueError("invalid bundle id")
         entries, found = self._artifact_entries()
         entry = next((item for item in entries if item["id"] == bundle_id), None)
-        if entry is None:
+        visible = self.visible_profiles(identity)
+        if entry is None or (visible is not None and entry.get("profile") not in visible):
+            # Not found, not forbidden: a project somebody is not shown does
+            # not exist for them, bundle ids included.
             raise KeyError(bundle_id)
         bundle = found.bundles[bundle_id]
         checksums = {}
@@ -5392,16 +5421,19 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 return self._json(HTTPStatus.OK, manager.artifact_index(
                     limit=limit, offset=offset,
                     search=one("q"), profile=one("profile"), branch=one("branch"),
+                    identity=identity,
                 ))
             if path == "/api/v1/artifacts/library":
-                return self._json(HTTPStatus.OK, manager.artifact_library())
+                return self._json(HTTPStatus.OK, manager.artifact_library(identity=identity))
             match = re.fullmatch(r"/api/v1/artifacts/([0-9a-f]{32})", path)
             if match:
                 try:
-                    return self._json(HTTPStatus.OK, manager.artifact_detail(match.group(1)))
+                    return self._json(HTTPStatus.OK, manager.artifact_detail(match.group(1), identity=identity))
                 except KeyError:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "no such bundle"})
             match = re.fullmatch(r"/api/v1/artifacts/([0-9a-f]{32})/bundle", path)
+            if match and not manager.artifact_visible(match.group(1), identity):
+                return self._json(HTTPStatus.NOT_FOUND, {"error": "no such bundle"})
             if match:
                 try:
                     body, filename = manager.artifact_archive(match.group(1))
@@ -5420,6 +5452,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             # many directories as the filesystem allows. What is served is only
             # ever a file the bundle's enumeration holds (artifact_store.file_path).
             match = re.fullmatch(r"/api/v1/artifacts/([0-9a-f]{32})/files/([^\x00-\x1f\x7f]+)", path)
+            if match and not manager.artifact_visible(match.group(1), identity):
+                return self._json(HTTPStatus.NOT_FOUND, {"error": "no such bundle"})
             if match:
                 try:
                     file_path, content_type, filename = manager.artifact_file(match.group(1), match.group(2))
