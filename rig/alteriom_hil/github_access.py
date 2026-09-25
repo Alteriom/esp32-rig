@@ -263,6 +263,9 @@ def look_around(token: str, repo_url: str) -> dict:
                 found["suite_path"] = str(suite["path"])
             if doc.get("label"):
                 found["label"] = str(doc["label"])
+            build = doc.get("build") or {}
+            if isinstance(build, dict) and build.get("revision_key"):
+                found["revision_key"] = str(build["revision_key"])
             if isinstance(supply, dict):
                 if supply.get("workflow"):
                     found["supply_workflow"] = str(supply["workflow"])

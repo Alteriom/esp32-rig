@@ -98,7 +98,9 @@ The rig re-hashes every image and every component and checks each
 component sits at its stated offset inside the merged image. A refusal
 names what disagreed. Most often: the manifest's revision key is missing
 or not the 40-character commit; a family in the manifest has no image; a
-file was rebuilt after the manifest was written.
+file was rebuilt after the manifest was written. When the manifest holds
+the commit under another key than the project names, the refusal says
+which -- change the project's revision key to it (its page, **Change**).
 
 ## The dashboard says the key is wrong
 

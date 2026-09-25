@@ -1,0 +1,52 @@
+# The example project: a small firmware and its suite, in a public
+# repository anyone may read and copy (https://github.com/Alteriom/esp32-rig-example).
+# It ships with the rig so a fresh rig has one project to try before it has
+# one of its own: Get firmware from GitHub, then Run. Remove it from
+# Settings -> Projects when the rig has work of its own; it can be restored.
+#
+# Everything here is the generic shape a project added from its URL gets.
+
+schema: 1
+name: rig-example
+label: Rig example
+
+source:
+  # The suite lives in the example repository and is checked out per run.
+  location: consumer
+  repo: https://github.com/Alteriom/esp32-rig-example
+  default_ref: main
+
+build:
+  # The key its manifest records the commit under: the default.
+  revision_key: git_sha
+
+supply:
+  # Its HIL workflow builds the bundle and uploads it as an Actions artifact;
+  # the rig fetches the newest one, or the workflow hands it over.
+  repo: https://github.com/Alteriom/esp32-rig-example
+  workflow: .github/workflows/hil.yml
+  artifact: hil-artifacts
+
+flash:
+  command:
+    - "{python}"
+    - -m
+    - alteriom_hil.flash_artifacts
+    - --artifacts
+    - "{artifact_dir}"
+    - --board-map
+    - "{board_map}"
+    - --revision-key
+    - git_sha
+
+suite:
+  path: tests
+  # One board is enough; the suite runs its three checks on every board it
+  # is given, whatever family.
+  min_boards: 1
+  # Names no families, so it takes the whole bench for the minute it runs.
+  exclusive: true
+  timeout_seconds: 600
+
+report:
+  title: "HIL rig example {revision}"
