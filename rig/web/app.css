@@ -18,7 +18,7 @@ body[data-role="user"] .admin-only{display:none!important}
    account reads its own workspace, so a control or a destination whose every
    read is farm-wide is not offered to one. The service refuses it either way;
    this is so nobody is invited to find that out. */
-body[data-caller="account"]:not([data-role="admin"]) .farm-wide{display:none!important}
+body[data-caller="account"] .farm-wide{display:none!important}
 .badge.you{text-transform:none}
 .board.instrument .wiring{margin:6px 0 0;padding-left:18px;font-size:.85em}
 /* A portal's workers: each node, where it is with the release, and its boards */
