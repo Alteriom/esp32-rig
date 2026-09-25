@@ -310,6 +310,14 @@ class JobStore:
         )""")
         if "browser" not in {row[1] for row in db.execute("PRAGMA table_info(oauth_states)")}:
             db.execute("ALTER TABLE oauth_states ADD COLUMN browser TEXT")
+        # GitHub connected for repositories: the grant's token, the scope
+        # GitHub gave, and when. The token is read by the portal when it
+        # asks GitHub on the person's behalf, and never leaves the store any
+        # other way (session_account drops it).
+        have = {row[1] for row in db.execute("PRAGMA table_info(accounts)")}
+        for column in ("github_repo_token", "github_repo_scope", "github_repo_granted_at"):
+            if column not in have:
+                db.execute(f"ALTER TABLE accounts ADD COLUMN {column} TEXT")
         # The workers a portal knows: what each offers and last reported.
         db.execute("""CREATE TABLE IF NOT EXISTS workers (
             name TEXT PRIMARY KEY, kind TEXT NOT NULL, version TEXT, max_runs INTEGER NOT NULL,
@@ -851,7 +859,8 @@ class JobStore:
         return self.account("id", account_id)
 
     def update_account(self, account_id: str, **fields) -> None:
-        allowed = {"email", "email_verified_at", "github_id", "github_login", "display_name", "role", "last_seen_at"}
+        allowed = {"email", "email_verified_at", "github_id", "github_login", "display_name", "role", "last_seen_at",
+                   "github_repo_token", "github_repo_scope", "github_repo_granted_at"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"an account has no {', '.join(sorted(unknown))}")
@@ -937,7 +946,11 @@ class JobStore:
             if row["last_seen_at"] is None or elapsed is None or elapsed >= self.SEEN_WRITE_SECONDS:
                 db.execute("UPDATE sessions SET last_seen_at=? WHERE digest=?", (now, token_digest))
                 db.execute("UPDATE accounts SET last_seen_at=? WHERE id=?", (now, row["id"]))
-        return dict(row)
+        # What a session looks up rides to the page as `you.account`: the
+        # grant's token is not part of anybody's own view of themselves.
+        account = dict(row)
+        account.pop("github_repo_token", None)
+        return account
 
     def delete_session(self, token_digest: str) -> None:
         with self.connect() as db:

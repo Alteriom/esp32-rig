@@ -41,6 +41,24 @@ def test_github_is_asked_with_a_state_and_answers_with_who_this_is():
     assert [call[0] for call in calls] == ["POST", "GET", "GET"]
 
 
+def test_connecting_for_repositories_asks_the_repo_scope_and_keeps_what_github_granted():
+    """A second authorization, for repositories: the `repo` scope is asked
+    (an OAuth app has no narrower grant that reaches a private repository),
+    and the exchange answers the token with the scope GitHub actually gave,
+    which may be less."""
+    app = signin.GitHubApp("id-123", "secret-xyz")
+    url = app.authorize_url("st4te", "https://farm.example/auth/github/callback", scope=signin.REPO_SCOPE)
+    assert "scope=repo+read%3Auser+user%3Aemail" in url
+    assert signin.SIGNIN_SCOPE == "read:user user:email" and "scope=read%3Auser+user%3Aemail" in app.authorize_url("s", "https://farm.example/cb")
+
+    def fake(url, *, method="GET", body=None, headers=None, timeout=15.0):
+        assert url == signin.GITHUB_TOKEN and method == "POST" and body["code"] == "c0de"
+        return {"access_token": "gho_repo", "token_type": "bearer", "scope": "repo,read:user"}
+    assert app.exchange("c0de", "https://farm.example/auth/github/callback", fetch=fake) == {"token": "gho_repo", "scope": "repo,read:user"}
+    with pytest.raises(signin.SignInError, match="no token"):
+        app.exchange("c0de", "https://farm.example/cb", fetch=lambda url, **kw: {})
+
+
 def test_a_code_github_will_not_exchange_is_an_error_not_a_person():
     app = signin.GitHubApp("id", "secret")
 

@@ -90,6 +90,9 @@ const RIG_SHELL = {
   // After a person's workspace projects are drawn: a portal offers to add one;
   // a rig's projects are added on its own Projects page.
   afterWorkspaceProjects: null,
+  // After the account page is drawn: a portal adds GitHub for repositories.
+  // A rig has no accounts.
+  afterAccount: null,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -5933,6 +5936,9 @@ async function loadAccount() {
       ? '<p class="muted">Both ways in reach this one account: signing in either way is the same you.</p>'
       : ""}`;
   await loadSessions();
+  // A portal adds what it keeps for a person besides sessions: GitHub
+  // connected for repositories.
+  if (shell().afterAccount) shell().afterAccount(account);
 }
 
 async function loadSessions() {
