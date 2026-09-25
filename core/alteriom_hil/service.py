@@ -5444,7 +5444,12 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     return self._json(HTTPStatus.NOT_FOUND, {"error": str(exc)})
                 except FileNotFoundError:
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "this run did not produce that artifact"})
-                return self._send_file(file_path.read_bytes(), content_type, filename)
+                body = file_path.read_bytes()
+                # The egress half of what the run costs, on its record.
+                counted = getattr(getattr(manager, "store", None), "add_job_egress", None)
+                if counted is not None:
+                    counted(match.group(1), len(body))
+                return self._send_file(body, content_type, filename)
             if path == "/api/v1/artifacts":
                 query = parse_qs(urlparse(self.path).query)
 

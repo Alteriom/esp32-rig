@@ -555,6 +555,11 @@ def test_firmware_is_a_library_by_project_and_branch_not_a_growing_list():
     storage = firmware.split('id="firmware-storage"', 1)[1]
     assert 'id="storage"' in storage and 'id="retention"' in storage and 'id="prune-form"' in storage
     assert 'api("/api/v1/artifacts/library")' in script
+    # A run's page says what it took, when its rig measured it.
+    took = script.split("function runMetrics(", 1)[1].split("\n}\n", 1)[0]
+    for part in ("board_minutes", "queue_wait_seconds", "cpu_seconds", "evidence_bytes", "bundle_bytes", "egress_bytes"):
+        assert part in took, part
+    assert 'insertAdjacentHTML("beforeend", runMetrics(job))' in script
     row = script.split("function libraryRow(", 1)[1].split("\n}\n", 1)[0]
     for part in ("group.latest", "group.last_run", "group.older_bytes", "library-run", "library-all"):
         assert part in row, part

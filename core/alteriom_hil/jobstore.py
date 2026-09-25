@@ -165,6 +165,11 @@ class JobStore:
         # rest, and the worker takes the highest, oldest queued job next.
         if "priority" not in columns:
             db.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
+        # What this service served of the run's evidence, in bytes: the
+        # egress half of what a run costs (the rig measures the rest and
+        # ships it in the result's `metrics`). Recorded, never charged.
+        if "egress_bytes" not in columns:
+            db.execute("ALTER TABLE jobs ADD COLUMN egress_bytes INTEGER NOT NULL DEFAULT 0")
         db.execute("CREATE INDEX IF NOT EXISTS jobs_created ON jobs(created_at DESC)")
         # The world page counts what finished this week, per rig, on
         # every poll: an index on when a run finished keeps that a
@@ -1274,6 +1279,13 @@ class JobStore:
         values.append(job_id)
         with self.connect() as db:
             db.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id=?", values)
+
+    def add_job_egress(self, job_id: str, count: int) -> None:
+        """Bytes of this run's evidence served to somebody, added to its record."""
+        if count <= 0:
+            return
+        with self.connect() as db:
+            db.execute("UPDATE jobs SET egress_bytes = egress_bytes + ? WHERE id=?", (int(count), job_id))
 
     def update_progress(self, job_id: str, progress: list[dict]):
         with self.connect() as db:

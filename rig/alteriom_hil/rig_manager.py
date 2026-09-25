@@ -915,11 +915,83 @@ class RigMixin:
             log.flush()
         return changed
 
+    def _meter_start(self) -> dict:
+        """Where the meters stand as a run begins: the wall clock and the
+        CPU this process's children have used so far (the flasher and the
+        suite are children). POSIX only; elsewhere CPU is not measured."""
+        started = {"wall": time.monotonic(), "cpu": None}
+        try:
+            import resource
+            usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+            started["cpu"] = usage.ru_utime + usage.ru_stime
+        except (ImportError, AttributeError, OSError):
+            pass
+        return started
+
+    def _run_metrics(self, job_id: str, job: dict, result: dict, meter: dict) -> dict:
+        """What this run took, on the record it leaves (docs/public-release-plan.md,
+        metering): `board_minutes` -- the boards it held for the minutes
+        between its first flash and its verdict; `queue_wait_seconds`;
+        `cpu_seconds` of the run's process tree (children of this process
+        since the run began -- exact when the rig runs one job at a time,
+        which a bench does); `evidence_bytes` in its run directory as it
+        closes; `bundle_bytes` of the firmware it flashed. Measured here,
+        on the rig that ran it, and shipped with the result; nothing is
+        charged for any of it."""
+        import datetime as _dt
+
+        def parse(value):
+            try:
+                return _dt.datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+            except ValueError:
+                return None
+
+        def tree_bytes(path: Path) -> int:
+            total = 0
+            if path.is_dir():
+                for item in path.rglob("*"):
+                    try:
+                        if item.is_file() and not item.is_symlink():
+                            total += item.stat().st_size
+                    except OSError:
+                        continue
+            return total
+
+        row = self.store.get(job_id) or job
+        now = _dt.datetime.now(_dt.timezone.utc)
+        created, started = parse(row.get("created_at")), parse(row.get("started_at"))
+        flashed = None
+        for stage in row.get("progress") or []:
+            if stage.get("name") == "flash" and stage.get("started_at"):
+                flashed = parse(stage["started_at"])
+                break
+        since = flashed or started
+        wall_minutes = max(0.0, (now - since).total_seconds() / 60) if since else time.monotonic() - meter["wall"]
+        boards = len(result.get("board_ids") or []) or int(result.get("boards") or 0)
+        cpu = None
+        if meter.get("cpu") is not None:
+            try:
+                import resource
+                usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+                cpu = round(max(0.0, usage.ru_utime + usage.ru_stime - meter["cpu"]), 2)
+            except (ImportError, AttributeError, OSError):
+                cpu = None
+        return {
+            "boards": boards,
+            "wall_seconds": round((time.monotonic() - meter["wall"]), 1),
+            "board_minutes": round(boards * wall_minutes, 2),
+            "queue_wait_seconds": round((started - created).total_seconds(), 1) if created and started else None,
+            "cpu_seconds": cpu,
+            "evidence_bytes": tree_bytes(self.state / "runs" / job_id),
+            "bundle_bytes": tree_bytes(self.state / "artifacts" / job_id),
+        }
+
     def _run_job(self, job: dict, grant: allocation.Grant):
         job_id, kind, request = job["id"], job["kind"], job["request"]
         self._job_local.job_id = job_id
         self._current_job = job_id
         log_path = self.state / "logs" / f"{job_id}.log"
+        meter = self._meter_start()
         # Read per job, so a link stored or removed since the service started
         # is what this run is scrubbed of (alteriom_hil.providers).
         redactor = Redactor.from_env(os.environ)
@@ -935,6 +1007,8 @@ class RigMixin:
                             # downloads the evidence as soon as it sees the
                             # status, and a node packages it for its portal.
                             self._scrub_run_evidence(job_id, redactor, log)
+                if kind == "suite":
+                    result["metrics"] = self._run_metrics(job_id, job, result, meter)
                 self.store.update(job_id, "passed", result)
                 self._emit_run(job_id, "passed", self.store.get(job_id) or {}, result)
             except JobCancelled as exc:
@@ -980,6 +1054,11 @@ class RigMixin:
                 result.update(
                     {name: str(path) for name, path in candidates.items() if path.is_file()}
                 )
+                if kind == "suite":
+                    try:
+                        result["metrics"] = self._run_metrics(job_id, job, result, meter)
+                    except Exception:  # noqa: BLE001 -- a meter never turns a failure into a crash
+                        pass
                 self.store.update(job_id, "failed", result)
                 self._emit_run(job_id, "failed", self.store.get(job_id) or {}, result)
         finally:

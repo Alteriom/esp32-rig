@@ -2795,6 +2795,38 @@ def test_the_statistics_route_answers_and_refuses_what_it_cannot_count(tmp_path)
     assert manager.farm_statistics(90)["window"]["days"] == 90
 
 
+def test_a_run_records_what_it_took_and_the_service_what_it_served(tmp_path):
+    """Metering, charged for nothing: the rig measures boards held for how
+    long, the wait, the CPU, the evidence stored and the bundle flashed,
+    and ships it with the result; the service adds what it served of the
+    run's evidence."""
+    import time as _time
+
+    manager = _store_manager(tmp_path)
+    job = manager.store.create("suite", {"profile": "painlessmesh", "ref": "x"}, manager.state / "x.log")
+    _time.sleep(0.05)
+    manager.store.update(job["id"], "running")
+    meter = manager._meter_start()
+    assert meter["wall"] > 0
+    runs = manager.state / "runs" / job["id"]
+    (runs / "serial").mkdir(parents=True)
+    (runs / "serial" / "b.log").write_bytes(b"x" * 1500)
+    (runs / "results.xml").write_bytes(b"<testsuite/>")
+    bundle = manager.state / "artifacts" / job["id"]
+    bundle.mkdir(parents=True)
+    (bundle / "flash-image.bin").write_bytes(b"\xe9" * 4096)
+    metrics = manager._run_metrics(job["id"], job, {"board_ids": ["esp32-01", "esp8266-01"], "boards": 2}, meter)
+    assert metrics["boards"] == 2 and metrics["board_minutes"] >= 0 and metrics["wall_seconds"] >= 0
+    assert metrics["queue_wait_seconds"] is not None and metrics["queue_wait_seconds"] >= 0
+    assert metrics["evidence_bytes"] == 1500 + len(b"<testsuite/>") and metrics["bundle_bytes"] == 4096
+    assert metrics["cpu_seconds"] is None or metrics["cpu_seconds"] >= 0
+    # Served bytes accumulate on the record, and nothing else changes.
+    manager.store.add_job_egress(job["id"], 700)
+    manager.store.add_job_egress(job["id"], 300)
+    manager.store.add_job_egress(job["id"], 0)
+    assert manager.store.get(job["id"])["egress_bytes"] == 1000
+
+
 def test_the_library_is_the_store_by_project_and_branch_newest_first(tmp_path):
     """What an operator asks of a growing store: the latest build of each
     branch, whether a run could flash it, the last run on it, and how much is
