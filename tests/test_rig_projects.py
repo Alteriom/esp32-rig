@@ -577,6 +577,7 @@ def test_the_library_lists_every_project_the_built_ins_first_bundles_or_not(tmp_
     assert example["last_run"] is None and example["description"] is None, "nothing was asked of GitHub"
     mesh = next(project for project in library["projects"] if project["profile"] == "painlessmesh")
     assert mesh["builtin"] is None and mesh["known"] is True
+    assert rig.library_profiles(None) is None and rig.visible_profiles(None) is None, "a rig's library is everyone's"
     # Proven by its first passing run here, and not before.
     assert mesh["proven"] is False and example["proven"] is False
     job = rig.store.create("suite", {"profile": "painlessmesh", "ref": "x"}, tmp_path / "x.log")
