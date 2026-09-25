@@ -78,6 +78,15 @@ const RIG_SHELL = {
   settingsOrder: ["rig", "projects", "host", "access"],
   // A rig's Settings are all its owner's: no group is the administration's alone.
   adminGroup: null,
+  // The library's card and its figures: a rig draws its own (below); a
+  // portal draws a catalogue of projects, with none of a rig's disk on it.
+  libraryCard: null,
+  libraryMetrics: null,
+  // Rediscover is a rig's own button, boards or none; a portal offers it
+  // only to somebody with a rig to rediscover.
+  rediscoverOffered: rigCount => true,
+  // A page the shell adds to the document, opened by its route: a rig adds none.
+  openPage: null,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -527,8 +536,11 @@ function showPanel(name, updateHash = true, suffix = "", {as = null} = {}) {
   const wanted = document.querySelector(`.page[data-page="${CSS.escape(name)}"]`);
   // A document without a fleet overview (a rig's) lands on its rig page.
   const fallback = document.querySelector('.page[data-page="overview"]') ? "overview" : "rig";
-  const target = wanted && !(workspaceOnly()
-    && wanted.classList.contains("farm-wide")) ? name : fallback;
+  // A page the caller is not offered -- a farm-wide one to an account, an
+  // admin's to anybody else -- lands them home instead of on a blank page.
+  const withheld = wanted && ((workspaceOnly() && wanted.classList.contains("farm-wide"))
+    || (document.body.dataset.role !== "admin" && wanted.classList.contains("admin-only")));
+  const target = wanted && !withheld ? name : fallback;
   document.querySelectorAll(".page").forEach(page => { const active = page.dataset.page === target; page.hidden = !active; page.classList.toggle("active", active); });
   // `as` is the address and the nav item this page stands for: on a rig the
   // rig page is #overview, and Overview is lit.
@@ -638,6 +650,8 @@ function openRoute(route, {updateHash = true} = {}) {
   showPanel(route.name, updateHash);
   if (!token) return;
   if (route.name === "statistics") loadStatistics(Number(route.id) || statsDays);
+  // A page the shell added -- a portal's Admin -- loads through the shell.
+  if (shell().openPage) shell().openPage(route.name, route.id);
 }
 
 // ---- Markdown -------------------------------------------------------------
@@ -1947,6 +1961,10 @@ function renderFleet() {
   renderHardwareOverview(lastInventory || {});
   $("refresh").disabled = shell().rediscoverDisabled(rigBusy);
   $("refresh").textContent = shell().rediscoverLabel;
+  // Nothing to rediscover: no button, and no note about one.
+  const offered = shell().rediscoverOffered(rigs.length);
+  $("refresh").hidden = !offered;
+  $("refresh-note").hidden = !offered;
   // Adding a rig is what a portal is for, and it is everybody's: a person
   // brings their own, and it is theirs from the moment it is made. An
   // address with no account and no key is nobody yet.
@@ -4258,6 +4276,7 @@ async function loadLibrary() {
 // the list otherwise -- which counts the same store but not by branch, so
 // what is older is the library's last word on it, or not said.
 function renderFirmwareMetrics(summary) {
+  if (shell().libraryMetrics) return shell().libraryMetrics(summary);
   const byBranch = Array.isArray(summary.projects);
   const projects = byBranch ? summary.projects.length : (summary.profiles || []).length;
   const branches = byBranch ? summary.projects.reduce((sum, project) => sum + project.branches.length, 0) : null;
@@ -4366,7 +4385,8 @@ function libraryCard(project) {
 
 function renderLibrary(library) {
   const projects = library.projects || [];
-  $("firmware-library").innerHTML = projects.length ? projects.map(libraryCard).join("")
+  const card = shell().libraryCard || libraryCard;
+  $("firmware-library").innerHTML = projects.length ? projects.map(card).join("")
     : `<section class="card"><p class="muted">${escapeHtml(Site())} knows no project yet.</p></section>`;
 }
 
