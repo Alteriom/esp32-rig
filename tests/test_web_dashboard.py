@@ -564,7 +564,8 @@ def test_firmware_is_a_library_by_project_and_branch_not_a_growing_list():
     for part in ("project.builtin", "project.latest", "project.last_run", "project.rigs", "project.firmware",
                  "library-builds", "libraryRow(project, group, index)"):
         assert part in card, part
-    assert 'projects.map(libraryCard)' in script
+    assert 'projects.map(card)' in script and "shell().libraryCard || libraryCard" in script, \
+        "a portal draws its own card; a rig draws this one"
     # "N builds" is the whole list, filtered to that branch, which can be let go.
     assert 'params.set("branch", bundleQuery.branch)' in script and 'id="bundle-branch"' in page
     # One scan of the store a visit, and the figures follow a prune.
