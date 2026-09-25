@@ -5446,7 +5446,7 @@ function projectForm(current) {
       <label>Supply repository <small class="muted">empty: the repository above</small><input name="supply_repo" type="url" value="${value("supply_repo")}" placeholder="https://github.com/you/my-sensor"></label>
       <label>Workflow <input name="supply_workflow" value="${value("supply_workflow", ".github/workflows/hil.yml")}"></label>
       <label>Artifact name <input name="supply_artifact" value="${value("supply_artifact", "hil-artifacts")}"></label>
-      <label>Manifest revision key <small class="muted">empty: the name, as <code>my_sensor_sha</code></small><input name="revision_key" value="${value("revision_key")}" placeholder="my_sensor_sha"></label>
+      <label>Manifest revision key <small class="muted">the key the bundle's manifest records the commit under</small><input name="revision_key" value="${value("revision_key", "git_sha")}" placeholder="git_sha"></label>
     </details>
     <p id="project-error" class="failure-summary" hidden></p>
     <div class="settings-footer"><button type="submit">${current ? "Save" : "Add project"}</button><button type="button" class="secondary project-cancel">Cancel</button></div>

@@ -58,13 +58,13 @@ it guessed; check them and press **Add**. The fields:
 | **Families** | the chip families a run takes one board of each; none means the whole bench | none |
 | **Supply workflow** | the workflow whose artifact is the bundle | `.github/workflows/hil.yml` |
 | **Artifact name** | the Actions artifact that workflow uploads | `hil-artifacts` |
-| **Revision key** | the key in the bundle's manifest that holds the commit | `<project>_sha` |
+| **Revision key** | the key in the bundle's manifest that holds the commit | `git_sha`, or what the repository's `.alteriom-hil.yaml` declares |
 | **Timeout** | how long a run's suite may take | 1800 s |
 
 The rig writes the project as a profile document under
 `/var/lib/alteriom-hil/profiles/<name>.yaml`, reads it back at once, and an
 upgrade leaves it alone. Edit or remove a project from its page; a project
-that shipped with the rig (painlessMesh, the reference) can be removed and
+that shipped with the rig (the Rig example, and painlessMesh, the reference) can be removed and
 restored. The same over the API: `GET`/`POST /api/v1/projects`,
 `POST /api/v1/projects/inspect`, `POST /api/v1/projects/<name>` to edit,
 `.../delete`, `.../restore`, with an admin key.
@@ -87,7 +87,7 @@ hil-artifacts/
 ```json
 {
   "schema": 2,
-  "esp32_rig_example_sha": "<the 40-character commit the build resolved to>",
+  "git_sha": "<the 40-character commit the build resolved to>",
   "targets": {
     "esp32": {
       "chip": "esp32",
@@ -102,9 +102,10 @@ hil-artifacts/
 }
 ```
 
-- The **revision key** (`esp32_rig_example_sha` here; your project's name
-  with underscores, or whatever you set) holds the commit. That is what a
-  run is named by, what a bundle is reused by, and what the dashboard links.
+- The **revision key** (`git_sha` unless you set another) holds the commit.
+  That is what a run is named by, what a bundle is reused by, and what the
+  dashboard links. A bundle whose manifest holds the commit under a key the
+  project does not name is refused, and the refusal says which key does.
 - **`image`** is one merged image per family, flashed whole at
   `flash_offset`. `segments` and `files` are optional; when present the rig
   checks each component sits at its stated offset inside the merged image.

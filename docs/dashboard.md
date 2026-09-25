@@ -93,7 +93,7 @@ supply workflow and artifact name), the bundles the rig holds for it, its
 recent runs, **Get firmware from GitHub**, edit, remove. **Add project**
 starts from a repository URL: the rig looks it up on GitHub and fills the
 form in, saying what it found and what it guessed. A shipped project
-(painlessMesh, the reference) can be removed and later restored. The Rig
+(the Rig example, and painlessMesh, the reference) can be removed and later restored. The Rig
 Health Check is not a project: it comes with the release and is run from
 Boards. [Projects and your CI](projects.md) has the whole story.
 

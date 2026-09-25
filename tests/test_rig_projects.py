@@ -157,10 +157,10 @@ def test_a_project_is_added_from_a_few_facts_and_is_a_whole_profile(tmp_path):
     assert Path(answer["path"]) == path and path.is_file()
     written = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert written["source"] == {"location": "consumer", "repo": MINE["repo"], "default_ref": "main"}, "the ref named wins over the repository's own"
-    assert written["build"] == {"revision_key": "my_sensor_sha"}
+    assert written["build"] == {"revision_key": "git_sha"}, "the key every schema-2 manifest records, not a guess from the name"
     assert written["supply"] == {"repo": MINE["repo"], "workflow": ".github/workflows/hil.yml", "artifact": "hil-artifacts"}
     assert written["flash"]["command"][:3] == ["{python}", "-m", "alteriom_hil.flash_artifacts"]
-    assert "--revision-key" in written["flash"]["command"] and written["flash"]["command"][-1] == "my_sensor_sha"
+    assert "--revision-key" in written["flash"]["command"] and written["flash"]["command"][-1] == "git_sha"
     assert written["needs"] == [{"target": "esp32", "count": 1}, {"target": "esp32-c3", "count": 1}]
     # Families named: the run takes one of each and leaves the bench free
     # for another; none named would take the whole bench.
@@ -485,7 +485,7 @@ def test_a_finished_run_and_a_projects_runs_can_be_deleted(tmp_path):
 
 # ---- the newest bundle a project's CI built, fetched by the rig ----------------------
 
-def _zipped_bundle(commit: str, families=("esp32",)) -> bytes:
+def _zipped_bundle(commit: str, families=("esp32",), revision_key="git_sha") -> bytes:
     """An Actions artifact as GitHub stores it: a zip of the uploaded
     directory's contents -- a bundle a rig can flash."""
     import hashlib
@@ -500,7 +500,7 @@ def _zipped_bundle(commit: str, families=("esp32",)) -> bytes:
             targets[family] = {"image": f"{family}/flash-image.bin", "flash_offset": "0x0",
                                "sha256": hashlib.sha256(image).hexdigest(), "files": {}, "segments": {}}
         archive.writestr("manifest.json", json.dumps({"schema": 2, "producer": "my-sensor",
-                                                       "my_sensor_sha": commit, "targets": targets}))
+                                                       revision_key: commit, "targets": targets}))
     return out.getvalue()
 
 
@@ -541,6 +541,23 @@ def test_the_rig_fetches_the_newest_bundle_from_the_projects_workflow(tmp_path, 
     again = rig.fetch_project_bundle({}, "my-sensor")
     assert again["held"] is True and again["fetched"] is False and again["bundle"]["id"] == bundle["id"]
     assert len(downloads) == 1
+
+
+def test_a_bundle_whose_manifest_names_the_commit_under_another_key_is_refused_by_name(tmp_path, monkeypatch):
+    """The commit is there, under a key the project does not name. That is
+    the project's revision key to change -- so the refusal says which key
+    holds it, instead of 'no recorded revision'. (Round five's finding: a
+    project made by hand named its own key; the bundle said git_sha.)"""
+    rig = _rig(tmp_path)
+    rig.create_project({**MINE, "revision_key": "my_sensor_sha"})
+    monkeypatch.setattr(rig, "expected_agent_sha", lambda profile: None)
+    _github_with_artifacts(rig, monkeypatch)   # the zipped bundle records git_sha
+    with pytest.raises(ValueError, match="holds the commit under git_sha, not my_sensor_sha.*change the project's revision key to git_sha"):
+        rig.fetch_project_bundle({}, "my-sensor")
+    # A manifest that holds the commit nowhere: the old words stand.
+    monkeypatch.setattr(rig, "_github_download", lambda token, url: _zipped_bundle("c" * 40, revision_key="unrelated"))
+    with pytest.raises(ValueError, match="built from no recorded revision"):
+        rig.fetch_project_bundle({}, "my-sensor")
 
 
 def test_fetching_needs_github_and_a_project_that_names_a_workflow(tmp_path, monkeypatch):
@@ -690,7 +707,8 @@ def test_a_project_starts_from_its_repository_url(tmp_path, monkeypatch):
     assert seen["suggested"] == {
         "name": "my-sensor", "label": "my-sensor", "repo": "https://github.com/example/my-sensor", "default_ref": "develop",
         "suite_path": "hil/tests", "families": ["esp32", "esp32-c3"], "supply_repo": "https://github.com/example/my-sensor",
-        "supply_workflow": ".github/workflows/hil-build.yml", "supply_artifact": "hil-artifacts"}
+        "supply_workflow": ".github/workflows/hil-build.yml", "supply_artifact": "hil-artifacts",
+        "revision_key": "git_sha"}
     assert seen["guessed"] and seen["found"] == [] and seen["taken"] is False and seen["workflows"] == ["ci.yml", "hil-build.yml"]
     assert not (tmp_path / "state" / "profiles").exists(), "looking is not adding"
     # A project that describes itself is taken at its word.
@@ -717,7 +735,7 @@ def test_github_access_reads_what_a_repository_holds(monkeypatch):
         "/repos/example/described": {"full_name": "example/described", "default_branch": "main", "private": False},
         "/repos/example/described/contents/.alteriom-hil.yaml?ref=main": {
             "type": "file", "encoding": "base64",
-            "content": base64.b64encode(b"label: Described\nsuite:\n  path: hil/tests\nsupply:\n  workflow: .github/workflows/hil.yml\n  artifact: hil-artifacts\nneeds:\n  - target: esp32\n").decode()},
+            "content": base64.b64encode(b"label: Described\nbuild:\n  revision_key: firmware_sha\nsuite:\n  path: hil/tests\nsupply:\n  workflow: .github/workflows/hil.yml\n  artifact: hil-artifacts\nneeds:\n  - target: esp32\n").decode()},
         "/repos/example/bare": {"full_name": "example/bare", "default_branch": "trunk", "private": True},
         "/repos/example/bare/contents/tests?ref=trunk": [{"name": "test_blink.py", "type": "file"}],
         "/repos/example/bare/contents/.github/workflows?ref=trunk": [{"name": "ci.yml"}, {"name": "hil-build.yml"}],
@@ -739,8 +757,10 @@ def test_github_access_reads_what_a_repository_holds(monkeypatch):
     assert described["found"] == [".alteriom-hil.yaml"] and described["label"] == "Described"
     assert described["suite_path"] == "hil/tests" and described["supply_workflow"] == ".github/workflows/hil.yml"
     assert described["families"] == ["esp32"] and described["guessed"] == []
+    assert described["revision_key"] == "firmware_sha", "the key the project declares, so the form and the bundle agree"
     bare = github_access.look_around("tok", "https://github.com/example/bare")
     assert bare["default_ref"] == "trunk" and bare["private"] is True and bare["found"] == []
+    assert "revision_key" not in bare, "nothing is guessed for the key: the default is git_sha"
     assert bare["suite_path"] == "tests" and bare["supply_workflow"] == ".github/workflows/hil-build.yml"
     assert any(g.startswith("suite_path: tests") for g in bare["guessed"]) and any("hil-build.yml" in g for g in bare["guessed"])
 

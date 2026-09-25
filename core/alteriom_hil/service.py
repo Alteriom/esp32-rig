@@ -3248,9 +3248,7 @@ class BaseManager:
             manifest = load_artifacts(staging)
             revision = str(manifest.get(spec.revision_key) or "")
             if revision.lower() != commit:
-                raise ValueError(
-                    f"the bundle was built from {revision or 'no recorded revision'}, not {commit}"
-                )
+                raise ValueError(self._revision_mismatch(spec, manifest, revision, commit))
             agent = manifest.get("hil_agent_sha")
             expected = self.expected_agent_sha(profile)
             if agent and expected and agent != expected:
@@ -3610,6 +3608,20 @@ class BaseManager:
             runs.append({**entry["built_by"], "created_at": entry.get("created_at")})
         runs = [run for run in runs if run.get("created_at")]
         return max(runs, key=lambda run: run["created_at"]) if runs else None
+
+    @staticmethod
+    def _revision_mismatch(spec, manifest: dict, revision: str, commit: str) -> str:
+        """Why a bundle is not the commit it claims: built from another one
+        -- or the commit recorded under a key the project does not name,
+        which is the project's revision key to change, so the message says
+        which key holds it."""
+        if not revision:
+            under = sorted(key for key, value in manifest.items()
+                           if key != spec.revision_key and isinstance(value, str) and value.lower() == commit)
+            if under:
+                return (f"the bundle's manifest holds the commit under {under[0]}, not {spec.revision_key}, "
+                        f"the revision key this project names: change the project's revision key to {under[0]}")
+        return f"the bundle was built from {revision or 'no recorded revision'}, not {commit}"
 
     def artifact_library(self) -> dict:
         """Every project's bundles by branch: the newest build of each, the

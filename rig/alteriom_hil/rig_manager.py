@@ -109,6 +109,10 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+# The manifest key that holds the commit a bundle was built from, unless the
+# project names another: what the documented build scripts write.
+DEFAULT_REVISION_KEY = "git_sha"
+
 class RigMixin:
     # The rig's own routes, declared beside the methods that answer them
     # (the portal's are PortalMixin.WORKSPACE_ROUTES). Projects: what this
@@ -516,6 +520,7 @@ class RigMixin:
             "supply_repo": found["repo"],
             "supply_workflow": found.get("supply_workflow") or ".github/workflows/hil.yml",
             "supply_artifact": found.get("supply_artifact") or "hil-artifacts",
+            "revision_key": found.get("revision_key") or DEFAULT_REVISION_KEY,
         }
         return {"repo": found["repo"], "private": found.get("private"), "default_ref": found.get("default_ref"),
                 "found": found.get("found", []), "guessed": found.get("guessed", []),
@@ -621,7 +626,10 @@ class RigMixin:
         if not default_ref or any(ch.isspace() for ch in default_ref):
             raise ValueError("default_ref is a branch, tag or commit, without spaces")
         suite_path = text("suite_path", "tests").strip("/")
-        revision_key = text("revision_key", f"{name.replace('-', '_')}_sha")
+        # The key a schema-2 manifest records the commit under. A project
+        # that writes it under another name says so in its .alteriom-hil.yaml
+        # or in the form; nothing is guessed from the project's name.
+        revision_key = text("revision_key", DEFAULT_REVISION_KEY)
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", revision_key):
             raise ValueError("revision_key is the manifest key that holds the commit: letters, digits and underscores")
         supply_repo = github_access.normalise_repo(text("supply_repo", repo))
