@@ -522,14 +522,18 @@ ACCOUNT_ROUTES: tuple[tuple[str, re.Pattern], ...] = (
     # verdicts they may not follow. Without it a person clicking a board on
     # their own rig gets a 403 (runner/web/app.js, showBoard).
     ("GET", re.compile(rf"/api/v1/inventory/{RIG_NAME}/history")),
-    # NOT the artifact store. It was on this list on the belief that firmware
-    # here is the farm's own HIL agent; it is not. The farm holds consumer
-    # firmware built from private repositories, and a bundle entry carries the
-    # repository, the ref, the branch, the actor and the run ids -- one
-    # account's work, named. It stays closed until artifacts have an owner to
-    # filter on, or a redacted projection of their own the way the world page
-    # has. One run's own output, above, is a different thing: it has a rig to
-    # filter on.
+    # The artifact store, scoped: a bundle belongs to a project, and a project
+    # is shown to the accounts whose workspace it is in and, when its
+    # repository is public and shown, to everybody -- the library, the list,
+    # one bundle, its archive and its files all ask `visible_profiles` first
+    # and answer 404 for the rest. It was closed while a bundle entry had no
+    # owner to filter on; it has one now (docs/public-release-plan.md, the
+    # library).
+    ("GET", re.compile(r"/api/v1/artifacts")),
+    ("GET", re.compile(r"/api/v1/artifacts/library")),
+    ("GET", re.compile(r"/api/v1/artifacts/[0-9a-f]{32}")),
+    ("GET", re.compile(r"/api/v1/artifacts/[0-9a-f]{32}/bundle")),
+    ("GET", re.compile(r"/api/v1/artifacts/[0-9a-f]{32}/files/[^\x00-\x1f\x7f]+")),
     # Their own rigs' visibility.
     ("POST", re.compile(rf"/api/v1/rigs/{RIG_NAME}/visibility")),
     # Stopping their own run. Safe to admit because the handler already asks

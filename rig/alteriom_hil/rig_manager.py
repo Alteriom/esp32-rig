@@ -398,7 +398,7 @@ class RigMixin:
                          "supply_repo": spec.supply_repo or spec.repo})
         return rows
 
-    def _project_extras_for(self, names) -> dict:
+    def _project_extras_for(self, names, identity=None) -> dict:
         """The description GitHub gives each project's repository, from the
         access report already held -- never a request of its own: the
         library draws without waiting on GitHub."""
