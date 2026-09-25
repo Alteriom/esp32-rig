@@ -960,6 +960,22 @@ function runFacts(job) {
   </div>`;
 }
 
+// What the run took, when its rig measured it: boards held for how long,
+// how long it waited, the CPU its processes used, what it stored and moved.
+// Recorded on every run from now on; charged for nothing.
+function runMetrics(job) {
+  const m = job.result?.metrics;
+  if (!m) return "";
+  const parts = [];
+  if (m.board_minutes != null) parts.push(`${escapeHtml(m.boards ?? "?")} board${m.boards === 1 ? "" : "s"} × ${escapeHtml(formatDuration(m.wall_seconds || 0))} = <strong>${escapeHtml(m.board_minutes)}</strong> board-minutes`);
+  if (m.queue_wait_seconds != null) parts.push(`waited ${escapeHtml(formatDuration(m.queue_wait_seconds))}`);
+  if (m.cpu_seconds != null) parts.push(`CPU ${escapeHtml(formatDuration(m.cpu_seconds))}`);
+  if (m.evidence_bytes != null) parts.push(`evidence ${escapeHtml(formatBytes(m.evidence_bytes))}`);
+  if (m.bundle_bytes != null) parts.push(`bundle ${escapeHtml(formatBytes(m.bundle_bytes))}`);
+  if (job.egress_bytes) parts.push(`served ${escapeHtml(formatBytes(job.egress_bytes))}`);
+  return parts.length ? `<p class="muted run-metrics">What it took: ${parts.join(" · ")}.</p>` : "";
+}
+
 function renderJob(job) {
   const details = $("log-details");
   const wasOpen = details.open;
@@ -997,6 +1013,7 @@ function renderJob(job) {
   $("job-summary").querySelectorAll(".rerun-same").forEach(button => button.addEventListener("click", () => { button.disabled = true; rerun(job, selection.tests, selection.keyword).catch(error => { alert(`${Site()} refused the run: ${error.message}`); button.disabled = false; }); }));
   $("simulation").innerHTML = renderSimulation(job);
   $("pipeline").innerHTML = `<h3>Pipeline</h3><div class="pipeline">${inferredProgress(job).map(stage => `<article class="pipeline-stage ${escapeHtml(stage.status)}"><span class="stage-dot"></span><div><small class="stage-group">${escapeHtml(stage.group || "pipeline")}</small><strong>${escapeHtml(stage.label)}</strong><small><span class="stage-status">${escapeHtml(stage.status)}</span>${escapeHtml(stage.summary || "")}${stage.status === "running" && stage.started_at ? ` · ${liveTimer(stage.started_at)}` : ""}</small></div></article>`).join("")}</div>`;
+  $("pipeline").insertAdjacentHTML("beforeend", runMetrics(job));
   $("timing").innerHTML = renderTimings(job);
   $("report").innerHTML = renderReport(job);
   log.textContent = job.log_tail || "No log output available.";
