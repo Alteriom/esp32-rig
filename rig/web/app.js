@@ -529,13 +529,13 @@ function setProgress(root, fraction) {
   root.querySelectorAll(".progress-track > span").forEach(bar => { bar.style.width = `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%`; });
 }
 
-// Whether this caller is confined to their own workspace. Not simply "is an
-// account": an admin signs in as an account like anybody else, and the farm
-// authorizes them before it asks about workspaces (api_keys.allowed), so
-// hiding the farm-wide half from them takes away the whole dashboard they
-// are the main user of.
+// Whether this caller is confined to their own workspace: every signed-in
+// account, an admin's included. On the pages an admin shares with everybody
+// an admin is a person with an account -- their own rigs, runs, projects,
+// run form; the farm-wide half is the Admin page, a place they go on
+// purpose. A pasted key is the platform itself and sees the whole farm.
 function workspaceOnly() {
-  return document.body.dataset.caller === "account" && document.body.dataset.role !== "admin";
+  return document.body.dataset.caller === "account";
 }
 
 function showPanel(name, updateHash = true, suffix = "", {as = null} = {}) {

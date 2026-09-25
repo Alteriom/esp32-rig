@@ -4814,6 +4814,16 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             scope = getattr(manager, "run_scope", None)
             return scope(identity) if scope is not None else (None, None)
 
+        def _run_reads(self, identity) -> tuple[set[str] | None, str | None]:
+            """Which runs this caller may read BY ID -- a run's detail, its
+            evidence. The lists on the pages an admin shares with everybody
+            are the account's own (`_runs`); a run somebody opened from the
+            Runs tab under Admin is theirs to read, as a bundle opened from
+            All builds is. Anybody else reads what their lists show."""
+            if getattr(identity, "is_admin", False):
+                return None, None
+            return self._runs(identity)
+
         def _theirs(self, name: str, identity) -> bool:
             """Whether an account may act on this rig: it owns it.
 
@@ -5503,7 +5513,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # from private repositories and stays shut (api_keys,
                 # ACCOUNT_ROUTES).
                 detail = manager.job_detail(match.group(1))
-                run_rigs, submitter = self._runs(identity)
+                run_rigs, submitter = self._run_reads(identity)
                 if detail is None or not manager.store.mine(detail, run_rigs, submitter):
                     return self._json(HTTPStatus.NOT_FOUND, {"error": "job not found"})
                 try:
@@ -5622,9 +5632,16 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     offset = int(one("offset", "0"))
                 except ValueError:
                     return self._json(HTTPStatus.BAD_REQUEST, {"error": "limit and offset must be integers"})
-                # An account sees the runs of the rigs in its workspace; a
-                # key sees the farm's. None means no restriction.
-                run_rigs, submitter = self._runs(identity)
+                # An account sees the runs of its own rigs and its own; a
+                # key the farm's. An admin account asks for the platform's
+                # on purpose -- `scope=platform`, the Runs tab under Admin --
+                # rather than being handed them on the page everybody has.
+                if one("scope") == "platform":
+                    if not getattr(identity, "is_admin", False):
+                        return self._json(HTTPStatus.FORBIDDEN, {"error": "the platform's runs are an admin's, under Admin"})
+                    run_rigs, submitter = None, None
+                else:
+                    run_rigs, submitter = self._runs(identity)
                 page = manager.store.page(
                     limit=limit,
                     offset=offset,
@@ -5645,8 +5662,9 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 # A run belongs to the rig that ran it, or -- while it waits
                 # for one -- to whoever submitted it. One outside this
                 # caller's workspace is not found rather than forbidden: a
-                # 403 would confirm the id names something real.
-                run_rigs, submitter = self._runs(identity)
+                # 403 would confirm the id names something real. An admin
+                # reads any by id (_run_reads): opened from under Admin.
+                run_rigs, submitter = self._run_reads(identity)
                 if job and not manager.store.mine(job, run_rigs, submitter):
                     job = None
                 return self._json(HTTPStatus.OK if job else HTTPStatus.NOT_FOUND, job or {"error": "job not found"})
