@@ -39,6 +39,27 @@ def started(result):
     return [grant.job_id for grant in result.start]
 
 
+def test_a_run_that_named_its_rig_goes_there_or_waits_for_it():
+    """A person runs on their own rig, not wherever the farm has room: a
+    demand that names a rig is placed there even when another is idle,
+    waits for it by name when it is not connected, and is told when the
+    rig does not run its profile."""
+    from alteriom_hil.allocation import Demand, plan
+
+    boards = [{"id": "a1", "target": "esp32", "worker": "a"}, {"id": "b1", "target": "esp32", "worker": "b"}]
+    profiles = {"a": frozenset({"p", "q"}), "b": frozenset({"p"})}
+    need = ({"target": "esp32", "count": 1},)
+    on_b = Demand(job_id="1" * 32, label="p", profile="p", needs=need, concurrent=True, rig="b")
+    decision = plan([on_b], boards, [], limits={"a": 1, "b": 1}, profiles=profiles)
+    assert [grant.worker for grant in decision.start] == ["b"], "named, so not a but b"
+    gone = Demand(job_id="2" * 32, label="p", profile="p", needs=need, concurrent=True, rig="c")
+    assert plan([gone], boards, [], limits={"a": 1, "b": 1}, profiles=profiles).waiting == {"2" * 32: "waiting for c to connect"}
+    wrong = Demand(job_id="3" * 32, label="q", profile="q", needs=need, concurrent=True, rig="b")
+    assert plan([wrong], boards, [], limits={"a": 1, "b": 1}, profiles=profiles).waiting == {"3" * 32: "b does not run q"}
+    anywhere = Demand(job_id="4" * 32, label="p", profile="p", needs=need, concurrent=True)
+    assert plan([anywhere], boards, [], limits={"a": 1, "b": 1}, profiles=profiles).start[0].worker == "a", "unnamed: the first rig with room"
+
+
 def test_at_concurrency_one_every_run_has_the_rig_to_itself_in_queue_order():
     # How the farm always ran: the first job starts, alone, and the rest wait
     # in order -- even two jobs that would never touch the same board.

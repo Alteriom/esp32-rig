@@ -1051,6 +1051,27 @@ function familyLabel(target) { return target.replace(/^esp32-/, "").toUpperCase(
 // run whose selection leaves a connected board without an artifact. Rebuilt
 // only when the family list or the connected set changes, so an operator's
 // own toggles survive the polling refresh.
+// The rigs this caller may run on, on a portal's run form: the rigs the
+// status lists for them -- their own and the ones shared with them -- and,
+// for whoever sees the whole farm, "any rig". A rig's document has no
+// such choice: it is the rig.
+function renderRigChoices() {
+  const select = $("rig-select");
+  if (!select) return;
+  const any = !workspaceOnly();
+  const options = (any ? ['<option value="">Any rig the farm chooses</option>'] : []).concat(
+    workers.map(worker => `<option value="${escapeHtml(worker.name)}">${escapeHtml(worker.name)}${worker.online === false ? " (offline)" : ""}</option>`));
+  const signature = options.join("");
+  if (select.dataset.signature !== signature) {
+    const was = select.value;
+    select.dataset.signature = signature;
+    select.innerHTML = options.length ? signature : '<option value="">No rig of yours has connected yet</option>';
+    if ([...select.options].some(option => option.value === was)) select.value = was;
+  }
+  const hint = $("rig-hint");
+  if (hint) hint.textContent = any ? "" : "one of yours, or one shared with you";
+}
+
 function renderProfiles() {
   const select = document.getElementById("profile-select");
   if (!select) return;
@@ -6060,6 +6081,7 @@ async function refresh(force = false) {
       renderYou(data.you);
       farmMode = data.mode || "standalone";
       workers = data.workers || [];
+      renderRigChoices();
       pendingRigs = data.pending_rigs || [];
       currentRelease = data.release || null;
       portalUrl = data.portal_url || null;
@@ -6186,6 +6208,10 @@ $("suite-form").addEventListener("submit", async event => {
   if (!targets.length) return alert("Select at least one artifact family");
   // The bundle is the whole of what is flashed, so it names the commit too.
   const body = {profile: form.get("profile"), ref: bundle.revision, artifact: bundle.id, targets};
+  // The rig this run is for, on a portal: a person's own, or one shared
+  // with them; an admin may leave it to the farm. A rig's document asks none.
+  const rig = form.get("rig");
+  if (rig) body.rig = rig;
   if (bundle.branch && /^[A-Za-z0-9][A-Za-z0-9._\/-]{0,127}$/.test(bundle.branch)) body.branch = bundle.branch;
   const tests = form.getAll("test");
   if (tests.length) body.tests = tests;

@@ -95,6 +95,9 @@ class Demand:
     holds_boards: bool = True
     # The profile it runs: a worker that does not have it is not offered it.
     profile: str | None = None
+    # Only this rig, when the request named one: a person runs on their own
+    # rig, not wherever the farm has room.
+    rig: str | None = None
 
 
 @dataclass(frozen=True)
@@ -372,9 +375,22 @@ def plan(
         for name in names
     ]
     for demand in queue:
-        candidates = [rig for rig in rigs if rig.eligible(demand)]
+        # A run that named its rig is that rig's or nobody's: it waits for
+        # it rather than going elsewhere, and says what it waits for.
+        if demand.rig is not None:
+            named = [rig for rig in rigs if rig.name == demand.rig]
+            if not named:
+                result.waiting[demand.job_id] = f"waiting for {demand.rig} to connect"
+                continue
+            if not named[0].runs_profile(demand):
+                result.waiting[demand.job_id] = f"{demand.rig} does not run {demand.profile or demand.label}"
+                continue
+            offered = named
+        else:
+            offered = rigs
+        candidates = [rig for rig in offered if rig.eligible(demand)]
         if not candidates:
-            runners = [rig for rig in rigs if rig.runs_profile(demand)]
+            runners = [rig for rig in offered if rig.runs_profile(demand)]
             if not runners:
                 result.waiting[demand.job_id] = f"no worker runs {demand.profile or demand.label}"
                 continue

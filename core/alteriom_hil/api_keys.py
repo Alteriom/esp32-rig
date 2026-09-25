@@ -536,6 +536,11 @@ ACCOUNT_ROUTES: tuple[tuple[str, re.Pattern], ...] = (
     ("GET", re.compile(r"/api/v1/artifacts/[0-9a-f]{32}/files/[^\x00-\x1f\x7f]+")),
     # Their own rigs' visibility.
     ("POST", re.compile(rf"/api/v1/rigs/{RIG_NAME}/visibility")),
+    # Starting a run: a project they may see, on a rig of theirs or one
+    # shared with them, named in the request. The handler asks the portal
+    # (may_submit) before anything is queued; it was farm-wide while the
+    # allocator did not know whose rig a run was for -- now the run says.
+    ("POST", re.compile(r"/api/v1/suites")),
     # Stopping their own run. Safe to admit because the handler already asks
     # whose run it is -- a non-admin may cancel only what they submitted --
     # and necessary because a run an account can see and not stop is worse

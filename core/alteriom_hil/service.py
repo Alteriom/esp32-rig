@@ -489,6 +489,12 @@ class BaseManager:
             },
         ))
 
+    def may_submit(self, identity, kind: str, request: dict) -> None:
+        """Whether this caller may start this run: a PermissionError says
+        why not. A rig asks nothing more than the key's role, which the
+        handler already did; a portal asks whose project and whose rig."""
+        return None
+
     def _project_extras_for(self, names, identity=None) -> dict:
         """What one half knows about projects beyond their profiles and
         their bundles: a rig, the description GitHub gives each repository;
@@ -1187,7 +1193,7 @@ class BaseManager:
     def _validate(self, kind: str, request: dict) -> str | None:
         allowed = {
             "inventory": set(),
-            "suite": {"profile", "ref", "branch", "actor", "targets", "simulation", "supersede", "tests", "keyword", "reuse", "env", "artifact", "boards"},
+            "suite": {"profile", "ref", "branch", "actor", "targets", "simulation", "supersede", "tests", "keyword", "reuse", "env", "artifact", "boards", "rig"},
         }.get(kind)
         if allowed is None:
             raise ValueError(f"unsupported job kind: {kind}")
@@ -1228,6 +1234,14 @@ class BaseManager:
                 not isinstance(supplied, str) or not artifact_store.BUNDLE_ID.fullmatch(supplied)
             ):
                 raise ValueError("artifact must be the id of a bundle the farm holds")
+        rig = request.get("rig")
+        if rig is not None:
+            # The rig this run is for and no other. A farm that is one rig
+            # names none: there is nothing to choose.
+            if not isinstance(rig, str) or not WORKER_NAME_PATTERN.fullmatch(rig):
+                raise ValueError("rig must be a rig's name")
+            if self.__dict__.get("mode") != "portal":
+                raise ValueError("this farm is one rig; a run names none")
         unknown = set(request) - allowed
         if unknown:
             raise ValueError(f"unknown request fields: {sorted(unknown)}")
@@ -1446,6 +1460,7 @@ class BaseManager:
             "job_id": job["id"], "label": spec.label, "kind": kind,
             "concurrent": spec.concurrent, "resources": frozenset(spec.resources),
             "profile": spec.name,
+            "rig": request.get("rig") or None,
         }
         if request.get("boards"):
             # "Check this board": exactly those, whatever the profile says.
@@ -4700,6 +4715,20 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
+        def _account_projects(self, identity) -> tuple[dict, dict]:
+            """The projects an account may run, for the run form's pickers:
+            the profiles and their details, cut to what the manager shows
+            this caller (visible_profiles) -- its own, the built-ins, the
+            public ones. It used to be an empty answer, because starting a
+            run was not something an account did; it is, on a rig it names,
+            so the pickers show what it may pick."""
+            visible = getattr(manager, "visible_profiles", None)
+            allowed = visible(identity) if visible is not None else None
+            details = manager.configuration()["build"]["profile_details"]
+            keep = lambda name: allowed is None or name in allowed  # noqa: E731
+            return ({name: spec for name, spec in manager.profiles.items() if keep(name)},
+                    {name: detail for name, detail in details.items() if keep(name)})
+
         def _runs(self, identity) -> tuple[set[str] | None, str | None]:
             """Which runs this caller may read, as `FarmManager.run_scope`
             gives it: the rigs whose runs are theirs, and the name their own
@@ -5375,27 +5404,23 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                         # page change.
                         "targets": sorted(TARGETS),
                         "version": service_version(),
-                        # The three below are the farm's build configuration,
-                        # not anybody's workspace: where the farm's own code
-                        # comes from, the suite's files and tests, and each
-                        # consumer's repo, supply repo, supply workflow and
-                        # suite path. Those last name private repositories --
-                        # the same names that keep the artifact store shut to
-                        # accounts -- so a workspace view does not carry them.
-                        # What reads them is the run form's pickers, which
-                        # come up empty rather than broken; and starting a run
-                        # is not something an account does yet
-                        # (docs/device-platform-plan.md, step 12); when it is,
-                        # each becomes a projection of the consumers that
-                        # account may build rather than an empty answer.
-                        "repositories": repositories(manager.repo, manager.profiles) if mine is None else {},
+                        # The three below are the farm's build configuration
+                        # for whoever sees the whole farm. For an account they
+                        # are a projection of the projects it may see -- its
+                        # own, the built-ins, the public ones -- because the
+                        # run form's pickers read them, and starting a run is
+                        # something an account does now, on a rig it names
+                        # (may_submit). The suite's own tests stay the farm's.
+                        "repositories": repositories(manager.repo, manager.profiles) if mine is None
+                                        else repositories(manager.repo, self._account_projects(identity)[0]),
                         "queue": manager.queue_state(run_rigs, submitter),
                         "suite_tests": manager.suite_catalogue() if mine is None else [],
                         # The profile a run is for when it names none, and
                         # whose suite `suite_tests` lists: the farm's choice,
                         # so the dashboard asks rather than knowing a name.
                         "default_profile": manager.default_profile,
-                        "profiles": manager.configuration()["build"]["profile_details"] if mine is None else {},
+                        "profiles": manager.configuration()["build"]["profile_details"] if mine is None
+                                    else self._account_projects(identity)[1],
                     },
                 )
             match = re.fullmatch(r"/api/v1/jobs/([0-9a-f]{32})/artifacts/([a-z0-9][a-z0-9_.:-]{0,80})", path)
@@ -6129,7 +6154,16 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             if path not in kinds:
                 return self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
             try:
-                job = manager.submit(kinds[path], self._request_json(), submitted_by=identity.name)
+                body = self._request_json()
+                # Whose project, on whose rig: a portal's question, asked
+                # before anything is queued (an account's run names its rig).
+                # A manager without it (a test double) has nobody to ask for.
+                asked = getattr(manager, "may_submit", None)
+                if asked is not None:
+                    asked(identity, kinds[path], body)
+                job = manager.submit(kinds[path], body, submitted_by=identity.name)
+            except PermissionError as exc:
+                return self._json(HTTPStatus.FORBIDDEN, {"error": str(exc)})
             except RigBusyError as exc:
                 return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
             except (ValueError, json.JSONDecodeError) as exc:

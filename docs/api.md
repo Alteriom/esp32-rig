@@ -64,6 +64,7 @@ A run's id is 32 hex characters. States: `queued`, `running`, `passed`,
 |---|---|---|
 | `GET /api/v1/artifacts` | user | the bundles the rig holds, a page at a time: id, project, commit, families, size, origin, pinned; `?profile=`, `?branch=`, `?q=`, `?limit=` |
 | `GET /api/v1/artifacts/library` | user | the same, grouped by project and commit |
+| `POST /api/v1/suites` | user | start a run: `{"profile", "artifact", "ref", "targets", "branch", "tests", "keyword", "boards", "rig"}`; on a portal `rig` names the rig the run is for and no other (an account's run names its own, or one shared with it); a rig, being one rig, refuses it |
 | `POST /api/v1/artifacts?profile=…&repo=…&workflow=…&run_id=…&run_url=…&commit=…` | user | hand a bundle over: the body is a `.tar.gz` of the bundle directory, at most 256 MB; the query names its provenance, checked against the project's supply block; the manifest's revision key must equal `commit`. Answers the bundle's id, or `{"reused": true, ...}` for a commit already held |
 | `GET /api/v1/artifacts/<id>` | user | one bundle: its manifest and provenance |
 | `GET /api/v1/artifacts/<id>/bundle` · `/files/<path>` | user | download it as `.tar.gz`, or one file out of it |
