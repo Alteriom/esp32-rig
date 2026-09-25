@@ -252,3 +252,6 @@ ul.plain{margin:6px 0;padding-left:18px}
 .tabs .tabs-group{margin-left:auto;align-self:center;padding:0 10px;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .visibility-control{display:flex;flex-direction:column;gap:4px}
 .visibility-control select{max-width:180px}
+
+/* The library: a card a project, its facts in a row, its builds under it. */
+.library-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 18px;margin-top:14px}.library-facts>div{display:grid;gap:3px;align-content:start}.library-facts>div>small{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}.library-facts span small{display:block;font-size:.74rem}.library-project.builtin{border-color:#63e6be45}.library-project .title-row>div>small{display:block;margin-top:3px;max-width:640px}.library-builds{margin-top:14px}.library-builds summary{cursor:pointer;color:var(--muted);font-size:.8rem}

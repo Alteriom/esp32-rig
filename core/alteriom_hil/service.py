@@ -153,6 +153,11 @@ FARM_REPO_ROOT = Path(__file__).resolve().parents[2]
 # The rig's own firmware and its profile: run from Boards, installed with a
 # release, never listed among the projects a rig is for.
 HEALTH_CHECK_PROFILE = "canary"
+# The example project the rig ships (profiles/rig-example.yaml): the one to
+# try a rig with, and to copy. Built in, like the health check, and listed
+# with it first in the library.
+EXAMPLE_PROFILE = "rig-example"
+BUILTIN_ORDER = {"health-check": 0, "example": 1}
 # Sign-in codes one caller may ask for, and in how long; the session
 # cookie's name, and how long a session lasts.
 SIGNIN_REQUESTS_ALLOWED = 5
@@ -483,6 +488,37 @@ class BaseManager:
                 "result": result or {},
             },
         ))
+
+    def _project_extras_for(self, names) -> dict:
+        """What one half knows about projects beyond their profiles and
+        their bundles: a rig, the description GitHub gives each repository;
+        a portal, whose workspace each is in and which rigs run it. The
+        base knows nothing more."""
+        return {name: {} for name in names}
+
+    def _known_profiles(self) -> dict:
+        """The profiles this service runs, or none on a manager that has
+        not loaded any (a store-only manager in tests)."""
+        try:
+            return dict(self.profiles)
+        except (AttributeError, KeyError):
+            return {}
+
+    def health_check_firmware(self) -> dict | None:
+        """The health check firmware this release pins (canary/firmware.json
+        beside the code): its version, families and commands. What the
+        built-in project *is*, for the library and the public site."""
+        repo = self.__dict__.get("repo")
+        if repo is None:
+            return None
+        try:
+            pin = json.loads((Path(repo) / "canary" / "firmware.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(pin, dict):
+            return None
+        return {"version": pin.get("version"), "families": list(pin.get("families") or []),
+                "commands": list(pin.get("commands") or [])}
 
     def imported_artifact(self, entry_id: str) -> bool:
         """History a node brought is a portal's; a rig has brought none."""
@@ -3675,6 +3711,22 @@ class BaseManager:
                            "older_bytes": sum(group["older_bytes"] for group in branches),
                            "latest_at": branches[0]["latest"]["created_at"] if branches else None})
         listed.sort(key=lambda project: project["latest_at"] or "", reverse=True)
+        # Every project the service knows is in the library, bundles or not:
+        # a library is what can be run here, not what happens to be on
+        # disk. The built-ins first -- the health check, then the example
+        # -- then the rest by their newest build.
+        known = self._known_profiles()
+        by_name = {project["profile"]: project for project in listed}
+        for name, spec in known.items():
+            if name not in by_name:
+                by_name[name] = {"profile": name, "project": spec.label, "repo": spec.repo, "bundles": 0, "bytes": 0,
+                                 "pinned": 0, "branches": [], "older": 0, "older_bytes": 0, "latest_at": None}
+                listed.append(by_name[name])
+        extras = self._project_extras_for([project["profile"] for project in listed])
+        for project in listed:
+            project.update(self._project_card(project, known.get(project["profile"]), extras.get(project["profile"]) or {}))
+        listed.sort(key=lambda project: (BUILTIN_ORDER.get(project["builtin"], len(BUILTIN_ORDER)),
+                                         project["latest_at"] is None))
         return {
             "projects": listed,
             "count": len(entries),
@@ -3686,6 +3738,31 @@ class BaseManager:
             # one without a second scan of the store.
             "pruning": self.prune_progress(),
         }
+
+    def _project_card(self, project: dict, spec, extras: dict) -> dict:
+        """One project as the library shows it: what it is (its label, its
+        repository, the families it needs), its newest build across every
+        branch, the last run on any of them, whether it is built in -- and
+        what the half running this knows besides."""
+        name = project["profile"]
+        builtin = ("health-check" if name == HEALTH_CHECK_PROFILE
+                   else "example" if name == EXAMPLE_PROFILE else None)
+        branches = project.get("branches") or []
+        latest = branches[0]["latest"] if branches else None
+        runs = [group["last_run"] for group in branches if group.get("last_run")]
+        last_run = max(runs, key=lambda run: run["created_at"] or "") if runs else None
+        card = {"builtin": builtin, "label": project.get("project") or name, "known": spec is not None,
+                "latest": latest, "last_run": last_run, "families": [], "min_boards": None, "exclusive": None,
+                "supply_repo": None, "supply_workflow": None, "description": None}
+        if spec is not None:
+            card.update({"label": spec.label, "repo": spec.repo,
+                         "families": [str(dict(need).get("target")) for need in spec.needs if dict(need).get("target")],
+                         "min_boards": spec.min_boards, "exclusive": spec.exclusive,
+                         "supply_repo": spec.supply_repo, "supply_workflow": spec.supply_workflow})
+        if builtin == "health-check":
+            card["firmware"] = self.health_check_firmware()
+        card.update(extras)
+        return card
 
     def artifact_detail(self, bundle_id: str) -> dict:
         if not artifact_store.BUNDLE_ID.fullmatch(bundle_id or ""):

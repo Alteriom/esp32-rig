@@ -398,6 +398,18 @@ class RigMixin:
                          "supply_repo": spec.supply_repo or spec.repo})
         return rows
 
+    def _project_extras_for(self, names) -> dict:
+        """The description GitHub gives each project's repository, from the
+        access report already held -- never a request of its own: the
+        library draws without waiting on GitHub."""
+        held = self.__dict__.get("_github_access") or {}
+        described = {}
+        for entry in ((held.get("report") or {}).get("projects") or []):
+            access = entry.get("repo_access") or {}
+            if access.get("description"):
+                described[entry.get("name")] = access["description"]
+        return {name: {"description": described.get(name)} for name in names}
+
     def _github_access_report(self, token: str) -> dict:
         """What the token reaches, and what it may do with each project's
         repository (read it, read its code, list its bundles). Asked of

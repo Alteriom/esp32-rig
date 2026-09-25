@@ -177,7 +177,7 @@ def repository_access(token: str, repo_url: str) -> dict:
     owner, repo = parse_repo(repo_url)
     base = f"{GITHUB_API}/repos/{owner}/{repo}"
     result = {"repo": f"https://github.com/{owner}/{repo}", "metadata": False, "contents": False,
-              "actions": False, "private": None, "error": None, "refused": {}}
+              "actions": False, "private": None, "error": None, "refused": {}, "description": None}
     try:
         seen = _ask(base, token)
     except GitHubError as error:
@@ -185,6 +185,8 @@ def repository_access(token: str, repo_url: str) -> dict:
         return result
     result["metadata"] = True
     result["private"] = bool(seen.get("private")) if isinstance(seen, dict) else None
+    # What the repository says it is, for the library's card; nothing else of it.
+    result["description"] = (str(seen.get("description") or "").strip()[:200] or None) if isinstance(seen, dict) else None
     for key, url in (("contents", f"{base}/contents/"), ("actions", f"{base}/actions/artifacts?per_page=1")):
         try:
             _ask(url, token)
