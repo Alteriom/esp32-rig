@@ -558,6 +558,13 @@ def test_firmware_is_a_library_by_project_and_branch_not_a_growing_list():
     row = script.split("function libraryRow(", 1)[1].split("\n}\n", 1)[0]
     for part in ("group.latest", "group.last_run", "group.older_bytes", "library-run", "library-all"):
         assert part in row, part
+    # A card a project -- what it is, its newest build, its last run, the
+    # rigs running it -- the built-ins first, and the branches under it.
+    card = script.split("function libraryCard(", 1)[1].split("\n}\n", 1)[0]
+    for part in ("project.builtin", "project.latest", "project.last_run", "project.rigs", "project.firmware",
+                 "library-builds", "libraryRow(project, group, index)"):
+        assert part in card, part
+    assert 'projects.map(libraryCard)' in script
     # "N builds" is the whole list, filtered to that branch, which can be let go.
     assert 'params.set("branch", bundleQuery.branch)' in script and 'id="bundle-branch"' in page
     # One scan of the store a visit, and the figures follow a prune.

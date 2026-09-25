@@ -2813,8 +2813,13 @@ def test_the_library_is_the_store_by_project_and_branch_newest_first(tmp_path):
 
     library = manager.artifact_library()
     assert library["count"] == 4 and library["pinned"] == 1
-    (project,) = library["projects"]
-    assert project["profile"] == "painlessmesh" and project["bundles"] == 4
+    project = next(item for item in library["projects"] if item["profile"] == "painlessmesh")
+    assert project["bundles"] == 4
+    # The card's own facts: the newest build across every branch, the last
+    # run on any of them (the one that built the topic branch's bundle, a
+    # day after the failed run on main), and that it is not built in.
+    assert project["latest"]["id"] == topic and project["last_run"]["id"] == topic and project["builtin"] is None
+    assert project["branches"][1]["last_run"]["id"] == failed
     assert [group["branch"] for group in project["branches"]] == ["fix/c5", "main"], "newest branch first"
     main = project["branches"][1]
     assert main["bundles"] == 3 and main["latest"]["id"] == newest

@@ -560,6 +560,25 @@ def test_a_bundle_whose_manifest_names_the_commit_under_another_key_is_refused_b
         rig.fetch_project_bundle({}, "my-sensor")
 
 
+def test_the_library_lists_every_project_the_built_ins_first_bundles_or_not(tmp_path):
+    """A library is what can be run here, not what is on disk: every project
+    the rig knows, the health check and the example first, each with what
+    it is -- and nothing asked of GitHub to draw it."""
+    rig = _rig(tmp_path)
+    library = rig.artifact_library()
+    names = [project["profile"] for project in library["projects"]]
+    assert names[:2] == ["canary", "rig-example"], names
+    assert set(names) == set(rig.profiles)
+    health, example = library["projects"][:2]
+    assert health["builtin"] == "health-check" and health["bundles"] == 0 and health["latest"] is None
+    assert health["firmware"]["version"] and "esp32" in health["firmware"]["families"], "the pinned firmware is what it is"
+    assert example["builtin"] == "example" and example["repo"] == "https://github.com/Alteriom/esp32-rig-example"
+    assert example["supply_workflow"] == ".github/workflows/hil.yml" and example["exclusive"] is True
+    assert example["last_run"] is None and example["description"] is None, "nothing was asked of GitHub"
+    mesh = next(project for project in library["projects"] if project["profile"] == "painlessmesh")
+    assert mesh["builtin"] is None and mesh["known"] is True
+
+
 def test_fetching_needs_github_and_a_project_that_names_a_workflow(tmp_path, monkeypatch):
     rig = _rig(tmp_path, github="none")
     with pytest.raises(LookupError, match="no project named nope"):

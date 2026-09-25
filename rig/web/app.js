@@ -4262,8 +4262,9 @@ function renderFirmwareMetrics(summary) {
   const projects = byBranch ? summary.projects.length : (summary.profiles || []).length;
   const branches = byBranch ? summary.projects.reduce((sum, project) => sum + project.branches.length, 0) : null;
   const older = byBranch ? summary : lastLibrary;
+  const builtin = byBranch ? summary.projects.filter(project => project.builtin).length : 0;
   $("firmware-metrics").innerHTML = `
-    <article><span>Projects</span><strong>${escapeHtml(projects)}</strong><small class="muted">${branches === null ? '<a href="#artifacts">by branch in the library</a>' : `${escapeHtml(branches)} branch${branches === 1 ? "" : "es"}`}</small></article>
+    <article><span>Projects</span><strong>${escapeHtml(projects)}</strong><small class="muted">${branches === null ? '<a href="#artifacts">in the library</a>' : `${escapeHtml(builtin)} built in · ${escapeHtml(branches)} branch${branches === 1 ? "" : "es"} built`}</small></article>
     <article><span>Builds kept</span><strong>${escapeHtml(summary.count ?? 0)}</strong><small class="muted">${summary.pinned ? `${escapeHtml(summary.pinned)} pinned` : "none pinned"}</small></article>
     <article><span>On disk</span><strong>${escapeHtml(formatBytes(summary.bytes || 0))}</strong><small class="muted">firmware bundles</small></article>
     <article><span>Older builds</span><strong>${older ? escapeHtml(formatBytes(older.older_bytes || 0)) : "–"}</strong><small class="muted">${!older ? '<a href="#artifacts">counted in the library</a>' : older.older ? `<a href="#artifacts/storage">${escapeHtml(older.older)} not the latest of their branch</a>` : "nothing older to clean up"}</small></article>`;
@@ -4295,18 +4296,78 @@ function libraryRow(project, group, index) {
   </tr>`;
 }
 
-// Each project a card, each branch a row: its latest build, what the last
-// run on it said, how many builds it has kept and how much of that is older.
+// Each project a card -- what it is, its newest build, the last run on it,
+// and on a portal whose it is and which rigs run it -- the built-ins first,
+// with its builds by branch under it. A library is what can be run here,
+// not what happens to be on disk.
+function familyChips(families) {
+  return `<div class="family-chips">${families.map(family => `<span class="artifact">${escapeHtml(familyLabel(family))}</span>`).join("")}</div>`;
+}
+
+function projectEyebrow(project) {
+  if (project.builtin === "health-check") return "BUILT IN · HEALTH CHECK";
+  if (project.builtin === "example") return "BUILT IN · EXAMPLE";
+  const seen = project.visibility;
+  if (!seen) return "PROJECT";
+  if (seen.shown === "hidden") return "PROJECT · HIDDEN";
+  return seen.repo === "public" ? "PROJECT · PUBLIC" : "PROJECT · PRIVATE";
+}
+
+function libraryCard(project) {
+  const builtin = project.builtin;
+  const own = Boolean(shell().projectsAreOwn);
+  const blurb = builtin === "health-check"
+    ? "Proves a board is wired, reachable and alive: the firmware a rig flashes before it trusts a board. Run from Boards, not as a project."
+    : builtin === "example"
+      ? "A small firmware and its suite, in a public repository to copy — and the project to try a rig with."
+      : project.description || "";
+  const families = project.families?.length ? familyChips(project.families)
+    : builtin === "health-check" && project.firmware?.families?.length ? familyChips(project.firmware.families)
+    : `<span class="muted">${project.exclusive ? "the whole bench" : "any boards"}</span>`;
+  const branches = project.branches || [];
+  const latest = project.latest;
+  const runnable = branches.map(group => group.runnable).find(Boolean);
+  const supply = project.supply_workflow;
+  const newest = latest
+    ? `<a href="#artifact/${escapeHtml(latest.id)}">${latest.revision ? escapeHtml(String(latest.revision).slice(0, 9)) : escapeHtml(latest.id.slice(0, 8))}</a>${branches[0]?.branch ? ` <span class="branch">${escapeHtml(branches[0].branch)}</span>` : ""}<small>${whenSpan(latest.created_at)}${latest.actor ? ` · ${actorLink(latest.actor)}` : ""}</small>`
+    : builtin === "health-check" ? '<span class="muted">arrives with each release</span>'
+    : `<span class="muted">none yet</span><small>${own && supply ? `<a href="#configuration/projects/${escapeHtml(project.profile)}">Get firmware from GitHub</a>` : supply ? `its CI hands one over (<code>${escapeHtml(supply)}</code>)` : "no supply workflow"}</small>`;
+  const run = project.last_run;
+  const verdict = run
+    ? `<a href="#run/${escapeHtml(run.id)}"><span class="state ${statusClass(run.status)}">${escapeHtml(run.status)}</span></a><small>${whenSpan(run.created_at)}</small>`
+    : '<span class="muted">never run</span>';
+  const rigs = Array.isArray(project.rigs)
+    ? `<div><small>Rigs</small><span>${project.rigs.length ? project.rigs.map(name => `<a href="${rigHref(name)}">${escapeHtml(name)}</a>`).join(", ") : '<span class="muted">none yet</span>'}</span></div>`
+    : "";
+  const firmware = builtin === "health-check" && project.firmware?.version
+    ? `<div><small>Firmware</small><span>${escapeHtml(project.firmware.version)}</span></div>` : "";
+  const kept = project.bundles
+    ? `${escapeHtml(project.bundles)} build${project.bundles === 1 ? "" : "s"} · ${escapeHtml(formatBytes(project.bytes))}${project.pinned ? ` · ${escapeHtml(project.pinned)} pinned` : ""}`
+    : '<span class="muted">nothing on disk</span>';
+  const action = builtin === "health-check"
+    ? `<button type="button" class="secondary library-go" data-href="${own ? "#boards" : "#rigs"}">${own ? "Boards" : "Rigs"}</button>`
+    : runnable ? `<button type="button" class="secondary library-run" data-id="${escapeHtml(runnable.id)}">Run</button>` : "";
+  const more = branches.length - LIBRARY_BRANCHES_SHOWN;
+  return `<section class="card library-project${builtin ? " builtin" : ""}" data-profile="${escapeHtml(project.profile)}">
+    <div class="title-row"><div><p class="eyebrow">${projectEyebrow(project)}</p><h2>${escapeHtml(project.label || project.project || project.profile)}</h2>${blurb ? `<small>${escapeHtml(blurb)}</small>` : ""}${project.repo ? `<small>${repoLink(project.repo)}</small>` : ""}</div><span class="actions">${action}</span></div>
+    <div class="library-facts">
+      <div><small>Newest build</small><span>${newest}</span></div>
+      <div><small>Last run</small><span>${verdict}</span></div>
+      <div><small>Boards</small><span>${families}</span></div>
+      ${firmware}${rigs}
+      <div><small>Kept</small><span>${kept}</span></div>
+    </div>
+    ${branches.length ? `<details class="library-builds"><summary>Builds by branch</summary>
+      <div class="table-wrap"><table class="fleet library-table"><thead><tr><th>Branch</th><th>Latest build</th><th>Families</th><th>Last run</th><th class="num">Kept</th><th class="num">Size</th><th></th></tr></thead><tbody>${branches.map((group, index) => libraryRow(project, group, index)).join("")}</tbody></table></div>
+      ${more > 0 ? `<button type="button" class="linkish library-show-more">Show ${escapeHtml(more)} more branch${more === 1 ? "" : "es"}</button>` : ""}
+    </details>` : ""}
+  </section>`;
+}
+
 function renderLibrary(library) {
   const projects = library.projects || [];
-  $("firmware-library").innerHTML = projects.length ? projects.map(project => {
-    const more = project.branches.length - LIBRARY_BRANCHES_SHOWN;
-    return `<section class="card library-project">
-      <div class="title-row"><div><p class="eyebrow">${escapeHtml(project.profile)}</p><h2>${escapeHtml(project.project)}</h2>${project.repo ? `<small>${repoLink(project.repo)}</small>` : ""}</div><span class="muted">${escapeHtml(project.bundles)} build${project.bundles === 1 ? "" : "s"} · ${escapeHtml(formatBytes(project.bytes))}${project.pinned ? ` · ${escapeHtml(project.pinned)} pinned` : ""}</span></div>
-      <div class="table-wrap"><table class="fleet library-table"><thead><tr><th>Branch</th><th>Latest build</th><th>Families</th><th>Last run</th><th class="num">Kept</th><th class="num">Size</th><th></th></tr></thead><tbody>${project.branches.map((group, index) => libraryRow(project, group, index)).join("")}</tbody></table></div>
-      ${more > 0 ? `<button type="button" class="linkish library-show-more">Show ${escapeHtml(more)} more branch${more === 1 ? "" : "es"}</button>` : ""}
-    </section>`;
-  }).join("") : '<section class="card"><p class="muted">${Site()} keeps no firmware yet. A project\'s CI supplies its bundles; the Rig Health Check firmware arrives with each release.</p></section>';
+  $("firmware-library").innerHTML = projects.length ? projects.map(libraryCard).join("")
+    : `<section class="card"><p class="muted">${escapeHtml(Site())} knows no project yet.</p></section>`;
 }
 
 function installLibraryHandlers() {
@@ -4319,6 +4380,7 @@ function installLibraryHandlers() {
       button.remove();
       return;
     }
+    if (button.classList.contains("library-go")) return navigateTo(button.dataset.href);
     if (button.classList.contains("library-all")) {
       Object.assign(bundleQuery, {profile: button.dataset.profile, branch: button.dataset.branch, q: "", offset: 0});
       $("bundle-search").value = "";
