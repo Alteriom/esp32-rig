@@ -100,6 +100,16 @@ def http_json(url: str, *, method: str = "GET", body: dict | None = None,
     return json.loads(raw) if raw else {}
 
 
+# What signing in asks of GitHub: who this is, and a verified address.
+SIGNIN_SCOPE = "read:user user:email"
+# What connecting GitHub for repositories asks besides: to read repositories
+# on the person's behalf, private ones included. An OAuth app has no
+# narrower grant that reaches a private repository; the farm uses it to read
+# a repository and to ask whether the person may push to it, and for nothing
+# else, and the person may take it back at any time.
+REPO_SCOPE = "repo read:user user:email"
+
+
 @dataclass(frozen=True)
 class GitHubApp:
     """The OAuth app the farm is registered as with GitHub."""
@@ -107,22 +117,20 @@ class GitHubApp:
     client_id: str
     client_secret: str
 
-    def authorize_url(self, state: str, redirect_uri: str) -> str:
+    def authorize_url(self, state: str, redirect_uri: str, scope: str = SIGNIN_SCOPE) -> str:
         """Where to send the browser. `state` comes back with the code and
         is what stops a code meant for somebody else from being used."""
         return GITHUB_AUTHORIZE + "?" + urllib.parse.urlencode({
             "client_id": self.client_id,
             "redirect_uri": redirect_uri,
             "state": state,
-            "scope": "read:user user:email",
+            "scope": scope,
             "allow_signup": "true",
         })
 
-    def user(self, code: str, redirect_uri: str, fetch=http_json) -> dict:
-        """Who GitHub says this code is: `{id, login, email, name}`, the
-        email their primary verified one or None. The access token is used
-        for the two reads and then forgotten: the farm keeps no way back
-        into anybody's GitHub."""
+    def exchange(self, code: str, redirect_uri: str, fetch=http_json) -> dict:
+        """The code GitHub sent back, exchanged for `{token, scope}` -- the
+        scope as GitHub granted it, which may be less than was asked."""
         answer = fetch(GITHUB_TOKEN, method="POST", body={
             "client_id": self.client_id, "client_secret": self.client_secret,
             "code": code, "redirect_uri": redirect_uri,
@@ -131,6 +139,15 @@ class GitHubApp:
         if not token:
             why = (answer.get("error_description") or answer.get("error")) if isinstance(answer, dict) else None
             raise SignInError(f"GitHub did not exchange the code: {why or 'no token in its answer'}")
+        return {"token": str(token), "scope": str(answer.get("scope") or "")}
+
+    def user(self, code: str, redirect_uri: str, fetch=http_json) -> dict:
+        """Who GitHub says this code is: `{id, login, email, name}`, the
+        email their primary verified one or None. The access token is used
+        for the two reads and then forgotten: signing in keeps no way back
+        into anybody's GitHub (connecting GitHub for repositories does, on
+        purpose, and says so)."""
+        token = self.exchange(code, redirect_uri, fetch=fetch)["token"]
         auth = {"Authorization": f"Bearer {token}"}
         person = fetch(f"{GITHUB_API}/user", headers=auth)
         if not isinstance(person, dict) or not isinstance(person.get("id"), int) or not person.get("login"):

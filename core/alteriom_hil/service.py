@@ -4827,6 +4827,21 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 except ElsewhereError as exc:
                     return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
                 return self._redirect(url, self._oauth_cookie_header(nonce))
+            if path == "/auth/github/repos":
+                # Connecting GitHub for repositories: a second authorization,
+                # for a signed-in account, that keeps its token (a portal's;
+                # begin_github_repos says what for).
+                identity = self._identity()
+                if identity is None or getattr(identity, "kind", "") != "account":
+                    return self._json(HTTPStatus.UNAUTHORIZED, {"error": "sign in first: a grant is an account's"})
+                begin = getattr(manager, "begin_github_repos", None)
+                if begin is None:
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such sign-in"})
+                try:
+                    url, nonce = begin(identity)
+                except ElsewhereError as exc:
+                    return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+                return self._redirect(url, self._oauth_cookie_header(nonce))
             if path == "/auth/github/callback":
                 try:
                     token, where = manager.finish_github(first("state"), first("code"),
@@ -4834,7 +4849,9 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 except (ValueError, farm_signin.SignInError, ElsewhereError, OSError, sqlite3.IntegrityError) as exc:
                     manager._event("farm", "account", f"a GitHub sign-in failed: {exc}", level="warn")
                     return self._redirect("/app?signin=failed", self._oauth_cookie_header(None))
-                return self._redirect(where, self._session_cookie_header(token), self._oauth_cookie_header(None))
+                # A grant made no session: the browser keeps the one it has.
+                cookies = ([self._session_cookie_header(token)] if token else []) + [self._oauth_cookie_header(None)]
+                return self._redirect(where, *cookies)
             return self._json(HTTPStatus.NOT_FOUND, {"error": "no such sign-in"})
 
         def _signin_cookie_header(self, nonce: str | None) -> str:
