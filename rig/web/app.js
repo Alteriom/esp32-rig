@@ -87,6 +87,9 @@ const RIG_SHELL = {
   rediscoverOffered: rigCount => true,
   // A page the shell adds to the document, opened by its route: a rig adds none.
   openPage: null,
+  // After a person's workspace projects are drawn: a portal offers to add one;
+  // a rig's projects are added on its own Projects page.
+  afterWorkspaceProjects: null,
   // A rig shows the public farm it could report to; a portal is one.
   farmWorld: true,
   fleet: () => [localRig()],
@@ -5704,6 +5707,8 @@ function renderWorkspaceProjects(workspaces) {
     ? `<div class="title-row"><div><p class="eyebrow">YOUR PROJECTS</p><h2>What runs for you</h2></div><a class="secondary" href="#configuration/workspaces">Workspaces</a></div>${workspaces.map(card).join("")}`
     : `<div class="title-row"><div><p class="eyebrow">YOUR PROJECTS</p><h2>What runs for you</h2></div></div>
        <p class="muted">You have no workspace yet, so nothing runs for you. A workspace is a repository you test; one is made for you when a rig is given to you, and you can <a href="#configuration/workspaces">make one now</a>.</p>`;
+  // A portal adds what a person may do here: add a project of their own.
+  if (shell().afterWorkspaceProjects) shell().afterWorkspaceProjects($("config-projects"), workspaces);
 }
 
 // What a profile asks the bank for, by family. "3 board(s)" said how many and
