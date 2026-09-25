@@ -508,6 +508,15 @@ class BaseManager:
         answer; a portal narrows it by whose workspace a project is in."""
         return None
 
+    def library_profiles(self, identity) -> set[str] | None:
+        """The projects this caller's Library lists, and the run form
+        offers, or None for all of them. Not the same question as
+        visible_profiles: what somebody may read and what their own page
+        is about. On a rig they are one answer; a portal lists every
+        account -- an admin's included -- its own, and keeps the whole
+        catalogue under Admin."""
+        return self.visible_profiles(identity)
+
     def artifact_visible(self, bundle_id: str, identity=None) -> bool:
         """Whether this caller may read this bundle at all: a bundle is
         shown with its project, and to nobody the project is not."""
@@ -3758,7 +3767,7 @@ class BaseManager:
         # Whose library this is: a caller shown only some projects is shown
         # only those, their bundles and their sums -- a stranger's private
         # project is not in the count, let alone by name.
-        visible = self.visible_profiles(identity)
+        visible = self.library_profiles(identity)
         if visible is not None:
             listed = [project for project in listed if project["profile"] in visible]
         extras = self._project_extras_for([project["profile"] for project in listed], identity)
@@ -4783,7 +4792,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             public ones. It used to be an empty answer, because starting a
             run was not something an account did; it is, on a rig it names,
             so the pickers show what it may pick."""
-            visible = getattr(manager, "visible_profiles", None)
+            visible = getattr(manager, "library_profiles", None)
             allowed = visible(identity) if visible is not None else None
             details = manager.configuration()["build"]["profile_details"]
             keep = lambda name: allowed is None or name in allowed  # noqa: E731
