@@ -4715,6 +4715,20 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             self.send_header("Cache-Control", "no-store")
             super().end_headers()
 
+        def _account_projects(self, identity) -> tuple[dict, dict]:
+            """The projects an account may run, for the run form's pickers:
+            the profiles and their details, cut to what the manager shows
+            this caller (visible_profiles) -- its own, the built-ins, the
+            public ones. It used to be an empty answer, because starting a
+            run was not something an account did; it is, on a rig it names,
+            so the pickers show what it may pick."""
+            visible = getattr(manager, "visible_profiles", None)
+            allowed = visible(identity) if visible is not None else None
+            details = manager.configuration()["build"]["profile_details"]
+            keep = lambda name: allowed is None or name in allowed  # noqa: E731
+            return ({name: spec for name, spec in manager.profiles.items() if keep(name)},
+                    {name: detail for name, detail in details.items() if keep(name)})
+
         def _runs(self, identity) -> tuple[set[str] | None, str | None]:
             """Which runs this caller may read, as `FarmManager.run_scope`
             gives it: the rigs whose runs are theirs, and the name their own
@@ -5390,27 +5404,23 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                         # page change.
                         "targets": sorted(TARGETS),
                         "version": service_version(),
-                        # The three below are the farm's build configuration,
-                        # not anybody's workspace: where the farm's own code
-                        # comes from, the suite's files and tests, and each
-                        # consumer's repo, supply repo, supply workflow and
-                        # suite path. Those last name private repositories --
-                        # the same names that keep the artifact store shut to
-                        # accounts -- so a workspace view does not carry them.
-                        # What reads them is the run form's pickers, which
-                        # come up empty rather than broken; and starting a run
-                        # is not something an account does yet
-                        # (docs/device-platform-plan.md, step 12); when it is,
-                        # each becomes a projection of the consumers that
-                        # account may build rather than an empty answer.
-                        "repositories": repositories(manager.repo, manager.profiles) if mine is None else {},
+                        # The three below are the farm's build configuration
+                        # for whoever sees the whole farm. For an account they
+                        # are a projection of the projects it may see -- its
+                        # own, the built-ins, the public ones -- because the
+                        # run form's pickers read them, and starting a run is
+                        # something an account does now, on a rig it names
+                        # (may_submit). The suite's own tests stay the farm's.
+                        "repositories": repositories(manager.repo, manager.profiles) if mine is None
+                                        else repositories(manager.repo, self._account_projects(identity)[0]),
                         "queue": manager.queue_state(run_rigs, submitter),
                         "suite_tests": manager.suite_catalogue() if mine is None else [],
                         # The profile a run is for when it names none, and
                         # whose suite `suite_tests` lists: the farm's choice,
                         # so the dashboard asks rather than knowing a name.
                         "default_profile": manager.default_profile,
-                        "profiles": manager.configuration()["build"]["profile_details"] if mine is None else {},
+                        "profiles": manager.configuration()["build"]["profile_details"] if mine is None
+                                    else self._account_projects(identity)[1],
                     },
                 )
             match = re.fullmatch(r"/api/v1/jobs/([0-9a-f]{32})/artifacts/([a-z0-9][a-z0-9_.:-]{0,80})", path)
