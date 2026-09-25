@@ -515,6 +515,39 @@ def test_a_run_may_be_scoped_to_named_boards(tmp_path):
         manager._scoped_board_map(spec, "j" * 32, Log(), ["esp32-c6-01"])
 
 
+def test_a_run_that_chose_families_gets_the_boards_of_those_families_and_no_other(tmp_path):
+    """The Rig example on a bench of two esp32, an esp8266 and an esp32-c5,
+    with a bundle built for esp32 and esp8266: the run chose those two
+    families, so it gets their boards and leaves the c5 alone -- instead of
+    being refused for a board it never asked for. Every family chosen, or
+    none named, is the active map unchanged; families that match no board
+    are said, not run."""
+    manager = _health_manager(tmp_path)   # the bench below is the board map, which is what scoping reads
+    manager.board_map.write_text(yaml.safe_dump({"boards": [
+        {"id": "esp32-01", "target": "esp32", "port": "/dev/ttyUSB0"},
+        {"id": "esp32-02", "target": "esp32", "port": "/dev/ttyUSB1"},
+        {"id": "esp8266-01", "target": "esp8266", "port": "/dev/ttyUSB2"},
+        {"id": "esp32-c5-01", "target": "esp32-c5", "port": "/dev/ttyACM0"},
+    ]}), encoding="utf-8")
+    spec = manager.profiles["rig-example"]
+    assert spec.exclusive and not spec.needs, "a whole-bench project with no needs of its own"
+
+    class Log:
+        def __init__(self): self.lines = []
+        def write(self, text): self.lines.append(text)
+        def flush(self): pass
+
+    log = Log()
+    scoped = manager._scoped_board_map(spec, "j" * 32, log, families=["esp32", "esp8266"])
+    document = yaml.safe_load(scoped.read_text(encoding="utf-8"))
+    assert [board["id"] for board in document["boards"]] == ["esp32-01", "esp32-02", "esp8266-01"]
+    assert any("Left out esp32-c5-01: esp32-c5 is not among the families this run chose" in line for line in log.lines)
+    assert manager._scoped_board_map(spec, "j" * 32, Log(), families=["esp32", "esp8266", "esp32-c5"]) == manager.board_map
+    assert manager._scoped_board_map(spec, "j" * 32, Log()) == manager.board_map
+    with pytest.raises(farm_service.PipelineError, match="No board of the families this run chose"):
+        manager._scoped_board_map(spec, "j" * 32, Log(), families=["esp32-s3"])
+
+
 def test_the_health_route_needs_the_token_and_answers_in_http_terms(tmp_path, monkeypatch):
     import threading
     from http.server import ThreadingHTTPServer

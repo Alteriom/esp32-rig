@@ -55,7 +55,7 @@ it guessed; check them and press **Add**. The fields:
 | **Repository** | the GitHub repository the rig checks out for every run | — |
 | **Default branch** | what a run is for when it names no ref | the repository's own |
 | **Suite path** | the directory in the repository the rig runs pytest in | `tests` |
-| **Families** | the chip families a run takes one board of each; none means the whole bench | none |
+| **Families** | the chip families a run takes one board of each; none means the whole bench -- the boards of the families the run chose, which are the ones its bundle carries | none |
 | **Supply workflow** | the workflow whose artifact is the bundle | `.github/workflows/hil.yml` |
 | **Artifact name** | the Actions artifact that workflow uploads | `hil-artifacts` |
 | **Revision key** | the key in the bundle's manifest that holds the commit | `git_sha`, or what the repository's `.alteriom-hil.yaml` declares |
