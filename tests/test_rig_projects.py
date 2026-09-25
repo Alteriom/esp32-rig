@@ -577,6 +577,15 @@ def test_the_library_lists_every_project_the_built_ins_first_bundles_or_not(tmp_
     assert example["last_run"] is None and example["description"] is None, "nothing was asked of GitHub"
     mesh = next(project for project in library["projects"] if project["profile"] == "painlessmesh")
     assert mesh["builtin"] is None and mesh["known"] is True
+    # Proven by its first passing run here, and not before.
+    assert mesh["proven"] is False and example["proven"] is False
+    job = rig.store.create("suite", {"profile": "painlessmesh", "ref": "x"}, tmp_path / "x.log")
+    rig.store.update(job["id"], "running")
+    rig.store.update(job["id"], "passed", {})
+    projects = {project["profile"]: project for project in rig.artifact_library()["projects"]}
+    after = {name: project["proven"] for name, project in projects.items()}
+    assert after["painlessmesh"] is True and after["rig-example"] is False and after["canary"] is False, "the health check is not a project"
+    assert projects["painlessmesh"]["last_run"]["id"] == job["id"] and projects["painlessmesh"]["last_run"]["status"] == "passed",         "the run that proved it is its last run, bundle or no bundle"
 
 
 def test_fetching_needs_github_and_a_project_that_names_a_workflow(tmp_path, monkeypatch):

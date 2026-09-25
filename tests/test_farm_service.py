@@ -2827,6 +2827,26 @@ def test_a_run_records_what_it_took_and_the_service_what_it_served(tmp_path):
     assert manager.store.get(job["id"])["egress_bytes"] == 1000
 
 
+def test_usage_is_summed_from_what_each_run_recorded(tmp_path):
+    """Insights carries what the window's runs took, in total and by
+    project, from the metrics each run recorded; a run from before the
+    meter counts in `runs` and nowhere else."""
+    manager = _store_manager(tmp_path)
+    manager.inventory_snapshot = lambda annotate=False: {"boards": []}
+    metrics = {"board_minutes": 2.5, "cpu_seconds": 5.0, "evidence_bytes": 1000, "bundle_bytes": 4000}
+    first = _run(manager, "passed", {"metrics": metrics})
+    _run(manager, "failed", {"metrics": {**metrics, "board_minutes": 0.5}}, profile="canary")
+    _run(manager, "passed", {})   # before the meter
+    manager.store.add_job_egress(first, 300)
+    usage = manager.farm_statistics(7)["usage"]
+    assert usage["totals"] == {"runs": 3, "measured": 2, "egress_bytes": 300, "board_minutes": 3.0, "cpu_seconds": 10.0,
+                               "evidence_bytes": 2000, "bundle_bytes": 8000}
+    assert [row["profile"] for row in usage["by_project"]] == ["painlessmesh", "canary"], "most board-minutes first"
+    assert usage["by_project"][0]["runs"] == 2 and usage["by_project"][0]["measured"] == 1 and usage["by_project"][0]["egress_bytes"] == 300
+    assert usage["by_workspace"] == [], "a farm without workspaces attributes nothing"
+    assert manager.store.profile_passed("painlessmesh") and manager.store.profile_passed("canary") is False
+
+
 def test_the_library_is_the_store_by_project_and_branch_newest_first(tmp_path):
     """What an operator asks of a growing store: the latest build of each
     branch, whether a run could flash it, the last run on it, and how much is

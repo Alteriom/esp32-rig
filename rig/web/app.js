@@ -4412,7 +4412,7 @@ function libraryCard(project) {
     : runnable ? `<button type="button" class="secondary library-run" data-id="${escapeHtml(runnable.id)}">Run</button>` : "";
   const more = branches.length - LIBRARY_BRANCHES_SHOWN;
   return `<section class="card library-project${builtin ? " builtin" : ""}" data-profile="${escapeHtml(project.profile)}">
-    <div class="title-row"><div><p class="eyebrow">${projectEyebrow(project)}</p><h2>${escapeHtml(project.label || project.project || project.profile)}</h2>${blurb ? `<small>${escapeHtml(blurb)}</small>` : ""}${project.repo ? `<small>${repoLink(project.repo)}</small>` : ""}</div><span class="actions">${action}</span></div>
+    <div class="title-row"><div><p class="eyebrow">${projectEyebrow(project)}</p><h2>${escapeHtml(project.label || project.project || project.profile)}${project.proven ? ' <span class="state good proven" title="A run of it has passed here">proven</span>' : ""}</h2>${blurb ? `<small>${escapeHtml(blurb)}</small>` : ""}${project.repo ? `<small>${repoLink(project.repo)}</small>` : ""}</div><span class="actions">${action}</span></div>
     <div class="library-facts">
       <div><small>Newest build</small><span>${newest}</span></div>
       <div><small>Last run</small><span>${verdict}</span></div>
@@ -4787,7 +4787,32 @@ function renderStatistics(stats) {
     FIRMWARE_SOURCES.filter(([key]) => firmware[key]).map(([key, label, tone]) => ({label, count: firmware[key], tone})),
     {empty: "No suite runs in this window."},
   );
+  renderUsage(stats.usage);
   $("stats-note").innerHTML = `From ${escapeHtml(new Date(span.from).toLocaleDateString())} to now, in your time zone. Runs are suite runs; ${escapeHtml(stats.discoveries ?? 0)} hardware discover${stats.discoveries === 1 ? "y" : "ies"} ran as well. Rig busy is the time a job held the rig's lock. Nothing here is collected for this page: it is the farm's own job history.`;
+}
+
+// What the window's runs took, summed from what each recorded: by
+// workspace on a portal, by project on a rig; the totals above either.
+// Recorded, not charged -- the numbers that will size storage and transfer.
+function renderUsage(usage) {
+  const card = $("stats-usage");
+  if (!card) return;
+  if (!usage) { card.innerHTML = '<p class="muted">Not recorded on this farm.</p>'; return; }
+  const rows = shell().projectsAreOwn ? usage.by_project || [] : (usage.by_workspace?.length ? usage.by_workspace : usage.by_project || []);
+  const name = row => row.workspace != null ? row.workspace : row.profile;
+  const totals = usage.totals || {};
+  const line = (label, value) => `<article><span>${label}</span><strong>${value}</strong></article>`;
+  card.innerHTML = `<section class="metrics usage-metrics">
+      ${line("Board-minutes", escapeHtml(totals.board_minutes ?? 0))}
+      ${line("CPU", escapeHtml(formatDuration(totals.cpu_seconds || 0)))}
+      ${line("Evidence stored", escapeHtml(formatBytes(totals.evidence_bytes || 0)))}
+      ${line("Bundles flashed", escapeHtml(formatBytes(totals.bundle_bytes || 0)))}
+      ${line("Evidence served", escapeHtml(formatBytes(totals.egress_bytes || 0)))}
+    </section>
+    ${rows.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th>${shell().projectsAreOwn || !usage.by_workspace?.length ? "Project" : "Workspace"}</th><th class="num">Runs</th><th class="num">Board-minutes</th><th class="num">CPU</th><th class="num">Evidence</th><th class="num">Bundles</th><th class="num">Served</th></tr></thead><tbody>${rows.map(row =>
+      `<tr><td><strong>${escapeHtml(name(row))}</strong></td><td class="num">${escapeHtml(row.runs)}${row.measured < row.runs ? `<small class="muted"> ${escapeHtml(row.measured)} measured</small>` : ""}</td><td class="num">${escapeHtml(row.board_minutes)}</td><td class="num">${escapeHtml(formatDuration(row.cpu_seconds || 0))}</td><td class="num">${escapeHtml(formatBytes(row.evidence_bytes || 0))}</td><td class="num">${escapeHtml(formatBytes(row.bundle_bytes || 0))}</td><td class="num">${escapeHtml(formatBytes(row.egress_bytes || 0))}</td></tr>`).join("")}</tbody></table></div>`
+      : '<p class="muted">No suite runs in this window.</p>'}
+    <p class="muted">Summed from what each run recorded as it ended; runs from before the meter count in Runs and nowhere else. Recorded, not charged.</p>`;
 }
 
 async function loadStatistics(days = statsDays) {
