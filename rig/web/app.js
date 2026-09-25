@@ -536,8 +536,11 @@ function showPanel(name, updateHash = true, suffix = "", {as = null} = {}) {
   const wanted = document.querySelector(`.page[data-page="${CSS.escape(name)}"]`);
   // A document without a fleet overview (a rig's) lands on its rig page.
   const fallback = document.querySelector('.page[data-page="overview"]') ? "overview" : "rig";
-  const target = wanted && !(workspaceOnly()
-    && wanted.classList.contains("farm-wide")) ? name : fallback;
+  // A page the caller is not offered -- a farm-wide one to an account, an
+  // admin's to anybody else -- lands them home instead of on a blank page.
+  const withheld = wanted && ((workspaceOnly() && wanted.classList.contains("farm-wide"))
+    || (document.body.dataset.role !== "admin" && wanted.classList.contains("admin-only")));
+  const target = wanted && !withheld ? name : fallback;
   document.querySelectorAll(".page").forEach(page => { const active = page.dataset.page === target; page.hidden = !active; page.classList.toggle("active", active); });
   // `as` is the address and the nav item this page stands for: on a rig the
   // rig page is #overview, and Overview is lit.
