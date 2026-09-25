@@ -1,5 +1,14 @@
 # esp32-rig
 
+[![CI](https://github.com/Alteriom/esp32-rig/actions/workflows/ci.yml/badge.svg)](https://github.com/Alteriom/esp32-rig/actions/workflows/ci.yml)
+[![Release](https://github.com/Alteriom/esp32-rig/actions/workflows/release.yml/badge.svg)](https://github.com/Alteriom/esp32-rig/actions/workflows/release.yml)
+[![Docs](https://github.com/Alteriom/esp32-rig/actions/workflows/docs.yml/badge.svg)](https://alteriom.github.io/esp32-rig/)
+[![Latest release](https://img.shields.io/github/v/release/Alteriom/esp32-rig?label=release)](https://github.com/Alteriom/esp32-rig/releases/latest)
+[![Health check firmware](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FAlteriom%2Fesp32-rig%2Fmain%2Fcanary%2Ffirmware.json&query=%24.version&label=health%20check%20firmware)](https://github.com/Alteriom/esp32-hil-firmware/releases)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-3776ab?logo=python&logoColor=white)](core/pyproject.toml)
+[![Boards](https://img.shields.io/badge/boards-esp32%20%C2%B7%20c3%20%C2%B7%20c5%20%C2%B7%20c6%20%C2%B7%20s3%20%C2%B7%20esp8266-6b8)](https://alteriom.github.io/esp32-rig/hardware/)
+[![License](https://img.shields.io/github/license/Alteriom/esp32-rig)](LICENSE)
+
 Hardware-in-the-loop testing for ESP32 firmware: a bank of real boards, a
 Raspberry Pi beside them, and a service that flashes, runs a suite, captures
 what the boards said and answers with a verdict.
