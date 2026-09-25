@@ -110,8 +110,8 @@ def _plural(count: int, noun: str) -> str:
 
 
 # The manifest key that holds the commit a bundle was built from, unless the
-# project names another: what the documented build scripts write.
-DEFAULT_REVISION_KEY = "git_sha"
+# project names another (alteriom_hil.projects, shared with a portal).
+from alteriom_hil.projects import DEFAULT_REVISION_KEY  # noqa: E402
 
 class RigMixin:
     # The rig's own routes, declared beside the methods that answer them
@@ -623,66 +623,11 @@ class RigMixin:
 
     def _project_document(self, fields: dict) -> dict:
         """A profile document from the few things a person knows about their
-        project. Everything else is the generic shape: the suite lives in
-        the project's repository and is checked out per run; its firmware
-        is a bundle the project's own CI built and handed over; the rig's
-        flasher flashes it by the manifest. Validated as any profile is, so
-        a document that would stop the service starting is refused here."""
-        text = lambda key, default="": str(fields.get(key) if fields.get(key) is not None else default).strip()
-        name = text("name").lower()
-        if not NAME_PATTERN.fullmatch(name):
-            raise ValueError("a project's name is lowercase letters, digits and dashes, up to 64")
-        repo = github_access.normalise_repo(text("repo"))   # GitHubError is a ValueError: a 400 with the reason
-        label = text("label", name)[:80] or name
-        default_ref = text("default_ref", "main")[:120]
-        if not default_ref or any(ch.isspace() for ch in default_ref):
-            raise ValueError("default_ref is a branch, tag or commit, without spaces")
-        suite_path = text("suite_path", "tests").strip("/")
-        # The key a schema-2 manifest records the commit under. A project
-        # that writes it under another name says so in its .alteriom-hil.yaml
-        # or in the form; nothing is guessed from the project's name.
-        revision_key = text("revision_key", DEFAULT_REVISION_KEY)
-        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", revision_key):
-            raise ValueError("revision_key is the manifest key that holds the commit: letters, digits and underscores")
-        supply_repo = github_access.normalise_repo(text("supply_repo", repo))
-        supply_workflow = text("supply_workflow", ".github/workflows/hil.yml")
-        supply_artifact = text("supply_artifact", "hil-artifacts")
-        try:
-            min_boards = int(fields.get("min_boards") or 1)
-            timeout = int(fields.get("timeout_seconds") or 1800)
-        except (TypeError, ValueError):
-            raise ValueError("min_boards and timeout_seconds are whole numbers") from None
-        families = fields.get("families") or []
-        if isinstance(families, str):
-            families = [part.strip() for part in families.split(",") if part.strip()]
-        if not isinstance(families, list):
-            raise ValueError("families is a list of chip families")
-        unknown = sorted(set(families) - set(TARGETS))
-        if unknown:
-            raise ValueError(f"not a chip family this rig knows: {', '.join(unknown)} (one of {', '.join(sorted(TARGETS))})")
-        # Families named: the run takes one board of each and leaves the rest
-        # free. None named: it takes the whole bench, as the shipped suites do.
-        exclusive = fields.get("exclusive", not families)
-        if not isinstance(exclusive, bool):
-            raise ValueError("exclusive is true or false")
-        doc = {
-            "schema": 1,
-            "name": name,
-            "label": label,
-            "source": {"location": "consumer", "repo": repo, "default_ref": default_ref},
-            "build": {"revision_key": revision_key},
-            "flash": {"command": ["{python}", "-m", "alteriom_hil.flash_artifacts",
-                                  "--artifacts", "{artifact_dir}", "--board-map", "{board_map}",
-                                  "--revision-key", revision_key]},
-            "supply": {"repo": supply_repo, "workflow": supply_workflow, "artifact": supply_artifact},
-            "suite": {"path": suite_path, "min_boards": min_boards, "exclusive": exclusive,
-                      "timeout_seconds": timeout},
-            "report": {"title": f"HIL {label} {{revision}}"},
-        }
-        if families:
-            doc["needs"] = [{"target": family, "count": 1} for family in dict.fromkeys(families)]
-        parse_profile(doc, f"project {name}")   # ProfileError is a ValueError: a 400 with the reason
-        return doc
+        project (alteriom_hil.projects: the same document a portal writes
+        for a workspace). The repository is what the rig's GitHub client
+        says it has to be, in its words (a GitHubError is a ValueError)."""
+        from alteriom_hil.projects import project_document
+        return project_document(fields, normalise=github_access.normalise_repo)
 
     def _own_project(self, name: str) -> Path:
         """The document a change or removal of this project touches: the

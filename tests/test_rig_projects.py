@@ -746,6 +746,28 @@ def test_a_project_starts_from_its_repository_url(tmp_path, monkeypatch):
         bare.inspect_repository({"repo": "https://github.com/example/my-sensor"})
 
 
+def test_a_repositorys_declaration_is_read_into_the_fields_a_form_takes():
+    """`.alteriom-hil.yaml` says what a project is -- and, on a portal, whose
+    workspace it is: the proof that whoever adds it controls the repository."""
+    from alteriom_hil import projects
+
+    found = projects.declared_fields(
+        "label: Blinky\nworkspace: abc123\nsource:\n  default_ref: trunk\nbuild:\n  revision_key: firmware_sha\n"
+        "suite:\n  path: hil/tests\n  min_boards: 2\n  exclusive: false\nsupply:\n  workflow: .github/workflows/hil.yml\n"
+        "  artifact: bundle\nneeds:\n  - target: esp32\n  - target: esp32-c3\n")
+    assert found == {"label": "Blinky", "default_ref": "trunk", "suite_path": "hil/tests", "min_boards": 2, "exclusive": False,
+                     "supply_workflow": ".github/workflows/hil.yml", "supply_artifact": "bundle", "revision_key": "firmware_sha",
+                     "families": ["esp32", "esp32-c3"], "workspaces": ["abc123"]}
+    assert projects.declared_fields("workspaces: [a, b]")["workspaces"] == ["a", "b"]
+    assert projects.declared_fields("- not: a document")["invalid"] is True
+    assert projects.repo_slug("https://github.com/Acme/My_Firmware.git") == "my-firmware"
+    doc = projects.project_document({"name": "blinky", "repo": "https://github.com/acme/blinky/", **{k: v for k, v in found.items() if k != "workspaces"}})
+    assert doc["source"]["repo"] == "https://github.com/acme/blinky" and doc["build"] == {"revision_key": "firmware_sha"}
+    assert doc["needs"] == [{"target": "esp32", "count": 1}, {"target": "esp32-c3", "count": 1}]
+    with pytest.raises(ValueError, match="github.com URL"):
+        projects.project_document({"name": "x", "repo": "ssh://example.org/x"})
+
+
 def test_github_access_reads_what_a_repository_holds(monkeypatch):
     """The look-around against a stand-in for GitHub: a described project is
     read from its document; an undescribed one is guessed from what is there."""
