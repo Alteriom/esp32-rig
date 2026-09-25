@@ -3802,6 +3802,16 @@ class BaseManager:
                          "supply_repo": spec.supply_repo, "supply_workflow": spec.supply_workflow})
         if builtin == "health-check":
             card["firmware"] = self.health_check_firmware()
+        # Proven: a run of it has passed here -- the example included, since
+        # somebody's first run is what proves it to them. The health check is
+        # not a project. A first passing run is the moment a card earns the word.
+        store = self.__dict__.get("store")
+        history = store.profile_history(name) if store is not None and builtin != "health-check" else {}
+        card["proven"] = bool(history.get("proven"))
+        if card["last_run"] is None and history.get("last_run"):
+            # A run that flashed no bundle from the store -- a rig's own
+            # firmware, a fabricated fixture -- is still the last run.
+            card["last_run"] = history["last_run"]
         card.update(extras)
         return card
 
@@ -4291,6 +4301,56 @@ class BaseManager:
         # Cancelled while queued, or failed before firmware was chosen.
         return "not_reached"
 
+    USAGE_KEYS = ("board_minutes", "cpu_seconds", "evidence_bytes", "bundle_bytes")
+
+    def _workspaces_of_runs(self, job_ids: list) -> dict:
+        """Which workspace each run was placed for, by name: a portal knows;
+        a rig has no workspaces, so nothing is attributed."""
+        return {}
+
+    def _usage(self, suites: list[dict]) -> dict:
+        """What the window's suite runs took, summed from the metrics each
+        recorded (docs/public-release-plan.md, metering): in total, by
+        project, and by workspace where there are workspaces. `measured`
+        says how many runs carried metrics at all -- runs from before the
+        meter count in `runs` and nowhere else. Recorded, not charged."""
+        def blank():
+            return {"runs": 0, "measured": 0, "egress_bytes": 0, **{key: 0.0 for key in self.USAGE_KEYS}}
+
+        def add(into: dict, job: dict) -> None:
+            metrics = (job.get("result") or {}).get("metrics") or {}
+            into["runs"] += 1
+            if metrics:
+                into["measured"] += 1
+            for key in self.USAGE_KEYS:
+                try:
+                    into[key] += float(metrics.get(key) or 0)
+                except (TypeError, ValueError):
+                    continue
+            into["egress_bytes"] += int(job.get("egress_bytes") or 0)
+
+        def rounded(entry: dict) -> dict:
+            entry["board_minutes"] = round(entry["board_minutes"], 2)
+            entry["cpu_seconds"] = round(entry["cpu_seconds"], 1)
+            entry["evidence_bytes"] = int(entry["evidence_bytes"])
+            entry["bundle_bytes"] = int(entry["bundle_bytes"])
+            return entry
+
+        totals, by_project, by_workspace = blank(), {}, {}
+        placed = self._workspaces_of_runs([job["id"] for job in suites])
+        for job in suites:
+            add(totals, job)
+            profile = str((job.get("request") or {}).get("profile") or "unknown")
+            add(by_project.setdefault(profile, {"profile": profile, **blank()}), job)
+            name = placed.get(job["id"]) or "unassigned"
+            add(by_workspace.setdefault(name, {"workspace": name, **blank()}), job)
+        order = lambda entry: -entry["board_minutes"]  # noqa: E731
+        return {
+            "totals": rounded(totals),
+            "by_project": sorted((rounded(entry) for entry in by_project.values()), key=order),
+            "by_workspace": sorted((rounded(entry) for entry in by_workspace.values()), key=order) if placed else [],
+        }
+
     def farm_statistics(self, days: int = 7, tz_offset_minutes: int = 0) -> dict:
         """What the farm has done over the last `days`, from its own history.
 
@@ -4428,6 +4488,7 @@ class BaseManager:
                 last_checked = record["checked_at"]
 
         return {
+            "usage": self._usage(suites),
             "window": {
                 "days": days, "from": start.isoformat(), "to": now.isoformat(),
                 "tz_offset_minutes": tz_offset_minutes,

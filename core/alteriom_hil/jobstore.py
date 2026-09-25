@@ -1280,6 +1280,24 @@ class JobStore:
         with self.connect() as db:
             db.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id=?", values)
 
+    def profile_history(self, profile: str) -> dict:
+        """What this project's suite runs here amount to, for its card:
+        whether one ever passed (what makes a project proven) and the
+        newest one, whatever it did."""
+        like = (f'%"profile": "{profile}"%',)
+        with self.connect() as db:
+            passed = db.execute(
+                "SELECT 1 FROM jobs WHERE kind='suite' AND status='passed' AND request_json LIKE ? LIMIT 1",
+                like).fetchone()
+            last = db.execute(
+                "SELECT id, status, created_at FROM jobs WHERE kind='suite' AND request_json LIKE ? "
+                "ORDER BY created_at DESC LIMIT 1", like).fetchone()
+        return {"proven": passed is not None,
+                "last_run": {"id": last["id"], "status": last["status"], "created_at": last["created_at"]} if last else None}
+
+    def profile_passed(self, profile: str) -> bool:
+        return self.profile_history(profile)["proven"]
+
     def add_job_egress(self, job_id: str, count: int) -> None:
         """Bytes of this run's evidence served to somebody, added to its record."""
         if count <= 0:
