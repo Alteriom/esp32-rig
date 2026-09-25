@@ -1469,7 +1469,7 @@ class RigMixin:
         return workspace
 
     def _scoped_board_map(self, spec, job_id: str, log, named: list[str] | None = None,
-                          exact: bool = False) -> Path:
+                          exact: bool = False, families: list[str] | None = None) -> Path:
         """The board map this run is allowed to touch.
 
         A request that named boards gets exactly those, whatever the profile
@@ -1490,13 +1490,23 @@ class RigMixin:
         ``exact``: the boards named are the whole allocation, needs included
         -- a job sharing the rig was given its boards by the dispatcher, and
         may not take one more.
+
+        ``families``: the families the run chose -- the ones its bundle
+        carries and the person kept. A project that declares no `needs`
+        runs on the boards of those families and leaves the rest of the
+        bench alone: a bundle built for esp32 and esp8266 is not refused
+        because an esp32-c5 is plugged in beside them. A profile with
+        `needs` is scoped by them, and a run that named boards by those.
         """
         store = self.__dict__.get("store")
         holds = store.holds() if store is not None else {}
-        if spec.exclusive and not named and not holds:
-            return self.board_map
         document = yaml.safe_load(self.board_map.read_text(encoding="utf-8")) or {}
         available = list(document.get("boards") or [])
+        chosen_families = set(families) if families and not named and not spec.needs else None
+        outside = ([board for board in available if board.get("target") not in chosen_families]
+                   if chosen_families is not None else [])
+        if spec.exclusive and not named and not holds and not outside:
+            return self.board_map
         chosen: list[dict] = []
         if not named:
             # Never a board held out of the pool: reserved for bench work, or
@@ -1510,6 +1520,14 @@ class RigMixin:
                     f"{utcnow()} Left out {board['id']}: {hold['state']}"
                     + (f" ({hold['reason']})" if hold.get("reason") else "") + "\n"
                 )
+            if outside:
+                outside_ids = {board.get("id") for board in outside}
+                available = [board for board in available if board.get("id") not in outside_ids]
+                for board in outside:
+                    log.write(
+                        f"{utcnow()} Left out {board.get('id')}: {board.get('target')} is not among the "
+                        f"families this run chose ({', '.join(sorted(chosen_families))})\n"
+                    )
             if spec.exclusive:
                 chosen, available = available, []
         if named:
@@ -1560,6 +1578,14 @@ class RigMixin:
                 f"{spec.label} requires at least {spec.min_boards} board(s); "
                 f"{len(chosen)} left once boards held out of the pool are set aside"
                 + (f" ({', '.join(sorted(holds))})" if holds else "") + ".",
+            )
+        if outside and not named and len(chosen) < spec.min_boards:
+            raise PipelineError(
+                "discover",
+                "No board of the families this run chose" if not chosen else "Not enough boards for this profile",
+                f"{spec.label} requires at least {spec.min_boards} board(s); this run chose "
+                f"{', '.join(sorted(chosen_families))} and {len(chosen)} connected board(s) are of those families "
+                f"(left out: {', '.join(sorted(str(board.get('id')) for board in outside))}).",
             )
         payload: dict = {"boards": chosen}
         # The instruments wired to what this run was given, with only those
@@ -1791,6 +1817,7 @@ class RigMixin:
             board_map = self._scoped_board_map(
                 spec, job_id, log,
                 self._check_named_boards(request["boards"], profile) if request.get("boards") else None,
+                families=request.get("targets"),
             )
         scoped = yaml.safe_load(board_map.read_text(encoding="utf-8")) or {}
         scoped_boards = scoped.get("boards") or []
