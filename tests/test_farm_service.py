@@ -2847,6 +2847,7 @@ def test_a_portal_backs_itself_up_and_a_rig_leaves_it_to_its_timer(tmp_path, mon
     assert outcome["files"] >= 1 and Path(outcome["archive"]).is_file()
     manifest, members = farm_backup.read_backup(Path(outcome["archive"]))
     assert "state/farm.sqlite3" in members and manifest["schema"] == farm_backup.SCHEMA
+    assert not any(name.startswith("state/artifacts/") for name in members), "a portal leaves its bundles out"
     # Restored elsewhere, the history is there.
     from alteriom_hil.jobstore import JobStore
 

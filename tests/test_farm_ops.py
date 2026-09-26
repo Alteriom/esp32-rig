@@ -308,6 +308,50 @@ def test_a_damaged_backup_is_refused_before_anything_is_written(tmp_path):
     assert not (tmp_path / "x").exists()
 
 
+def test_a_backup_streams_and_a_portal_leaves_its_bundles_out(tmp_path, monkeypatch):
+    """The portal's first drill killed its backup at the pod's memory limit:
+    everything was read into memory before a byte was written. Now members
+    go from disk to the archive and back as streams -- a member larger than
+    anything read at once still round-trips -- a portal may leave the pinned
+    bundles out and is told how many it left, and a volume without room for
+    the backup is refused before anything is written."""
+    state, etc = _farm_state(tmp_path)
+    import tracemalloc
+
+    big = state / "artifacts" / ("c" * 32) / "esp32" / "big.bin"
+    size = 24 * 1024 * 1024
+    with open(big, "wb") as handle:
+        for _ in range(size // backup.CHUNK):
+            handle.write(bytes(range(256)) * (backup.CHUNK // 256))
+    tracemalloc.start()
+    try:
+        outcome = backup.create_backup(state, etc, tmp_path / "backups")
+        written_peak = tracemalloc.get_traced_memory()[1]
+        tracemalloc.reset_peak()
+        fresh = tmp_path / "fresh"
+        backup.restore_backup(Path(outcome["archive"]), fresh, tmp_path / "fresh-etc", apply=True)
+        restored_peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert written_peak < size // 3 and restored_peak < size // 3, (written_peak, restored_peak)
+    assert not list((tmp_path / "backups").glob("*.partial")), "no scratch copy is left behind"
+    assert (fresh / "artifacts" / ("c" * 32) / "esp32" / "big.bin").stat().st_size == size
+    assert backup._sha256_file(fresh / "artifacts" / ("c" * 32) / "esp32" / "big.bin") == backup._sha256_file(big)
+
+    lean = backup.create_backup(state, etc, tmp_path / "lean", include_bundles=False)
+    assert lean["pinned_bundles"] == 0 and lean["bundles_left_out"] == 1 and lean["bundle_bytes"] >= big.stat().st_size
+    manifest = backup.verify_backup(Path(lean["archive"]))
+    assert not any(name.startswith("state/artifacts/") for name in manifest["files"])
+    assert manifest["bundles_left_out"] == ["c" * 32]
+    said = backup.restore_backup(Path(lean["archive"]), tmp_path / "lean-state", tmp_path / "lean-etc")
+    assert said["bundles_left_out"] == ["c" * 32]
+
+    monkeypatch.setattr(backup.shutil, "disk_usage", lambda path: type("Usage", (), {"free": 1024})())
+    with pytest.raises(OSError, match="not enough room for a backup"):
+        backup.create_backup(state, etc, tmp_path / "full")
+    assert not backup.backups(tmp_path / "full") and not list((tmp_path / "full").glob(".*partial"))
+
+
 def test_old_backups_go_and_a_stale_or_uncopied_one_is_reported(tmp_path):
     state, etc = _farm_state(tmp_path)
     directory = tmp_path / "backups"
