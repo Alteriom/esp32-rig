@@ -2407,10 +2407,13 @@ class BaseManager:
         """Write one backup with this host's backup settings, as a rig's
         nightly timer does (`alteriom-hil-admin backup create`): the job
         store copied consistently while the service writes, the files
-        beside it, the pinned bundles -- never a secret. None when backups
-        are off and not forced. The archive stays on this volume, which
-        guards the history against a bad write or a bad migration; a copy
-        that survives the volume is `backup.target`'s, or the operator's."""
+        beside it -- never a secret, and not the pinned bundles: fourteen
+        nightly copies of every one would fill a portal's volume, and a
+        project's CI hands its bundle over again. None when backups are off
+        and not forced. Written as a stream, so memory stays flat however
+        large the store. The archive stays on this volume, which guards the
+        history against a bad write or a bad migration; a copy that survives
+        the volume is `backup.target`'s, or the operator's."""
         from alteriom_hil import hil_config
 
         settings = {**hil_config.DEFAULT_BACKUP, **(hil_config.load_config().get("backup") or {})}
@@ -2418,7 +2421,7 @@ class BaseManager:
             return None
         return farm_backup.create_backup(
             self.state, Path(hil_config.CONFIG_PATH).parent, Path(settings["directory"]),
-            keep=int(settings.get("keep") or 14), target=settings.get("target"))
+            keep=int(settings.get("keep") or 14), target=settings.get("target"), include_bundles=False)
 
     def backup_loop(self, first_delay: float = 900, interval: float = 86400) -> None:
         """Back up once a day. A portal's: it is one container on one volume
