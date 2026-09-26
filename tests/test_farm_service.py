@@ -2827,6 +2827,40 @@ def test_a_run_records_what_it_took_and_the_service_what_it_served(tmp_path):
     assert manager.store.get(job["id"])["egress_bytes"] == 1000
 
 
+def test_a_portal_backs_itself_up_and_a_rig_leaves_it_to_its_timer(tmp_path, monkeypatch):
+    """A portal is one container on one volume and nothing copied its job
+    store. `backup_now` writes one archive with the host's backup settings
+    -- the database copied consistently, verified on the way back in -- and
+    main() starts the daily loop for a portal only: a rig's host runs
+    `alteriom-hil-admin backup create` from its own timer."""
+    from alteriom_hil import backup as farm_backup
+    from alteriom_hil import hil_config
+
+    manager = _store_manager(tmp_path)
+    _run(manager, "passed", {"summary": "kept"})
+    directory = tmp_path / "backups"
+    monkeypatch.setattr(hil_config, "CONFIG_PATH", tmp_path / "etc" / "config.yaml")
+    monkeypatch.setattr(hil_config, "load_config", lambda *a, **k: {"backup": {"enabled": False, "directory": str(directory), "keep": 2}})
+    assert manager.backup_now() is None and not directory.exists(), "off is off"
+    monkeypatch.setattr(hil_config, "load_config", lambda *a, **k: {"backup": {"enabled": True, "directory": str(directory), "keep": 2}})
+    outcome = manager.backup_now()
+    assert outcome["files"] >= 1 and Path(outcome["archive"]).is_file()
+    manifest, members = farm_backup.read_backup(Path(outcome["archive"]))
+    assert "state/farm.sqlite3" in members and manifest["schema"] == farm_backup.SCHEMA
+    # Restored elsewhere, the history is there.
+    from alteriom_hil.jobstore import JobStore
+
+    restored = tmp_path / "restored"
+    farm_backup.restore_backup(Path(outcome["archive"]), restored, tmp_path / "etc-restored", apply=True)
+    assert [job["request"]["profile"] for job in JobStore(restored / "farm.sqlite3").since("2000-01-01T00:00:00+00:00")] == ["painlessmesh"]
+    # Started for a portal only.
+    import inspect
+
+    lines = inspect.getsource(core_service.serve).splitlines()
+    at = next(n for n, line in enumerate(lines) if "target=manager.backup_loop" in line)
+    assert lines[at - 1].strip() == 'if args.mode == "portal":', "a rig's host has a timer for it"
+
+
 def test_usage_is_summed_from_what_each_run_recorded(tmp_path):
     """Insights carries what the window's runs took, in total and by
     project, from the metrics each run recorded; a run from before the
@@ -3033,6 +3067,12 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
         try:
             with urlopen(f"http://127.0.0.1:{shadowing.server_address[1]}/healthz", timeout=5) as answer:
                 assert json.loads(answer.read()) == {"status": "ok"}, "the service answered its own route"
+            # An uptime check probes with HEAD: the GET's headers, no body.
+            from urllib.request import Request
+            probe = Request(f"http://127.0.0.1:{shadowing.server_address[1]}/healthz", method="HEAD")
+            with urlopen(probe, timeout=5) as answer:
+                assert answer.status == 200 and answer.headers["Content-Type"] == "application/json"
+                assert int(answer.headers["Content-Length"]) == len(b'{"status": "ok"}') and answer.read() == b""
         finally:
             shadowing.shutdown()
     finally:

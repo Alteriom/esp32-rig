@@ -2403,6 +2403,38 @@ class BaseManager:
         }
         return {**plan, "dry_run": False, "last": self._retention_last}
 
+    def backup_now(self, force: bool = False) -> dict | None:
+        """Write one backup with this host's backup settings, as a rig's
+        nightly timer does (`alteriom-hil-admin backup create`): the job
+        store copied consistently while the service writes, the files
+        beside it, the pinned bundles -- never a secret. None when backups
+        are off and not forced. The archive stays on this volume, which
+        guards the history against a bad write or a bad migration; a copy
+        that survives the volume is `backup.target`'s, or the operator's."""
+        from alteriom_hil import hil_config
+
+        settings = {**hil_config.DEFAULT_BACKUP, **(hil_config.load_config().get("backup") or {})}
+        if not settings.get("enabled") and not force:
+            return None
+        return farm_backup.create_backup(
+            self.state, Path(hil_config.CONFIG_PATH).parent, Path(settings["directory"]),
+            keep=int(settings.get("keep") or 14), target=settings.get("target"))
+
+    def backup_loop(self, first_delay: float = 900, interval: float = 86400) -> None:
+        """Back up once a day. A portal's: it is one container on one volume
+        with no timer beside it, and before this nothing copied its job store.
+        A rig's backups are its host's systemd timer, so main() starts this
+        for a portal only."""
+        time.sleep(first_delay)
+        while True:
+            try:
+                outcome = self.backup_now()
+                if outcome is not None:
+                    sys.stderr.write(f"farm-api: backup {outcome['archive']} ({outcome['bytes']} bytes)\n")
+            except Exception as exc:  # the next day tries again; the status page says it is stale
+                sys.stderr.write(f"farm-api: backup failed: {exc}\n")
+            time.sleep(interval)
+
     def retention_loop(self, first_delay: float = 600, interval: float = 86400) -> None:
         """Sweep once a day while the host has retention on. A thread of its
         own, started by main(): a sweep deletes files, never holds the rig."""
@@ -5205,6 +5237,22 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 raise ValueError("request body must be a JSON object")
             return payload
 
+        HEALTHZ = json.dumps({"status": "ok"}, sort_keys=True).encode()
+
+        def do_HEAD(self):
+            """The health check's headers, without its body. An uptime check
+            or a load balancer probes with HEAD, and the static-file handler
+            underneath answered it 404 -- a service that was up, reported
+            down. Everything else is what it was: a file's headers, or not
+            found."""
+            if urlparse(self.path).path == "/healthz":
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(self.HEALTHZ)))
+                self.end_headers()
+                return None
+            return super().do_HEAD()
+
         def do_GET(self):
             path = self._route()
             if path.startswith("/auth/"):
@@ -6418,6 +6466,9 @@ def serve(argv=None, *, classes: dict, agent=None, web_root: Path | None = None)
             raise SystemExit("a node needs the rig's agent; alteriom-hil is not installed")
         agent(manager, args)
     threading.Thread(target=manager.retention_loop, name="retention", daemon=True).start()
+    # A portal backs itself up; a rig's host has a timer for that.
+    if args.mode == "portal":
+        threading.Thread(target=manager.backup_loop, name="backup", daemon=True).start()
     # A rig looks for newer releases of its software now and then (RigMixin);
     # a portal has nothing to look for.
     start_watch = getattr(manager, "start_update_watch", None)
