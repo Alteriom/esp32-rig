@@ -352,6 +352,34 @@ def test_a_backup_streams_and_a_portal_leaves_its_bundles_out(tmp_path, monkeypa
     assert not backup.backups(tmp_path / "full") and not list((tmp_path / "full").glob(".*partial"))
 
 
+def test_a_restore_keeps_the_database_when_the_backup_has_none_and_refuses_planted_members(tmp_path):
+    """A backup made before there was a database restores the files beside
+    it without setting the current database aside; and an archive whose
+    manifest names something a farm backup never holds -- a key, a profile
+    -- is refused before anything is written, checksums or not."""
+    import io
+
+    state, etc = _farm_state(tmp_path)
+    (state / "farm.sqlite3").rename(tmp_path / "kept.sqlite3")
+    archive = Path(backup.create_backup(state, etc, tmp_path / "backups")["archive"])
+    (tmp_path / "kept.sqlite3").rename(state / "farm.sqlite3")
+    backup.restore_backup(archive, state, etc, apply=True)
+    assert (state / "farm.sqlite3").exists() and not list(state.glob("farm.sqlite3.before-restore-*"))
+
+    planted = tmp_path / "planted.tar.gz"
+    key = b"admin: planted\n"
+    manifest = {"schema": backup.SCHEMA, "files": {"etc/api-token": {
+        "sha256": backup._sha256(key), "bytes": len(key), "restore": "etc"}}}
+    with tarfile.open(planted, "w:gz") as tar:
+        for name, data in (("backup.json", json.dumps(manifest).encode()), ("etc/api-token", key)):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    with pytest.raises(ValueError, match="not something a farm backup restores"):
+        backup.restore_backup(planted, tmp_path / "x", tmp_path / "y", apply=True)
+    assert not (tmp_path / "y").exists()
+
+
 def test_old_backups_go_and_a_stale_or_uncopied_one_is_reported(tmp_path):
     state, etc = _farm_state(tmp_path)
     directory = tmp_path / "backups"

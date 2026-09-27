@@ -7,10 +7,13 @@
 // (rig_setup.py `label`): the count of boards, the access point's channel,
 // the channels that are told.
 
+// Safe in text and in a quoted attribute alike: the DOM round trip it
+// replaced escaped & < > but not quotes, and some hundred attr="${...}"
+// sites take values a rig reports (a health message, a pin note, a MAC).
 function escapeHtml(value) {
-  const node = document.createElement("span");
-  node.textContent = String(value ?? "");
-  return node.innerHTML;
+  return String(value ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // What a rig is set up to do. The states are the service's: `on` is set up

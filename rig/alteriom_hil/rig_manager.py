@@ -966,7 +966,8 @@ class RigMixin:
                 flashed = parse(stage["started_at"])
                 break
         since = flashed or started
-        wall_minutes = max(0.0, (now - since).total_seconds() / 60) if since else time.monotonic() - meter["wall"]
+        # Minutes either way: the fallback was seconds, and billed 60 times over.
+        wall_minutes = max(0.0, (now - since).total_seconds() / 60) if since else (time.monotonic() - meter["wall"]) / 60
         boards = len(result.get("board_ids") or []) or int(result.get("boards") or 0)
         cpu = None
         if meter.get("cpu") is not None:

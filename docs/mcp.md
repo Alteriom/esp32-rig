@@ -31,7 +31,7 @@ On the machine the assistant runs on, the HAL installed (it brings the
 `alteriom-farm-mcp` command) and the key in a file only you can read:
 
 ```bash
-pip install -e ./hal
+pip install -e ./core -e ./rig
 install -m 0600 /dev/null ~/.config/alteriom/farm-key && $EDITOR ~/.config/alteriom/farm-key
 ```
 

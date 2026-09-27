@@ -6,7 +6,7 @@ repository, and `canary/` is the health check firmware the release carries
 builds for their own project; the code that ships to them must not carry the
 names of our hosts, our people, our portal or our private consumer.
 
-This is the other half of `test_rig_package.py`. That one holds the boundary
+This is the other half of `test_package_boundaries.py`. That one holds the boundary
 between the halves; this one holds what may cross it. Both are ratchets: the
 counts may shrink and may not grow, so a name that arrives arrives on purpose
 and a name that leaves cannot come back.
