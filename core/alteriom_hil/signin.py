@@ -1,9 +1,9 @@
 """Signing in: a person becomes an account, by GitHub or by their email.
 
-The farm has known two kinds of caller: a key, for a program, and a person
-behind Authelia, for the dashboard. Opening the farm to everyone needs a
-third: an account the portal owns, made in one of two ways and the same
-account either way (docs/farm-service.md, "Accounts").
+A farm has two kinds of caller: a key, for a program, and an account, for a
+person -- one the portal owns, made in one of two ways and the same account
+either way. (A person used to be whoever a forward-auth proxy vouched for;
+the portal signs people in itself.)
 
 * **GitHub.** The developer whose firmware CI already lives there signs in
   with one click. The code GitHub hands back is exchanged for who they are:

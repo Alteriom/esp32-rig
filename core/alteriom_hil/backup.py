@@ -99,7 +99,10 @@ def _database_copy_to(path: Path, destination: Path) -> None:
     try:
         target = sqlite3.connect(destination)
         try:
-            source.backup(target)
+            # In steps, with a pause between them: one step holds the
+            # database's read lock for the whole copy, and a writer waiting
+            # longer than its busy timeout fails with "database is locked".
+            source.backup(target, pages=256, sleep=0.01)
         finally:
             target.close()
     finally:
@@ -132,6 +135,12 @@ def create_backup(state: Path, etc: Path, directory: Path, keep: int = 14, targe
     restore_to: dict[str, str] = {}
     try:
         if database.is_file():
+            # Room for the copy before it is made: the copy lands on the same
+            # volume, and a copy that fills it takes the service with it.
+            needed = database.stat().st_size + HEADROOM
+            if shutil.disk_usage(directory).free < needed:
+                raise OSError(f"not enough room for a backup in {directory}: the database alone needs "
+                              f"{database.stat().st_size} bytes and {HEADROOM} are kept free")
             _database_copy_to(database, copy)
             sources["state/farm.sqlite3"] = copy
             restore_to["state/farm.sqlite3"] = "state"
@@ -285,6 +294,17 @@ def _safe_member(info: tarfile.TarInfo) -> str:
     return name
 
 
+def _restorable(name: str, kind: str | None) -> bool:
+    """The members a farm backup may hold, each with the one place it goes."""
+    parts = Path(name).parts
+    if name == "state/farm.sqlite3" or name in {f"state/{item}" for item in STATE_FILES}:
+        return kind == "state"
+    if name in {f"etc/{item}" for item in ETC_FILES}:
+        return kind == "etc"
+    return (kind == "bundle" and len(parts) >= 4 and parts[:2] == ("state", "artifacts")
+            and len(parts[2]) == 32 and all(c in "0123456789abcdef" for c in parts[2]))
+
+
 def verify_backup(archive: Path) -> dict:
     """The manifest of a backup, every member's checksum verified -- read as
     a stream, so a backup of any size is checked in flat memory."""
@@ -306,6 +326,12 @@ def verify_backup(archive: Path) -> dict:
     listed = manifest.get("files") or {}
     if set(listed) != set(seen):
         raise ValueError(f"{archive}: members do not match the manifest")
+    # What a restore may write, whatever the manifest says: the checksums
+    # travel inside the archive, so they catch damage, not a copy somebody
+    # edited to plant a key or a profile that runs a command.
+    for name, described in listed.items():
+        if not _restorable(name, (described or {}).get("restore")):
+            raise ValueError(f"{name}: not something a farm backup restores")
     for name, digest in seen.items():
         if digest != listed[name]["sha256"]:
             raise ValueError(f"{name}: checksum mismatch; the backup is damaged")
@@ -351,7 +377,10 @@ def restore_backup(archive: Path, state: Path, etc: Path, apply: bool = False) -
         plan.append({"member": name, "to": str(destination), "action": action, "bytes": described["bytes"]})
     if apply:
         database = state / "farm.sqlite3"
-        if database.exists():
+        # Set aside only when the backup brings one back: a backup made
+        # before there was a database restores the files beside it, and
+        # must not leave the farm starting on an empty store.
+        if database.exists() and "state/farm.sqlite3" in (manifest.get("files") or {}):
             shutil.move(database, state / f"farm.sqlite3.before-restore-{stamp}")
         wanted = {step["member"]: Path(step["to"]) for step in plan if step["action"] != "keep existing"}
         with tarfile.open(archive, "r:gz") as tar:

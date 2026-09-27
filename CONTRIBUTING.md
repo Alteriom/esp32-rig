@@ -22,7 +22,7 @@ checks this and will fail the build.
 ## Running the tests
 
 ```bash
-pip install -e ./core[dev] -e ./rig[dev]
+pip install -e ./core[dev] -e './rig[dev]'
 python -m pytest tests -q
 ```
 
@@ -39,9 +39,10 @@ one; it is how a change to the pipeline is tested without holding the rig.
 
 Two files enforce what would otherwise be intentions:
 
-- `tests/test_rig_package.py` — what may import what. A rig does not import
-  the portal; the core imports neither half. The lists in it are ratchets:
-  they shrink and cannot grow.
+- `tests/test_package_boundaries.py` — what may import what. Core never
+  imports the rig, and neither half imports a portal's modules (the launcher
+  may ask whether one is installed, guarded). It reads the directories, so a
+  new module is on a side the moment it exists.
 - `tests/test_public_scrub.py` — what may ship.
 
 If one of them fails, it is usually right. If it is wrong, change the list and

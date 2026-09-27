@@ -187,6 +187,7 @@ function sessionEnded() {
   if (token !== "session") return;
   token = "";
   clearTimeout(pollTimer);
+  closeConsole();
   $("dashboard").hidden = true; $("login").hidden = false; $("overall").textContent = "LOCKED";
   if ($("sign-out")) $("sign-out").hidden = true;
   if ($("signin-methods")) $("signin-methods").hidden = false;
@@ -350,6 +351,9 @@ async function pollConsole() {
 }
 
 function openConsole(rig) {
+  // Farm-wide, and refused to an account: polling it would ask every
+  // second and a half for a 403 nobody can see or stop.
+  if (workspaceOnly()) return;
   const drawer = $("console");
   if (rig !== undefined && rig !== consoleState.rig) {
     consoleState.rig = rig;
@@ -591,7 +595,7 @@ function navigateTo(href) {
 // arrive the same way.
 // The menu names what an operator does -- Rigs, Firmware, Insights,
 // Settings -- and older links keep working.
-const ROUTE_ALIASES = {hardware: "rigs", firmware: "artifacts", insights: "statistics", settings: "configuration"};
+const ROUTE_ALIASES = {hardware: "rigs", firmware: "artifacts", insights: "statistics", settings: "configuration", bundle: "artifact"};
 function parseRoute(hash) {
   const [raw, id] = hash.replace(/^#/, "").split("/", 2);
   const name = ROUTE_ALIASES[raw] || raw;
@@ -602,6 +606,8 @@ function parseRoute(hash) {
 // is false when the browser already changed the URL for us -- a reload, or
 // the back button -- so the router does not fight it.
 function openRoute(route, {updateHash = true} = {}) {
+  // The run page follows its run on every poll; another page does not.
+  if (route.name !== "run") selectedJobId = null;
   if (route.name === "overview" && shell().overviewIsRigPage) {
     // The rig's own page, kept at #overview: the address a rig opens on.
     showPanel("rig", updateHash, "", {as: "overview"});
@@ -1037,6 +1043,8 @@ async function showJob(jobId, {focus = false, force = false} = {}) {
   try {
     job = await api(`/api/v1/jobs/${jobId}`);
   } catch (error) {
+    // Somebody opened another run while this one was asked for.
+    if (selectedJobId !== jobId) return;
     // A link to a run the farm no longer has -- pruned history, a typo in a
     // pasted URL -- says so on the page instead of leaving the last run's
     // details under someone else's id.
@@ -1048,6 +1056,8 @@ async function showJob(jobId, {focus = false, force = false} = {}) {
     $("job-actions").innerHTML = "";
     return;
   }
+  // A poll's answer for the run that was open, arriving after another was.
+  if (selectedJobId !== jobId) return;
   const signature = JSON.stringify(job);
   selectedJob = job;
   if (force || changed || signature !== detailSignature) { detailSignature = signature; renderJob(job); }
@@ -2695,7 +2705,7 @@ function rigNetwork(rig) {
       mqtt.enabled ? "A board publishes here in the queue check." : "The queue row skips without it."],
   ].filter(Boolean);
   return `${heading}${viewGroup("", rig.local
-    ? "Set on this host: sudo ./runner/setup-gateway-network.sh, then alteriom-hil-admin config set gateway.enabled true."
+    ? "Set on this host: sudo ./rig/setup-gateway-network.sh, then alteriom-hil-admin config set gateway.enabled true."
     : "Set on the rig itself; the commands are on its setup card.", rows)}`;
 }
 
@@ -3767,9 +3777,9 @@ function renderJobs(page) {
   const queueOrder = lastQueue.queued || [];
   const dash = "—";
   promotableOnlyList = true;
-  $("jobs").innerHTML = jobs.map(job => `<tr><td>${new Date(job.created_at).toLocaleString()}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("");
-  promotableOnlyList = false
+  $("jobs").innerHTML = jobs.map(job => `<tr><td>${new Date(job.created_at).toLocaleString()}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("")
     || `<tr><td colspan="9" class="muted">${runQuery.q || runQuery.status || runQuery.kind ? "No run matches this filter." : "No pipeline history yet."}</td></tr>`;
+  promotableOnlyList = false;
   document.querySelectorAll(".view-job").forEach(button => button.addEventListener("click", () => {
     openRun(button.dataset.id);
     showJob(button.dataset.id, {force: true});
@@ -4823,7 +4833,9 @@ async function loadStatistics(days = statsDays) {
   catch (error) { $("stats-chart").innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`; }
   // History moves slowly; once a minute while the page is open is plenty.
   statsTimer = setTimeout(() => {
-    if (document.querySelector('.page[data-page="statistics"]').hidden || document.hidden) return;
+    // Its own card on screen, wherever the document keeps it (a portal's is
+    // under Admin, and has no statistics page of its own).
+    if (!$("stats-headline") || $("stats-headline").offsetParent === null || document.hidden) return;
     loadStatistics(statsDays);
   }, 60000);
 }
@@ -4876,7 +4888,7 @@ async function loadOverviewStats() {
 // restated here, so a setting changed on the host shows up instead of the
 // page's idea of it.
 // Every parameter the host's configuration file can carry
-// (runner/hil-config.schema.json), so this page answers what the farm is set
+// (rig/hil-config.schema.json), so this page answers what the farm is set
 // to without an ssh session. Read-only, and one thing is deliberately absent:
 // the gateway password. Its *path* is here, because an operator needs to know
 // which file to rotate; the secret itself has no business in a web page.
@@ -6177,15 +6189,18 @@ function scheduleRefresh() {
 
 // Configuration is fetched when its tab is opened rather than on every poll:
 // it changes when an operator changes it, not every fifteen seconds.
-document.querySelectorAll(".nav-item,.go-panel").forEach(button => button.addEventListener("click", () => {
-  showPanel(button.dataset.panel);
+// Through the router, like a link, a reload and Back: showing the page
+// alone left the pages that load through openRoute -- a rig's Overview,
+// a portal's Admin -- on "Loading…" when reached by the menu.
+document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => {
+  const panel = button.dataset.panel;
   // A nav item may name the tab it opens: the rig's Boards is the rigs
   // page on its boards tab.
-  if (button.dataset.panel === "rigs") showRigsTab(button.dataset.tab || rigsTab);
-  if (button.dataset.panel === "configuration") showSettingsTab(settingsTab);
-  if (button.dataset.panel === "artifacts" && token) showFirmwareTab(firmwareTab);
-  if (button.dataset.panel === "statistics" && token) loadStatistics(statsDays);
-  if (button.dataset.panel === "account" && token) loadAccount();
+  const href = panel === "rigs" ? `#${button.dataset.tab || rigsTab}`
+    : panel === "configuration" ? `#configuration/${settingsTab}`
+    : panel === "artifacts" ? `#artifacts/${firmwareTab}`
+    : `#${panel}`;
+  navigateTo(href);
 }));
 $("token-form").addEventListener("submit", event => {
   event.preventDefault(); token = $("token").value; sessionStorage.setItem("farmToken", token);

@@ -1280,6 +1280,17 @@ class JobStore:
         with self.connect() as db:
             db.execute(f"UPDATE jobs SET {', '.join(fields)} WHERE id=?", values)
 
+    def cancel_if_queued(self, job_id: str, result: dict) -> bool:
+        """Mark a run cancelled if -- and only if -- it is still queued, in
+        one statement: the dispatcher's claim and a cancel can no longer
+        both win. False when something else got to it first."""
+        with self.connect() as db:
+            changed = db.execute(
+                "UPDATE jobs SET status='cancelled', finished_at=?, result_json=? WHERE id=? AND status='queued'",
+                (utcnow(), json.dumps(result or {}), job_id),
+            ).rowcount
+        return changed == 1
+
     def profile_history(self, profile: str) -> dict:
         """What this project's suite runs here amount to, for its card:
         whether one ever passed (what makes a project proven) and the

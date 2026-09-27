@@ -3120,6 +3120,61 @@ def test_a_release_bundle_is_served_only_to_whom_the_manager_says(tmp_path):
         server.shutdown()
 
 
+def test_the_bundle_list_tells_a_caller_only_about_what_it_may_see(tmp_path):
+    """The totals beside the list came from the whole store: an account
+    read every private project's name off `profiles`, and a prune's bundle
+    ids off `pruning`. Now each is counted over what the caller may see."""
+    from types import SimpleNamespace
+
+    manager = _store_manager(tmp_path)
+    entries = [
+        {"id": "a" * 32, "profile": "mine", "bytes": 10, "pinned": True, "created_at": "2026-09-26T00:00:00+00:00"},
+        {"id": "b" * 32, "profile": "secret", "bytes": 1000, "pinned": False, "created_at": "2026-09-26T00:00:00+00:00"},
+    ]
+    manager._artifact_entries = lambda: (entries, SimpleNamespace(links={"x": 1}, dangling=["y"]))
+    manager.prune_progress = lambda: {"active": {"ids": ["b" * 32]}, "last": None}
+    manager.visible_profiles = lambda identity: None if identity is None else {"mine"}
+    everybody = manager.artifact_index()
+    assert everybody["profiles"] == ["mine", "secret"] and everybody["count"] == 2 and everybody["pruning"]
+    theirs = manager.artifact_index(identity=object())
+    assert [b["id"] for b in theirs["bundles"]] == ["a" * 32]
+    assert theirs["profiles"] == ["mine"] and theirs["count"] == 1 and theirs["bytes"] == 10 and theirs["pinned"] == 1
+    assert theirs["pruning"] is None and theirs["links"] is None and theirs["dangling"] is None
+
+
+def test_a_cancel_that_loses_the_race_to_the_dispatcher_does_not_mark_a_running_run_cancelled(tmp_path):
+    manager = _store_manager(tmp_path)
+    queued = manager.store.create("suite", {"profile": "painlessmesh"}, tmp_path / "q.log")
+    assert manager.store.cancel_if_queued(queued["id"], {"cancelled": True}) is True
+    assert manager.store.get(queued["id"])["status"] == "cancelled"
+    claimed = manager.store.create("suite", {"profile": "painlessmesh"}, tmp_path / "c.log")
+    manager.store.update(claimed["id"], "running")   # the dispatcher got there first
+    assert manager.store.cancel_if_queued(claimed["id"], {"cancelled": True}) is False
+    assert manager.store.get(claimed["id"])["status"] == "running", "still running: it is interrupted, not relabelled"
+
+
+def test_a_negative_content_length_is_a_bad_request_not_an_unbounded_read(tmp_path):
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    manager = _store_manager(tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, "t" * 40, tmp_path))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for length in ("-1", "lots"):
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+            connection.putrequest("POST", "/api/v1/enroll")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", length)
+            connection.endheaders()
+            answer = connection.getresponse()
+            assert answer.status == 400, (length, answer.status)
+            connection.close()
+    finally:
+        server.shutdown()
+
+
 def test_a_standalone_rig_answers_its_own_dashboard_without_a_portal_half(tmp_path):
     """The dashboard opens with /api/v1/status and /api/v1/inventory, then a
     rig's page and a board's history. Each asked the manager which rigs the

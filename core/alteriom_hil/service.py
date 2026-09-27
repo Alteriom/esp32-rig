@@ -1001,14 +1001,19 @@ class BaseManager:
                 return self.store.get(job_id)
         if job["status"] != "queued":
             raise ValueError(f"job {job_id} is {job['status']}; only queued or running jobs can be cancelled")
+        result = {"summary": summary, "detail": detail, "cancelled": True}
+        if superseded_by:
+            result["superseded_by"] = superseded_by
+        # Only while it is still queued: the dispatcher can claim it between
+        # the read above and this write, and an unconditional write left a
+        # run executing under a `cancelled` status. Lost the race: it is
+        # running now, so it is interrupted the way a running run is.
+        if not self.store.cancel_if_queued(job_id, result):
+            return self.cancel(job_id, summary, detail, superseded_by)
         for stage in job["progress"]:
             if stage["status"] in ("pending", "running"):
                 stage["status"] = "skipped"
         self.store.update_progress(job_id, job["progress"])
-        result = {"summary": summary, "detail": detail, "cancelled": True}
-        if superseded_by:
-            result["superseded_by"] = superseded_by
-        self.store.update(job_id, "cancelled", result)
         self._emit_run(job_id, "cancelled", self.store.get(job_id) or {}, result)
         # A job queued ahead of others may have been holding them back.
         pending = self.__dict__.get("pending")
@@ -3683,6 +3688,13 @@ class BaseManager:
                 for field in ("id", "profile", "project", "branch", "ref", "revision", "actor", "pin_note")
             ))
         ]
+        # What the store holds, as this caller may see it: a caller shown only
+        # some projects is told about those -- their count, bytes and names
+        # -- and nothing of the rest, not even that it exists. (The totals
+        # were the whole store's, so an account read every private project's
+        # name off `profiles`.) The prune is the platform's.
+        seen = entries if visible is None else [entry for entry in entries if entry.get("profile") in visible]
+        whole = visible is None
         return {
             "bundles": chosen[offset:offset + limit],
             # The page, so a client need not infer what it asked for.
@@ -3690,17 +3702,17 @@ class BaseManager:
             "offset": offset,
             # What the filter matched, and what the store holds.
             "matched": len(chosen),
-            "count": len(entries),
-            "bytes": sum(entry["bytes"] for entry in entries),
+            "count": len(seen),
+            "bytes": sum(entry["bytes"] for entry in seen),
             "profiles": sorted({
-                entry["profile"] for entry in entries if entry.get("profile")
+                entry["profile"] for entry in seen if entry.get("profile")
             }),
-            "links": len(found.links),
-            "dangling": found.dangling,
-            "pinned": sum(1 for entry in entries if entry["pinned"]),
+            "links": len(found.links) if whole else None,
+            "dangling": found.dangling if whole else None,
+            "pinned": sum(1 for entry in seen if entry["pinned"]),
             # What a prune is doing, or what the last one did: a confirmed
             # prune answers before it has finished deleting.
-            "pruning": self.prune_progress(),
+            "pruning": self.prune_progress() if whole else None,
         }
 
     # ---- the library: the store by project and branch -----------------------------------
@@ -5232,7 +5244,14 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             self.wfile.write(body)
 
         def _request_json_limit(self, limit: int) -> dict:
-            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                raise ValueError("Content-Length must be a number") from None
+            # Negative was read as "until the client closes" (rfile.read(-1)),
+            # with no key needed on the sign-in and enrol routes.
+            if length < 0:
+                raise ValueError("Content-Length must not be negative")
             if length > limit:
                 raise ValueError("request body is too large")
             payload = json.loads(self.rfile.read(length) or b"{}")
@@ -5451,7 +5470,12 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             if match:
                 # A connected rig, in the rig view's shape: worker_detail plus
                 # the contract's version, cut for a caller the rig is only
-                # lent to exactly as its detail is.
+                # lent to exactly as its detail is -- and not found, like its
+                # detail, for a caller who may not see it at all. (It was
+                # answered for anybody who named a rig.)
+                mine = self._visible(identity)
+                if mine is not None and match.group(1) not in mine:
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig"})
                 try:
                     detail = manager.rig_detail(match.group(1), keys, identity)
                 except LookupError as exc:
@@ -5459,7 +5483,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 except ElsewhereError as exc:
                     return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
                 if detail.get("pending"):
-                    return self._json(HTTPStatus.NOT_FOUND, {"error": f"{match.group(1)} has not joined yet"})
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such rig"})
                 view = {"contract": manager.RIG_VIEW_CONTRACT}
                 for key in manager.RIG_VIEW_KEYS:
                     if key != "contract":
@@ -5489,7 +5513,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                                                    owned=self._runs(identity)[0])
                 else:
                     try:
-                        health = json.loads(Path("/var/lib/alteriom-hil/status.json").read_text())
+                        health = json.loads(STATUS_SNAPSHOT.read_text())
                     except (OSError, json.JSONDecodeError):
                         health = {"status": "unknown"}
                 # What this caller may see of the farm. None for a key or an
@@ -5835,6 +5859,7 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     return self._json(HTTPStatus.FORBIDDEN, {"error": "an admin key turns the farm's notifications off"})
                 if self._cookie_write_refused():
                     return
+                self._pending_audit = (identity, "DELETE", self.path.split("?")[0])
                 # One channel by its id, or every one of them.
                 wanted = parse_qs(urlparse(self.path).query).get("id", [""])[0].strip()
                 try:
@@ -6014,6 +6039,8 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
             if path == "/api/v1/rigs":
                 try:
                     return self._json(HTTPStatus.CREATED, manager.create_rig(self._request_json(), identity.name, keys))
+                except PermissionError as exc:
+                    return self._json(HTTPStatus.FORBIDDEN, {"error": str(exc)})
                 except ElsewhereError as exc:
                     return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
                 except (ValueError, json.JSONDecodeError) as exc:
@@ -6041,8 +6068,9 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                         return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
                     except (ValueError, json.JSONDecodeError) as exc:
                         return self._json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                reason = self._request_json().get("reason") if call == "drain" else None
-                return self._worker_call(lambda: manager.drain_worker(name, call == "drain", identity.name, reason))
+                return self._worker_call(lambda: manager.drain_worker(
+                    name, call == "drain", identity.name,
+                    self._request_json().get("reason") if call == "drain" else None))
             history = re.fullmatch(
                 r"/api/v1/workers/([a-z0-9][a-z0-9._-]{0,31})/history/"
                 r"(known|artifacts/[0-9a-f]{32}|jobs/[0-9a-f]{32}(?:/evidence|/log|/link)?)",

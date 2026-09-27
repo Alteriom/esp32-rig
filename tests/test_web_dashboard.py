@@ -1318,6 +1318,26 @@ def test_on_a_rig_overview_is_the_rigs_own_page():
     assert 'label: view.name && view.name !== "local" ? view.name : shell().localRigLabel,' in script
 
 
+def test_the_2026_09_26_review_fixes_hold_in_the_dashboard():
+    """What the review found broken in the dashboard, pinned so it stays
+    fixed: the run list's empty state and Delete; the menu going through
+    the router; a stale run answer dropped; the console kept from accounts;
+    bundle links; and an escape that is safe inside an attribute."""
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    chips = (WEB / "chips.js").read_text(encoding="utf-8")
+    jobs = script.split("function renderJobs(page)", 1)[1].split("\n}\n", 1)[0]
+    assert "promotableOnlyList = false\n    ||" not in jobs and "  promotableOnlyList = false;\n" in jobs
+    nav = script.split('document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click"', 1)[1].split("}));", 1)[0]
+    assert "navigateTo(href)" in nav and "showPanel(" not in nav
+    show_job = script.split("async function showJob(", 1)[1].split("\n}\n", 1)[0]
+    assert show_job.count("if (selectedJobId !== jobId) return;") == 2
+    assert 'if (route.name !== "run") selectedJobId = null;' in script
+    assert "if (workspaceOnly()) return;" in script.split("function openConsole(", 1)[1].split("\n}\n", 1)[0]
+    assert 'bundle: "artifact"' in script
+    assert '.replace(/"/g, "&quot;")' in chips and ".replace(/'/g, \"&#39;\")" in chips
+    assert "runner/setup-gateway-network.sh" not in script
+
+
 def test_the_rigs_document_is_the_rigs_application():
     """A rig served the farm's page -- "ESP32 Farm", "Farm overview", a
     fleet, Insights, Sign in with GitHub, an Add rig card, and a script tag

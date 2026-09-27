@@ -93,7 +93,7 @@ fi
 sync_clone "$REPO" "$SOURCE" "$REF" "$ORIGIN_URL"
 after="$(git -C "$REPO" rev-parse HEAD)"
 if [ ! -d "$REPO/rig" ] || [ ! -f "$REPO/rig/pyproject.toml" ]; then
-  die "$REPO at $after does not look like alteriom-esp32-farm"
+  die "$REPO at $after does not look like a rig checkout (no rig/pyproject.toml)"
 fi
 
 say "waiting for the rig lock (a running hardware job finishes first, up to ${LOCK_WAIT}s)"
@@ -105,7 +105,12 @@ say "installing the HAL into $VENV"
 "$VENV/bin/python" -m pip install --quiet --upgrade pip
 "$VENV/bin/python" -m pip install --quiet -e "$REPO/core[dev]"
 "$VENV/bin/python" -m pip install --quiet -e "$REPO/rig[hardware,dev]"
-"$VENV/bin/python" -m pip install --quiet -e "$REPO/portal[dev]"
+# A portal's half, when the checkout has one (the farm's does; a rig's own,
+# public checkout does not, and this failing under `set -e` left the old
+# service running against the new code).
+if [ -d "$REPO/portal" ]; then
+  "$VENV/bin/python" -m pip install --quiet -e "$REPO/portal[dev]"
+fi
 
 say "refreshing service snapshots, systemd units, and restarting the farm service"
 # From inside an Actions job the runner unit must not be restarted: it is the
