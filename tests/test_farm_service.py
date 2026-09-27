@@ -3080,6 +3080,46 @@ def test_a_half_adds_its_own_routes_and_the_service_answers_them(tmp_path):
         server.shutdown()
 
 
+def test_a_release_bundle_is_served_only_to_whom_the_manager_says(tmp_path):
+    """A portal's release bundle may be its operator's own source. The
+    handler asks the manager before serving one and answers 404 -- what a
+    release it does not hold would say -- when the manager says no; a
+    manager with no such rule serves it as before."""
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    manager = _store_manager(tmp_path)
+    bundle = tmp_path / "release.bundle"
+    bundle.write_bytes(b"the whole history")
+    commit = "c" * 40
+    manager.release_path = lambda sha: bundle if sha == commit else (_ for _ in ()).throw(LookupError(sha))
+    token = "t" * 40
+    server = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, tmp_path))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    def fetch():
+        request = Request(f"http://127.0.0.1:{server.server_address[1]}/api/v1/releases/{commit}/bundle",
+                          headers={"Authorization": f"Bearer {token}"})
+        try:
+            with urlopen(request, timeout=5) as answer:
+                return answer.status, answer.read()
+        except HTTPError as exc:
+            return exc.code, exc.read()
+
+    try:
+        assert fetch() == (200, b"the whole history"), "no rule: served as before"
+        asked = []
+        manager.may_fetch_release_bundle = lambda identity: asked.append(identity.name) or False
+        status, body = fetch()
+        assert status == 404 and b"the whole history" not in body and asked, "the rule said no"
+        manager.may_fetch_release_bundle = lambda identity: True
+        assert fetch() == (200, b"the whole history")
+    finally:
+        server.shutdown()
+
+
 def test_a_standalone_rig_answers_its_own_dashboard_without_a_portal_half(tmp_path):
     """The dashboard opens with /api/v1/status and /api/v1/inventory, then a
     rig's page and a board's history. Each asked the manager which rigs the
