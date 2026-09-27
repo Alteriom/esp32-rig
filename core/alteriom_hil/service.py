@@ -5384,6 +5384,13 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                 return self._json(HTTPStatus.OK, {"keys": keys.entries(), "error": keys.error})
             match = re.fullmatch(r"/api/v1/releases/([0-9a-f]{40})/bundle", path)
             if match:
+                # A release bundle can be the portal operator's own source,
+                # whole history and all: the manager says who may have it,
+                # and anybody else is told what a release it does not hold
+                # would tell them. A manager with no such rule serves it.
+                may_fetch = getattr(manager, "may_fetch_release_bundle", None)
+                if may_fetch is not None and not may_fetch(identity):
+                    return self._json(HTTPStatus.NOT_FOUND, {"error": "no such release"})
                 try:
                     release = manager.release_path(match.group(1))
                     body = release.read_bytes()
