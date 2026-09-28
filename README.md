@@ -17,13 +17,12 @@ Compile-only CI cannot catch what a radio does, what an OTA does, what a board
 does after four hours, or what two boards do to each other. A rig can. This is
 the software for one.
 
-```
-        your CI                 your rig
-   ┌──────────────┐        ┌────────────────────┐
-   │ build the    │ bundle │  flash  ▸  run  ▸  │   ESP32  ESP32-C3
-   │ firmware     ├───────▸│  capture ▸ verdict │   ESP32-C5  ESP32-C6
-   └──────────────┘        └────────────────────┘   ESP32-S3  ESP8266
-```
+![How a rig works: your CI builds a bundle, the rig flashes the boards, runs your suite and answers with a verdict](docs/images/how-a-rig-works.svg)
+
+![The rig's dashboard: its boards, its last seven days and the run in progress](docs/images/overview.webp)
+
+Every page of the dashboard, with a picture of each:
+[a tour of the dashboard](https://alteriom.github.io/esp32-rig/tour/).
 
 ## What it is
 

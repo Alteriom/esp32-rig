@@ -1444,6 +1444,7 @@ class JobStore:
         worker: str | None = None,
         workers: set[str] | None = None,
         submitted_by: str | None = None,
+        by: str | None = None,
     ) -> dict:
         """One page of history, filtered, with the total the filter matches.
 
@@ -1469,6 +1470,11 @@ class JobStore:
             # The runs one rig ran, for its page.
             where.append("worker = ?")
             params.append(worker)
+        if by:
+            # The runs one caller asked for, for their profile page -- within
+            # what the caller reading it may see (the clause below).
+            where.append("json_extract(request_json,'$.submitted_by') = ?")
+            params.append(by)
         if workers is not None:
             # Every run this caller may see. In SQL with the rest, so the
             # total and the paging are the caller's too -- filtering a page
@@ -1546,16 +1552,21 @@ class JobStore:
         return {"jobs": count, "oldest": oldest, "newest": newest, "artifact_records": records}
 
     def counts_by_status(self, workers: set[str] | None = None,
-                         submitted_by: str | None = None) -> dict:
+                         submitted_by: str | None = None, by: str | None = None) -> dict:
         """How many runs sit behind each filter, so the chips can say.
 
         Counted over the same runs the page is drawn from: a chip reading 40
         failures above a list of two would be somebody else's forty.
         """
-        clause, params = "", []
+        where, params = [], []
         if workers is not None:
-            sql, params = self._mine(workers, submitted_by)
-            clause = f" WHERE {sql}"
+            sql, scoped = self._mine(workers, submitted_by)
+            where.append(sql)
+            params.extend(scoped)
+        if by:
+            where.append("json_extract(request_json,'$.submitted_by') = ?")
+            params.append(by)
+        clause = f" WHERE {' AND '.join(where)}" if where else ""
         with self.connect() as db:
             rows = db.execute(f"SELECT status, COUNT(*) FROM jobs{clause} GROUP BY status", params).fetchall()
         return {row[0]: row[1] for row in rows}
@@ -1644,7 +1655,7 @@ class JobStore:
                 job["id"],
                 "failed",
                 {
-                    "summary": "Pipeline interrupted by a farm service restart",
+                    "summary": "Pipeline interrupted: the service restarted",
                     "detail": "The previous service process ended before the job completed.",
                 },
             )

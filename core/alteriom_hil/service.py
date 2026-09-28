@@ -5724,6 +5724,10 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     run_rigs, submitter = None, None
                 else:
                     run_rigs, submitter = self._runs(identity)
+                # Who asked, for a profile page: a key's or an account's name.
+                by = (one("by") or "").strip() or None
+                if by is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._@-]{0,63}", by):
+                    return self._json(HTTPStatus.BAD_REQUEST, {"error": "by must be a key's or an account's name"})
                 page = manager.store.page(
                     limit=limit,
                     offset=offset,
@@ -5733,8 +5737,9 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
                     worker=(one("worker") or "")[:32] or None,
                     workers=run_rigs,
                     submitted_by=submitter,
+                    by=by,
                 )
-                page["counts"] = manager.store.counts_by_status(run_rigs, submitter)
+                page["counts"] = manager.store.counts_by_status(run_rigs, submitter, by=by)
                 return self._json(HTTPStatus.OK, page)
             if path == "/api/v1/config":
                 return self._json(HTTPStatus.OK, manager.configuration())

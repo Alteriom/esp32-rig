@@ -68,7 +68,7 @@ def test_job_store_recovers_pipeline_interrupted_by_restart(tmp_path):
     assert store.recover_incomplete() == []
     recovered = store.get(created["id"])
     assert recovered["status"] == "failed"
-    assert recovered["result"]["summary"] == "Pipeline interrupted by a farm service restart"
+    assert recovered["result"]["summary"] == "Pipeline interrupted: the service restarted"
     assert recovered["progress"][0]["status"] == "failed"
 
 
@@ -3173,6 +3173,21 @@ def test_a_negative_content_length_is_a_bad_request_not_an_unbounded_read(tmp_pa
             connection.close()
     finally:
         server.shutdown()
+
+
+def test_the_run_list_answers_by_who_asked_within_what_the_caller_may_see(tmp_path):
+    """A profile page lists one caller's runs: `by` narrows the list and its
+    counts to who asked, inside the scope every list already has."""
+    manager = _store_manager(tmp_path)
+    for who, status in (("ci", "passed"), ("ci", "failed"), ("maria", "passed")):
+        job = manager.store.create("suite", {"profile": "painlessmesh", "submitted_by": who}, tmp_path / "x.log")
+        manager.store.update(job["id"], "running")
+        manager.store.update(job["id"], status, {})
+    page = manager.store.page(by="ci")
+    assert page["total"] == 2 and {job["request"]["submitted_by"] for job in page["jobs"]} == {"ci"}
+    assert manager.store.counts_by_status(by="ci") == {"passed": 1, "failed": 1}
+    assert manager.store.counts_by_status(workers=set(), submitted_by="maria", by="ci") == {}, "outside the scope stays outside"
+    assert manager.store.page(workers=set(), submitted_by="maria", by="maria")["total"] == 1
 
 
 def test_a_standalone_rig_answers_its_own_dashboard_without_a_portal_half(tmp_path):
