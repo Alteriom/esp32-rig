@@ -262,3 +262,8 @@ ul.plain{margin:6px 0;padding-left:18px}
    heading's buttons go under it rather than squeezing it to three words a line. */
 #job-title{font-size:clamp(1.7rem,3.4vw,2.6rem);line-height:1.1}
 @media(max-width:600px){.page-heading{flex-direction:column;align-items:stretch;gap:12px}.page-heading .row-actions,.page-heading>.actions{justify-content:flex-start;flex-wrap:wrap}}
+/* The phone menu scrolls sideways: an edge with more menu behind it fades out (app.js navHint). */
+#nav.scrolls-right{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 44px),transparent)}
+#nav.scrolls-left{-webkit-mask-image:linear-gradient(to right,transparent,#000 44px);mask-image:linear-gradient(to right,transparent,#000 44px)}
+#nav.scrolls-left.scrolls-right{-webkit-mask-image:linear-gradient(to right,transparent,#000 44px,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(to right,transparent,#000 44px,#000 calc(100% - 44px),transparent)}
+#nav{scrollbar-width:none}#nav::-webkit-scrollbar{display:none}

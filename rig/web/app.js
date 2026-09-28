@@ -557,6 +557,7 @@ function showPanel(name, updateHash = true, suffix = "", {as = null} = {}) {
   const shown = as || (target === "rig" && fallback === "rig" && !suffix ? "overview" : target);
   const lit = shown === "run" ? "runs" : ["artifact", "storage"].includes(shown) ? "artifacts" : ["rig", "board"].includes(shown) ? "rigs" : shown;
   document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.panel === lit));
+  showNavItem(document.querySelector(".nav-item.active"));
   if (updateHash) {
     history.replaceState(null, "", `#${shown}${suffix}`);
     lastRouted = location.hash;
@@ -6334,6 +6335,28 @@ function scheduleRefresh() {
 // Through the router, like a link, a reload and Back: showing the page
 // alone left the pages that load through openRoute -- a rig's Overview,
 // a portal's Admin -- on "Loading…" when reached by the menu.
+// On a phone the menu is a row that scrolls sideways. Its edges fade where
+// there is more of it, and the page you are on is scrolled into sight, so
+// the items past the edge are neither hidden nor a guess.
+function navHint() {
+  const nav = $("nav");
+  if (!nav) return;
+  const more = nav.scrollWidth - nav.clientWidth;
+  nav.classList.toggle("scrolls-left", more > 2 && nav.scrollLeft > 2);
+  nav.classList.toggle("scrolls-right", more > 2 && more - nav.scrollLeft > 2);
+}
+function showNavItem(item) {
+  const nav = $("nav");
+  if (!nav || !item || nav.scrollWidth <= nav.clientWidth) return navHint();
+  const box = nav.getBoundingClientRect();
+  const at = item.getBoundingClientRect();
+  if (at.left < box.left || at.right > box.right) nav.scrollLeft += at.left - box.left - (box.width - at.width) / 2;
+  navHint();
+}
+$("nav")?.addEventListener("scroll", navHint, {passive: true});
+window.addEventListener("resize", navHint);
+navHint();
+
 document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => {
   const panel = button.dataset.panel;
   // A nav item may name the tab it opens: the rig's Boards is the rigs

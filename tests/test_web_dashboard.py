@@ -1343,6 +1343,18 @@ def test_a_profile_page_says_who_you_are_and_what_anybody_has_run():
     assert '$("close-rig").hidden = Boolean(shell().overviewIsRigPage)' in script
 
 
+def test_the_phone_menu_says_there_is_more_of_it():
+    """On a phone the menu is a row that scrolls sideways, and nothing said
+    so: Profile sat past the edge. The edge with more behind it fades, and
+    the page you are on is scrolled into sight."""
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    css = (WEB / "app.css").read_text(encoding="utf-8")
+    assert 'nav.classList.toggle("scrolls-right"' in script and 'nav.classList.toggle("scrolls-left"' in script
+    assert 'showNavItem(document.querySelector(".nav-item.active"));' in script
+    assert '$("nav")?.addEventListener("scroll", navHint, {passive: true});' in script
+    assert "#nav.scrolls-right{" in css and "#nav.scrolls-left{" in css and "mask-image" in css
+
+
 def test_the_2026_09_26_review_fixes_hold_in_the_dashboard():
     """What the review found broken in the dashboard, pinned so it stays
     fixed: the run list's empty state and Delete; the menu going through
