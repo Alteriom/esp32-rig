@@ -3120,6 +3120,31 @@ def test_a_release_bundle_is_served_only_to_whom_the_manager_says(tmp_path):
         server.shutdown()
 
 
+def test_a_picture_is_served_as_the_picture_it_is(tmp_path):
+    """The guide's and the site's screenshots are WebP. A Linux image's
+    `mimetypes` has no entry for it, and a picture sent as
+    application/octet-stream under nosniff is a download, not a picture."""
+    from http.server import ThreadingHTTPServer
+    from urllib.request import Request, urlopen
+
+    manager = _store_manager(tmp_path)
+    web = tmp_path / "web"
+    (web / "shots").mkdir(parents=True)
+    (web / "shots" / "overview.webp").write_bytes(b"RIFF" + bytes(4) + b"WEBPVP8 ")
+    (web / "mark.svg").write_text("<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
+    token = "t" * 40
+    server = ThreadingHTTPServer(("127.0.0.1", 0), farm_service.make_handler(manager, token, web))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for path, kind in (("/shots/overview.webp", "image/webp"), ("/mark.svg", "image/svg+xml")):
+            request = Request(f"http://127.0.0.1:{server.server_address[1]}{path}",
+                              headers={"Authorization": f"Bearer {token}"})
+            with urlopen(request, timeout=5) as answer:
+                assert answer.status == 200 and answer.headers["Content-Type"] == kind, path
+    finally:
+        server.shutdown()
+
+
 def test_the_bundle_list_tells_a_caller_only_about_what_it_may_see(tmp_path):
     """The totals beside the list came from the whole store: an account
     read every private project's name off `profiles`, and a prune's bundle

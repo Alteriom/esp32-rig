@@ -4815,6 +4815,11 @@ def make_handler(manager: BaseManager, keys: KeyStore | str, web_root: Path):
     extra_routes = tuple(declares() if callable(declares) else ())
 
     class Handler(SimpleHTTPRequestHandler):
+        # What the file's name says it is, where Python's own table has no
+        # entry: a Linux image's `mimetypes` does not know .webp, so the
+        # guide's pictures went out as application/octet-stream.
+        extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webp": "image/webp"}
+
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(web_root), **kwargs)
 
