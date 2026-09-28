@@ -48,8 +48,8 @@ refusal by GitHub is passed through as GitHub said it.
 
 | | Role | Does |
 |---|---|---|
-| `POST /api/v1/suites` | user | submit a run: `{"profile", "ref", "artifact", "targets", "boards", "tests", "keyword", "reuse", "supersede", "env", "actor"}`. Only `profile` matters; `ref` defaults to the project's default branch, `artifact` to the newest bundle the rig holds for that commit (none held: refused at submit, naming the workflow). Answers the run's id |
-| `GET /api/v1/jobs` | user | runs, newest first; `?profile=`, `?state=`, `?limit=` |
+| `POST /api/v1/suites` | user | submit a run: `{"profile", "ref", "branch", "artifact", "targets", "boards", "tests", "keyword", "reuse", "supersede", "env", "actor"}` (on a portal also `rig`, the rig the run is for; a rig refuses it). Only `profile` matters; `ref` defaults to the project's default branch, `artifact` to the newest bundle the rig holds for that commit (none held: refused at submit, naming the workflow). Answers the run's id |
+| `GET /api/v1/jobs` | user | runs, newest first, with the count behind each status: `?status=`, `?kind=` (`suite`, `inventory`), `?q=` (id, ref, summary…), `?by=` (who asked: a key's or an account's name), `?limit=`, `?offset=` |
 | `GET /api/v1/jobs/<id>` | user | one run: state, stages with durations, results, the files it left |
 | `GET /api/v1/jobs/<id>/artifacts/<name>` | user | one file a run left: the pipeline log, a board's serial capture, `results.xml`, the report |
 | `POST /api/v1/jobs/<id>/cancel` | user | stop a queued or running run |

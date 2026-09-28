@@ -6,18 +6,23 @@ your test suite against real silicon, and keep the evidence. It works on its
 own, on your bench, with its own dashboard; it can also connect to a farm and
 take work from there.
 
+![The rig's dashboard: its boards, its last seven days and the run in progress](images/overview.webp)
+
 <div class="grid cards" markdown>
 
 - **[Getting started](getting-started.md)** — from a box of parts to the first
   green health check, in about an hour.
 - **[Projects and your CI](projects.md)** — how the rig gets *your* firmware and
   runs *your* suite: the project, the bundle, the workflow, the example.
-- **[The dashboard](dashboard.md)** — what every page shows and what it is for.
+- **[The dashboard](dashboard.md)** — what every page shows and what it is for,
+  and [a tour](tour.md) of it in pictures.
 - **[API reference](api.md)** — every route the rig answers.
 
 </div>
 
 ## What it is
+
+![How a rig works: your CI builds a bundle, the rig flashes the boards, runs your suite and answers with a verdict](images/how-a-rig-works.svg)
 
 - **A rig runs the projects you give it and no other.** A project is a GitHub
   repository: the rig checks it out for each run, flashes the bundle its CI

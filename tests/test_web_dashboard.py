@@ -1167,7 +1167,7 @@ PORTAL_ONLY_IDS = {
 
 # What the library builds into the page as it goes, rather than finds there.
 BUILT_AT_RUNTIME = {"rig-details-form", "settings-changes", "storage-next", "storage-prev", "join-command",
-                    "project-form", "project-error",
+                    "project-form", "project-error", "profile-sign-out",
                     "github-token-form",
                     "github-token-error",
                     "project-start",
@@ -1318,6 +1318,52 @@ def test_on_a_rig_overview_is_the_rigs_own_page():
     assert 'label: view.name && view.name !== "local" ? view.name : shell().localRigLabel,' in script
 
 
+def test_a_profile_page_says_who_you_are_and_what_anybody_has_run():
+    """The UX review of 2026-09-27: a rig had no page about the person (or
+    the CI key) using it. #profile is yours -- role and what it may do, your
+    runs, how to use your key from CI; #profile/<name> is anybody's runs, as
+    far as you may read them. Every "who asked" links there."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    assert 'data-page="profile"' in page and '<a id="you" class="badge you" href="#profile"' in page
+    assert '<button class="nav-item" data-panel="profile">Profile</button>' in page, "reachable where the header hides the badge"
+    assert "shell().keyLabel(who)" in script, "your own key is named as the header names it"
+    assert 'escapeHtml(jobTitle(running))' in script, "the live run is named for what it is"
+    assert "if (selectedJobId) showJob(selectedJobId, {force: true});" in script, "a linked run is named once projects arrive"
+    for part in ('id="profile-identity"', 'id="profile-metrics"', 'id="profile-ci"', 'id="profile-runs"'):
+        assert part in page, part
+    assert 'if (route.name === "profile")' in script and "loadProfile(route.id)" in script
+    profile = script.split("async function loadProfile(name)", 1)[1].split("\n}\n", 1)[0]
+    assert "/api/v1/jobs?by=" in profile and "if (asked !== profileRequest) return;" in profile
+    assert 'by ${profileLink(job.request.submitted_by)}' in script, "the run list says who asked"
+    assert "profileLink(job.request?.submitted_by)" in script, "and so does a run's page"
+    assert "jobTitle(job)} · " in script and '"Hardware discovery"' in script
+    # A standalone rig shows no portal furniture.
+    assert '"node-banner", "farm-world", "overview-stats"' in script
+    assert '$("close-rig").hidden = Boolean(shell().overviewIsRigPage)' in script
+
+
+def test_a_profile_page_says_who_you_are_and_what_anybody_has_run():
+    """The UX review of 2026-09-27: a rig had no page about the person (or
+    the CI key) using it. #profile is yours -- role and what it may do, your
+    runs, how to use your key from CI; #profile/<name> is anybody's runs, as
+    far as you may read them. Every "who asked" links there."""
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    script = (WEB / "app.js").read_text(encoding="utf-8")
+    assert 'data-page="profile"' in page and '<a id="you" class="badge you" href="#profile"' in page
+    for part in ('id="profile-identity"', 'id="profile-metrics"', 'id="profile-ci"', 'id="profile-runs"'):
+        assert part in page, part
+    assert 'if (route.name === "profile")' in script and "loadProfile(route.id)" in script
+    profile = script.split("async function loadProfile(name)", 1)[1].split("\n}\n", 1)[0]
+    assert "/api/v1/jobs?by=" in profile and "if (asked !== profileRequest) return;" in profile
+    assert 'by ${profileLink(job.request.submitted_by)}' in script, "the run list says who asked"
+    assert "profileLink(job.request?.submitted_by)" in script, "and so does a run's page"
+    assert "jobTitle(job)} · " in script and '"Hardware discovery"' in script
+    # A standalone rig shows no portal furniture.
+    assert '"node-banner", "farm-world", "overview-stats"' in script
+    assert '$("close-rig").hidden = Boolean(shell().overviewIsRigPage)' in script
+
+
 def test_the_2026_09_26_review_fixes_hold_in_the_dashboard():
     """What the review found broken in the dashboard, pinned so it stays
     fixed: the run list's empty state and Delete; the menu going through
@@ -1356,7 +1402,7 @@ def test_the_rigs_document_is_the_rigs_application():
                  'id="farm-webhooks"', 'id="portal-config"', 'data-tab="releases"'):
         assert gone not in page, gone
     nav = page.split('<nav id="nav"', 1)[1].split("</nav>", 1)[0]
-    assert [m for m in __import__("re").findall(r'data-panel="([a-z]+)"', nav)] == ["overview", "runs", "rigs", "artifacts", "configuration"]
+    assert [m for m in __import__("re").findall(r'data-panel="([a-z]+)"', nav)] == ["overview", "runs", "rigs", "artifacts", "configuration", "profile"]
     assert 'data-panel="rigs" data-tab="boards">Boards</button>' in nav
     # The rig's document opens on the rig's own page -- the same sections the
     # portal shows for a rig -- and has no fleet overview.

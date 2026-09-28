@@ -20,12 +20,13 @@
       <button class="nav-item" data-panel="rigs" data-tab="boards">Boards</button>
       <button class="nav-item" data-panel="artifacts">Firmware</button>
       <button class="nav-item" data-panel="configuration">Settings</button>
+        <button class="nav-item" data-panel="profile">Profile</button>
       <a class="nav-guide" href="https://alteriom.github.io/esp32-rig/" target="_blank" rel="noopener" title="The guide: getting started, the dashboard, projects and your CI, the API">Guide</a>
     </nav>
     <div class="connection">
       <a id="repo-link" class="repo-link" href="#" target="_blank" rel="noopener" hidden title="The rig software on GitHub"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span id="repo-name">GitHub</span></a>
       <a id="version" class="version" href="#" target="_blank" rel="noopener" title="Deployed revision">–</a>
-      <span id="you" class="badge you" hidden></span><span id="live-dot" class="live-dot"></span><span id="last-updated">Connecting</span><span id="overall" class="badge">CONNECTING</span>
+      <a id="you" class="badge you" href="#profile" title="Your profile" hidden></a><span id="live-dot" class="live-dot"></span><span id="last-updated">Connecting</span><span id="overall" class="badge">CONNECTING</span>
     </div>
   </header>
   <main>
@@ -40,6 +41,15 @@
       </details>
     </section>
     <div id="dashboard" hidden>
+      <!-- Who asked the rig for runs: yours at #profile, anybody's at
+           #profile/<name> -- a person or a CI key, and how their runs went. -->
+      <section class="page" data-page="profile" hidden>
+        <div class="page-heading"><div><p id="profile-eyebrow" class="eyebrow">PROFILE</p><h1 id="profile-title">You</h1><p id="profile-subtitle" class="muted"></p></div></div>
+        <section id="profile-identity" class="card"><p class="muted">Loading…</p></section>
+        <section id="profile-metrics" class="metrics profile-metrics"></section>
+        <section id="profile-ci" class="card" hidden></section>
+        <section class="card"><div class="title-row"><div><p class="eyebrow">HISTORY</p><h2>Runs</h2></div><a id="profile-all-runs" class="button secondary" href="#runs">All runs</a></div><div id="profile-runs"></div></section>
+      </section>
       <section class="page" data-page="runs" hidden>
         <div class="page-heading"><div><p class="eyebrow">EVIDENCE</p><h1>Pipeline runs</h1></div><p class="muted">Start a run, follow its stages, read what it left.</p></div>
         <details id="run-card" class="card new-run farm-wide"><summary><span class="eyebrow">NEW EXECUTION</span><strong>Run a validation pipeline</strong><small class="muted">Flash a bundle a project's CI built, on the boards it needs</small></summary><form id="suite-form"><label>Project<select name="profile" id="profile-select"><option value="">Loading the projects this rig runs…</option></select></label><div id="project-strip" class="project-strip" hidden></div><label>Firmware bundle <small class="muted" id="bundle-hint"></small><select name="artifact" id="bundle-select"><option value="">Loading the bundles this rig holds…</option></select></label><p id="bundle-note" class="muted">This rig does not build firmware: a run flashes a bundle its project's CI built.</p><fieldset id="artifact-families"><legend>Artifact families</legend><span class="muted">Loading families…</span></fieldset><details id="test-selection"><summary>Test selection <span id="test-selection-note" class="muted">whole suite</span></summary><fieldset id="test-files"><legend>Test files</legend><span class="muted">Loading the suite…</span></fieldset><label>Keyword expression <small class="muted">(pytest -k, e.g. <code>failover or soak</code>)</small><input name="keyword" autocomplete="off" placeholder="run everything matching…"></label></details><button id="suite-submit">Flash this bundle and test</button></form></details>

@@ -39,6 +39,7 @@ One of four repositories that must stay consistent:
 | Host scripts, systemd, udev, nginx | `rig/*.sh`, `rig/udev/`, `rig/nginx/` |
 | Suites | `suites/canary` (health check), `suites/painlessmesh` (reference) |
 | Release build | `runner/ci/build-release.sh`, `.github/workflows/release.yml` |
+| The guide's screenshots (retake after a visible `rig/web/` change) | `runner/screenshots/` (demo rig + Playwright capture), into `docs/images/` |
 
 ## Commands
 

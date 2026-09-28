@@ -1,9 +1,10 @@
 # The dashboard
 
 The rig's own web page, served by the rig at port 8090 (or behind its
-reverse proxy). Five pages in the header: **Overview**, **Runs**, **Boards**,
-**Firmware**, **Settings**. Sign in with a key; the key stays in that browser
-tab and nowhere else.
+reverse proxy). Six pages in the header: **Overview**, **Runs**, **Boards**,
+**Firmware**, **Settings** and your **Profile**. Sign in with a key; the key
+stays in that browser tab and nowhere else. [A tour of the dashboard](tour.md)
+shows every page with a picture.
 
 The same pages, rendered from the same rig-view document, are what a farm
 shows for this rig once it is connected. What you see here is what the farm
@@ -11,12 +12,16 @@ sees, no more.
 
 ## Overview
 
+![The Overview page](images/overview.webp)
+
 The rig's own page. Its name, description and location as written in
 Settings; its version; its health in a word with what is not ok up front,
 and every check behind one click; the run in progress with its live stages;
-what needs attention; recent runs; the boards. At the bottom, the public page
-of the farm the rig software comes from, with a way to connect this rig to
-it. Nothing there is yours; connecting is a choice made in Settings.
+what needs attention; recent runs; the boards. **How this rig is doing** is
+the last seven days in one line, and **Statistics** opens the whole history.
+At the bottom, the public page of the farm the rig software comes from, with
+a way to connect this rig to it. Nothing there is yours; connecting is a
+choice made in Settings.
 
 ## Runs
 
@@ -27,7 +32,12 @@ project's page fetches a new one), which boards or families, and under
 suite. **Run**.
 
 Below, every run the rig has made, newest first, searchable, with its
-verdict, project, commit, boards and duration. A run's page has:
+verdict, project, commit, boards, duration and **who asked for it**, linked
+to their [profile](#profile).
+
+![A run's page](images/run.webp)
+
+A run's page has:
 
 - **the pipeline** — checkout, discover, flash, preflight, suite, report,
   each with its duration and log;
@@ -42,6 +52,8 @@ The queue's state is at the top of the page: paused by a red health check
 with the reason, or by you; resume from there.
 
 ## Boards
+
+![The Boards page](images/boards.webp)
 
 Every board the rig knows: name (family and the last four characters of
 its MAC), family, port, state (idle, held by a run, quarantined, red on a
@@ -60,14 +72,49 @@ jumper with `instruments wire`.
 
 ## Firmware
 
-The bundles the rig holds, one row each: the project, the commit, the
-families, the size, when it arrived and how (fetched from GitHub, handed over
-by a CI, installed with a release), and whether it is **pinned**. The health
-check's bundle is pinned by the release that installed it. Retention removes
-old unpinned bundles; a pinned one outlives every prune. Download a bundle
-or delete one from its row.
+![The Firmware page](images/firmware.webp)
+
+**Library** is one card per project: the newest build of each branch and who
+it came from, the last run on it, the families it holds and what it keeps on
+disk. **All builds** is every bundle the rig holds, one row each: the project,
+the commit, the families, the size, when it arrived and how (fetched from
+GitHub, handed over by a CI, installed with a release), and whether it is
+**pinned**. The health check's bundle is pinned by the release that installed
+it. **Storage and clean-up** says what older builds cost and prunes them:
+retention removes old unpinned bundles, and a pinned one outlives every
+prune. Download a bundle or delete one from its page.
+
+## Statistics
+
+![The Statistics page](images/statistics.webp)
+
+Opened from Overview. Seven, thirty or ninety days: suite runs, pass rate,
+median and slowest run, queue wait, how busy the rig was and how many boards
+are healthy; runs per day by verdict; each project's runs and pass rate; what
+the runs took (board-minutes, CPU, evidence and bundle bytes, recorded and
+never charged); which stage failures come from; and where the firmware came
+from. All of it is the rig's own job history.
+
+## Profile
+
+![A CI key's profile](images/profile-ci.webp)
+
+Every name a run was asked for under has a profile at `#profile/<name>`: a
+person's key, a CI's key, a farm account. It shows that name's runs (only
+the ones you may see), its pass rate, its last run and the projects it ran;
+the **by** link on any run opens it. The runs behind it are
+`GET /api/v1/jobs?by=<name>`.
+
+**Profile** in the header is yours: who the rig says you are, your role and
+what it allows, how you signed in, your own runs, and **Forget this key**.
+Signed in with a key, it also shows **Use this key from a workflow**: the
+request a CI job sends to run a suite, with this rig's address in it. Give
+each CI its own `user` key (Settings → Access), named after the workflow; its
+runs then have a profile of their own, and revoking it touches nothing else.
 
 ## Settings
+
+![Settings, Rig page](images/settings.webp)
 
 Four pages on a rig, one purpose each.
 

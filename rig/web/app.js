@@ -619,6 +619,11 @@ function openRoute(route, {updateHash = true} = {}) {
     if (token) loadAccount();
     return;
   }
+  if (route.name === "profile") {
+    showPanel("profile", updateHash, route.id ? `/${encodeURIComponent(route.id)}` : "");
+    if (token) loadProfile(route.id);
+    return;
+  }
   if (route.name === "run" && route.id) {
     showPanel("run", updateHash, `/${route.id}`);
     if (token) showJob(route.id, {force: true});
@@ -960,9 +965,9 @@ function runFacts(job) {
     ${jobVersion(job) ? `<div><small>Version</small><span><strong>${escapeHtml(jobVersion(job))}</strong></span></div>` : ""}
     <div><small>Revision</small><span>${shaLink(jobRevision(job), jobRepo(job)) || "—"}</span></div>
     <div><small>Targets</small><span>${escapeHtml(jobTargets(job) || "—")}</span></div>
-    <div><small>Started by</small><span>${actorLink(job.request?.actor) || escapeHtml(job.request?.submitted_by || "—")}${job.request?.actor && job.request?.submitted_by ? ` <small class="muted">via ${escapeHtml(job.request.submitted_by)}</small>` : ""}</span></div>
+    <div><small>Started by</small><span>${actorLink(job.request?.actor) || profileLink(job.request?.submitted_by) || "—"}${job.request?.actor && job.request?.submitted_by ? ` <small class="muted">via ${profileLink(job.request.submitted_by)}</small>` : ""}</span></div>
     <div><small>Boards</small><span>${result.boards ?? "—"}</span></div>
-    <div><small>Ran on</small><span>${escapeHtml(job.worker || (farmMode === "standalone" ? "this farm" : "—"))}${job.request?.imported_from ? ` <small class="muted" title="Run on ${escapeHtml(job.request.imported_from)} before it joined the portal, and brought with its history">before the portal</small>` : ""}</span></div>
+    ${shell().boardRigColumn ? `<div><small>Ran on</small><span>${escapeHtml(job.worker || "—")}${job.request?.imported_from ? ` <small class="muted" title="Run on ${escapeHtml(job.request.imported_from)} before it joined the portal, and brought with its history">before the portal</small>` : ""}</span></div>` : ""}
   </div>`;
 }
 
@@ -985,9 +990,12 @@ function runMetrics(job) {
 function renderJob(job) {
   const details = $("log-details");
   const wasOpen = details.open;
+  // "(live)" while the log is still being written; a finished run's log is a record.
+  const live = details.querySelector("summary .muted");
+  if (live) live.hidden = !["queued", "running"].includes(job.status);
   const log = $("job-log");
   const followLog = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  $("job-title").textContent = `${job.kind} · ${job.id.slice(0, 8)}`;
+  $("job-title").textContent = `${jobTitle(job)} · ${job.id.slice(0, 8)}`;
   // The run's own line, under its title: what it validated, so the page
   // says what it is about before any of the evidence is read.
   const branch = jobBranch(job);
@@ -1690,7 +1698,7 @@ function workerFacts(worker, {long = false} = {}) {
     local
       ? ["Version", `<strong>${escapeHtml(worker.version || "unknown")}</strong>`]
       : ["Release", `<strong>${escapeHtml(worker.version || "unknown")}</strong> <small class="state ${release.tone}">${escapeHtml(release.label)}</small>`],
-    ["Runs", `${escapeHtml(worker.running)} of ${escapeHtml(worker.max_runs)}`],
+    ["Running", `${escapeHtml(worker.running)} of ${escapeHtml(worker.max_runs)} at a time`],
     ["Boards", `${escapeHtml(worker.boards)}${worker.missing ? ` <small class="warn">${escapeHtml(worker.missing)} missing</small>` : ""}`],
     ["Host health", `<span class="${health === "ok" ? "good" : health === "unknown" ? "muted" : "warn"}">${escapeHtml(health)}</span>`],
     ...(local ? [] : [["Last heard", whenSpan(worker.seen_at)]]),
@@ -1700,7 +1708,7 @@ function workerFacts(worker, {long = false} = {}) {
       ["Location", worker.location ? escapeHtml(worker.location) : '<span class="muted">not set</span>'],
       ["GitHub", githubFact(worker.github || lastGithubSummary)],
       ["Commit", farmCommitLink(worker.commit)],
-      ["Projects", escapeHtml((worker.profiles || []).filter(name => name !== "canary").join(", ") || "none yet")]);
+      ["Projects", escapeHtml((worker.profiles || []).filter(name => name !== "canary").map(name => profiles[name]?.label || name).join(", ") || "none yet")]);
   } else if (long) {
     facts.push(
       // Whose rig it is: the person who administers it, and what its own
@@ -1984,6 +1992,13 @@ function renderRecentRuns(jobs) {
 
 // ---- Rigs page -------------------------------------------------------------------
 function showRigsTab(tab, updateHash = true) {
+  // A rig is one rig: its Boards page has no Rigs tab to offer.
+  // A strip of one tab is a heading that looks like a control: none at all.
+  const rigsLink = document.querySelector('#rigs-tabs a[data-tab="rigs"]');
+  if (rigsLink) rigsLink.hidden = Boolean(shell().overviewIsRigPage);
+  const strip = $("rigs-tabs");
+  if (strip) strip.hidden = [...strip.querySelectorAll("a")].filter(link => !link.hidden).length < 2;
+  if (tab === "rigs" && shell().overviewIsRigPage) tab = "boards";
   // Releases is the farm's own software, and `/api/v1/releases` is closed to
   // an account. The tab is hidden for them by CSS; this is the same rule for
   // an address, which the tab strip cannot cover.
@@ -2051,7 +2066,7 @@ function renderBoardsTable() {
   const missing = (inv.missing || []).filter(id => !q || id.includes(q));
   const rows = shown.map(board => {
     const state = boardState(board);
-    return `<tr class="clickable" data-href="${boardHref(board.id)}"><td><a class="row-link" href="${boardHref(board.id)}">${escapeHtml(board.id)}</a><small>${escapeHtml(board.mac || "")}</small></td>${shell().boardRigColumn ? `<td><a href="${rigHref(board.worker)}">${escapeHtml(board.worker || "—")}</a></td>` : ""}<td>${escapeHtml(familyLabel(board.target))}<small>${escapeHtml(board.details?.description || board.chip || "")}</small></td><td><span class="state ${state.tone}">${state.label}</span></td><td>${healthBadge(board)}<small>${board.health?.checked_at ? escapeHtml(shortWhen(board.health.checked_at)) : ""}</small></td><td>${escapeHtml(board.details?.flash_size || "")}<small>${escapeHtml(board.details?.transport || "")}</small></td></tr>`;
+    return `<tr class="clickable" data-href="${boardHref(board.id)}"><td><a class="row-link" href="${boardHref(board.id)}">${escapeHtml(board.id)}</a><small>${escapeHtml(board.mac || "")}</small></td>${shell().boardRigColumn ? `<td><a href="${rigHref(board.worker)}">${escapeHtml(board.worker || "—")}</a></td>` : ""}<td>${escapeHtml(familyLabel(board.target))}<small>${escapeHtml(board.details?.description || board.chip || "")}</small></td><td><span class="state ${state.tone}">${state.label}</span></td><td>${healthBadge(board)}<small>${board.health?.checked_at ? whenSpan(board.health.checked_at) : ""}</small></td><td>${escapeHtml(board.details?.flash_size || "")}<small>${escapeHtml(board.details?.transport || "")}</small></td></tr>`;
   });
   const missingRows = boardFilter.state ? [] : missing.map(id => `<tr class="clickable" data-href="${boardHref(id)}"><td><a class="row-link" href="${boardHref(id)}">${escapeHtml(id)}</a></td>${shell().boardRigColumn ? '<td><span class="muted">—</span></td>' : ""}<td><span class="muted">—</span></td><td><span class="state warn">MISSING</span></td><td></td><td></td></tr>`);
   $("boards-table").innerHTML = rows.length || missingRows.length
@@ -2169,8 +2184,12 @@ function renderRig() {
   rigSections().forEach(node => {
     if (node.id === "rig-summary") return;
     if (pending) node.hidden = true;
-    else if (!["rig-live", "rig-logs"].includes(node.id)) node.hidden = false;
+    // Sections that decide for themselves whether to show are left to it:
+    // the node banner shown empty on every standalone rig.
+    else if (!["rig-live", "rig-logs", "node-banner", "farm-world", "overview-stats"].includes(node.id)) node.hidden = false;
   });
+  // On a rig the page is the rig itself: there is no list of rigs to go back to.
+  if ($("close-rig")) $("close-rig").hidden = Boolean(shell().overviewIsRigPage);
   $("rig-tabs").hidden = pending;
   if (!pending) renderRigTabs(rig);
   if (pending) {
@@ -2213,7 +2232,8 @@ function rigSubtitle(rig) {
     rig.local ? "" : `<span class="state ${release.tone}">${escapeHtml(release.label)}</span>`,
     // On the world page, and for anyone: worth saying beside its name.
     rig.visibility && rig.visibility !== "private" ? `<span class="state good">${escapeHtml(rig.visibility)}</span>` : "",
-    rig.location ? escapeHtml(rig.location) : ""].filter(Boolean).join(" ");
+    // Chips sit side by side; plain words need a separator from the words before.
+    rig.location ? `· ${escapeHtml(rig.location)}` : ""].filter(Boolean).join(" ");
 }
 
 // escapeHtml, SETUP_STATE and capabilityChips are chips.js: one renderer
@@ -3777,7 +3797,7 @@ function renderJobs(page) {
   const queueOrder = lastQueue.queued || [];
   const dash = "—";
   promotableOnlyList = true;
-  $("jobs").innerHTML = jobs.map(job => `<tr><td>${new Date(job.created_at).toLocaleString()}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("")
+  $("jobs").innerHTML = jobs.map(job => `<tr><td class="nowrap">${whenSpan(job.created_at)}</td><td>${escapeHtml(jobProject(job))}${(job.request?.tests?.length || job.request?.keyword) ? ' <span class="state warn" title="A partial run: selected tests only">partial</span>' : ""}${job.worker && shell().boardRigColumn ? `<small class="sub" title="${job.request?.imported_from ? "Run before this node joined the portal, and brought with its history" : "The node that ran it"}">on ${escapeHtml(job.worker)}</small>` : ""}${job.request?.submitted_by ? `<small class="sub">by ${profileLink(job.request.submitted_by)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || dash)}</td><td>${job.kind === "inventory" ? dash : `${jobVersion(job) ? `<strong>${escapeHtml(jobVersion(job))}</strong> · ` : ""}${shaLink(jobRevision(job), jobRepo(job)) || dash}`}</td><td>${escapeHtml(jobTargets(job) || dash)}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="duration" data-started="${escapeHtml(job.started_at || "")}" data-final="${job.duration_seconds ?? ""}">${escapeHtml(formatDuration(jobElapsed(job)))}</td><td>${described(job)}</td><td><div class="actions"><button class="view-job secondary" data-id="${escapeHtml(job.id)}">View</button>${jobActionButtons(job, {promotable: queueOrder.indexOf(job.id) > 0})}</div></td></tr>`).join("")
     || `<tr><td colspan="9" class="muted">${runQuery.q || runQuery.status || runQuery.kind ? "No run matches this filter." : "No pipeline history yet."}</td></tr>`;
   promotableOnlyList = false;
   document.querySelectorAll(".view-job").forEach(button => button.addEventListener("click", () => {
@@ -4809,7 +4829,7 @@ function renderUsage(usage) {
   if (!card) return;
   if (!usage) { card.innerHTML = '<p class="muted">Not recorded on this farm.</p>'; return; }
   const rows = shell().projectsAreOwn ? usage.by_project || [] : (usage.by_workspace?.length ? usage.by_workspace : usage.by_project || []);
-  const name = row => row.workspace != null ? row.workspace : row.profile;
+  const name = row => row.workspace != null ? row.workspace : profiles[row.profile]?.label || row.profile;
   const totals = usage.totals || {};
   const line = (label, value) => `<article><span>${label}</span><strong>${value}</strong></article>`;
   card.innerHTML = `<section class="metrics usage-metrics">
@@ -5985,6 +6005,121 @@ async function loadAudit() {
 // in as you. The header says your name and offers a sign out, but the header's
 // whole .connection block is hidden below 850px -- so on a phone this page is
 // the only way to see either, which is reason enough for it to exist.
+// ---- Profiles ----------------------------------------------------------------
+// Who asked the rig for runs, and how those went: a person, or a CI key --
+// the caller a rig mostly has. #profile is yours: who you are, what your role
+// may do, your runs, and how to use your key from CI. #profile/<name> is
+// anybody else's, cut to what you may read of their runs (the run list's
+// `?by=`, inside the same scope as every other list).
+
+// What each role may do, in the words a person reading their own profile needs.
+const ROLE_SAYS = {
+  admin: ["Everything a user can, and the rig's own settings", "Keys, access and the audit log", "Delete runs and bundles, pin and prune"],
+  user: ["Start runs and cancel your own", "Read every run, board and bundle this rig lets you see", "Hand bundles over from CI"],
+  node: ["A rig's own key, for talking to its portal"],
+  guest: ["Say who you are; nothing else until an admin lets you in"],
+};
+
+function profileLink(name) {
+  if (!name) return "";
+  return `<a href="#profile/${encodeURIComponent(name)}">${escapeHtml(name)}</a>`;
+}
+
+function jobTitle(job) {
+  if (job.kind === "inventory") return "Hardware discovery";
+  if (job.kind === "build") return "Farm build";
+  return jobProject(job) || job.kind;
+}
+
+let profileRequest = 0;
+let profileShown = null;
+async function loadProfile(name) {
+  if (!$("profile-identity")) return;  // a document without the page
+  profileShown = name || null;
+  const mine = !name || (you && name === you.name);
+  const who = mine ? (you?.name || "") : name;
+  const asked = ++profileRequest;
+  const shown = mine && you && !you.account ? shell().keyLabel(who) : who;
+  $("profile-eyebrow").textContent = mine ? "YOUR PROFILE" : "PROFILE";
+  $("profile-title").textContent = shown || "You";
+  $("profile-subtitle").textContent = mine
+    ? "Who you are on this rig, what you may do, and what you have asked it to run."
+    : `What ${who} has asked this rig to run, as far as you may see it.`;
+  renderProfileIdentity(mine, shown);
+  let page;
+  try { page = await api(`/api/v1/jobs?by=${encodeURIComponent(who)}&limit=25`); }
+  catch (error) {
+    if (asked !== profileRequest) return;
+    $("profile-runs").innerHTML = `<p class="failure-summary">${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  if (asked !== profileRequest) return;
+  const counts = page.counts || {};
+  const jobs = page.jobs || [];
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const decided = (counts.passed || 0) + (counts.failed || 0);
+  const rate = decided ? Math.round(100 * (counts.passed || 0) / decided) : null;
+  const projects = [...new Set(jobs.filter(job => job.kind === "suite").map(job => jobProject(job)))];
+  const actors = [...new Set(jobs.map(job => job.request?.actor).filter(Boolean))];
+  const last = jobs[0];
+  $("profile-metrics").innerHTML = `
+    <article><span>Runs</span><strong>${escapeHtml(total)}</strong><small class="muted">${escapeHtml(counts.running || 0)} running · ${escapeHtml(counts.queued || 0)} queued</small></article>
+    <article><span>Pass rate</span><strong class="${rate === null ? "" : rate >= 90 ? "good" : rate >= 60 ? "warn" : "bad"}">${rate === null ? "—" : `${rate}%`}</strong><small class="muted">${escapeHtml(counts.passed || 0)} passed · ${escapeHtml(counts.failed || 0)} failed</small></article>
+    <article><span>Last run</span><strong>${last ? whenSpan(last.created_at) : "—"}</strong><small class="muted">${last ? escapeHtml(jobTitle(last)) : "nothing yet"}</small></article>
+    <article><span>Projects</span><strong>${escapeHtml(projects.length)}</strong><small class="muted">${escapeHtml(projects.slice(0, 3).join(", ") || "none yet")}</small></article>`;
+  $("profile-all-runs").href = `#runs`;
+  $("profile-runs").innerHTML = jobs.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th>When</th><th>What</th><th>Branch · revision</th><th>Status</th><th class="num">Took</th></tr></thead><tbody>${jobs.map(job =>
+    `<tr class="clickable" data-href="#run/${escapeHtml(job.id)}"><td class="nowrap">${whenSpan(job.created_at)}</td><td><a class="row-link" href="#run/${escapeHtml(job.id)}">${escapeHtml(jobTitle(job))}</a>${job.request?.actor ? `<small class="sub">for ${actorLink(job.request.actor)}</small>` : ""}</td><td>${escapeHtml(jobBranch(job) || "—")}${jobRevision(job) ? ` · ${shaLink(jobRevision(job), jobRepo(job))}` : ""}</td><td><span class="state ${statusClass(job.status)}">${escapeHtml(job.status)}</span></td><td class="num">${escapeHtml(formatDuration(jobElapsed(job)))}</td></tr>`).join("")}</tbody></table></div>
+    ${total > jobs.length ? `<p class="muted">The newest ${jobs.length} of ${total}.</p>` : ""}`
+    : `<p class="muted">${mine ? "You have not asked this rig for a run yet." : `No run of ${escapeHtml(who)}'s that you may see.`}</p>`;
+  const ci = $("profile-ci");
+  if (ci) {
+    ci.hidden = !(mine && you && !you.account);
+    if (!ci.hidden) renderProfileCi(actors);
+  }
+}
+
+function renderProfileIdentity(mine, who) {
+  const card = $("profile-identity");
+  if (!mine) {
+    card.innerHTML = `<div class="title-row"><div><p class="eyebrow">WHO</p><h2>${escapeHtml(who)}</h2></div></div>
+      <p class="muted">A name runs are asked for under: a person's account, or a key a program uses -- a CI workflow, the MCP server, another rig. Its runs below are the ones you may read.</p>`;
+    return;
+  }
+  const role = you?.role || "user";
+  const how = you?.account ? "a signed-in account" : "a key, kept in this browser tab only";
+  card.innerHTML = `<div class="title-row"><div><p class="eyebrow">WHO YOU ARE</p><h2>${escapeHtml(who || "you")}</h2></div>
+      <button type="button" class="secondary" id="profile-sign-out">${you?.account ? "Sign out" : "Forget this key"}</button></div>
+    <div class="detail-grid">
+      <div><small>Role</small><span class="state ${role === "admin" ? "good" : role === "guest" ? "warn" : ""}">${escapeHtml(role)}</span></div>
+      <div><small>Signed in with</small><span>${escapeHtml(how)}</span></div>
+    </div>
+    <p class="muted">${/^[aeiou]/i.test(role) ? "An" : "A"} ${escapeHtml(role)} may:</p>
+    <ul class="profile-can">${(ROLE_SAYS[role] || []).map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`;
+  $("profile-sign-out").addEventListener("click", () => {
+    if (you?.account && $("sign-out")) { $("sign-out").click(); return; }
+    sessionStorage.removeItem("farmToken");
+    token = "";
+    history.replaceState(null, "", "#overview");
+    location.reload();
+  });
+}
+
+function renderProfileCi(actors) {
+  const origin = location.origin;
+  $("profile-ci").innerHTML = `<div class="title-row"><div><p class="eyebrow">FROM CI</p><h2>Use this key from a workflow</h2></div>
+      <a class="button secondary" href="https://alteriom.github.io/esp32-rig/projects/" target="_blank" rel="noopener">The guide</a></div>
+    <p class="muted">${you?.role === "admin"
+      ? 'Give CI a key of its own rather than this one: <a href="#configuration/access">Settings → Access</a>, a <strong>user</strong> key named after the workflow. Its runs then have a profile of their own, and revoking it touches nothing else.'
+      : "Keep the key in a repository secret, never in the workflow file."} A run names a project this rig knows; the rest defaults to that project's own settings.</p>
+    <pre class="snippet"><code>curl --fail -X POST "${escapeHtml(origin)}/api/v1/suites" \\
+  -H "Authorization: Bearer $RIG_KEY" -H "Content-Type: application/json" \\
+  -d '{"profile": "rig-example", "ref": "'"$GITHUB_SHA"'", "actor": "'"$GITHUB_ACTOR"'"}'</code></pre>
+    <p class="muted">The answer is the run's id; <code>GET /api/v1/jobs/&lt;id&gt;</code> follows it to its verdict. ${actors.length
+      ? `Runs of yours were asked for on behalf of ${actors.map(actorLink).join(", ")}.`
+      : "Send <code>actor</code> and each run says who on GitHub it was for."}</p>`;
+}
+
 async function loadAccount() {
   const identity = you;
   const account = identity && identity.account;
@@ -6062,7 +6197,7 @@ function liveRunColumn(running, alsoRunning, inv) {
   const current = progress.find(stage => stage.status === "running");
   const held = (inv?.boards || []).filter(board => board.held_by?.job_id === running.id);
   return `
-      <div class="title-row"><div><p class="eyebrow">LIVE PIPELINE</p><h2>${escapeHtml(running.kind)} · ${escapeHtml(running.id.slice(0, 8))}</h2></div><span class="state warn">${escapeHtml(running.status)}</span></div>
+      <div class="title-row"><div><p class="eyebrow">LIVE PIPELINE</p><h2>${escapeHtml(jobTitle(running))} · ${escapeHtml(running.id.slice(0, 8))}</h2></div><span class="state warn">${escapeHtml(running.status)}</span></div>
       <div class="live-facts">
         <div><small>Running for</small>${liveTimer(running.started_at, "timer")}</div>
         <div><small>Current stage</small><span>${escapeHtml(current?.label || (done === progress.length ? "Finishing" : "Starting"))}${current?.started_at ? ` · ${liveTimer(current.started_at)}` : ""}</span></div>
@@ -6080,7 +6215,7 @@ function liveRunColumn(running, alsoRunning, inv) {
       ${alsoRunning.length ? `<div class="also-running"><p class="eyebrow">ALSO RUNNING</p><ol class="queue-list">${alsoRunning.map(job => {
         const boards = (inv?.boards || []).filter(board => board.held_by?.job_id === job.id).map(board => board.id);
         const stage = inferredProgress(job).find(item => item.status === "running");
-        return `<li><span class="queue-pos">▶</span><div><strong>${escapeHtml(job.kind)} · ${escapeHtml(job.id.slice(0, 8))}</strong><small>${escapeHtml(jobProject(job))} · ${escapeHtml(stage?.label || "Starting")} · ${liveTimer(job.started_at)}</small><small>${boards.length ? `Boards: ${escapeHtml(boards.join(", "))}` : "No boards held"}</small></div><div class="actions"><button class="secondary active-view" data-id="${escapeHtml(job.id)}">Follow</button>${jobActionButtons(job)}</div></li>`;
+        return `<li><span class="queue-pos">▶</span><div><strong>${escapeHtml(jobTitle(job))} · ${escapeHtml(job.id.slice(0, 8))}</strong><small>${escapeHtml(stage?.label || "Starting")} · ${liveTimer(job.started_at)}</small><small>${boards.length ? `Boards: ${escapeHtml(boards.join(", "))}` : "No boards held"}</small></div><div class="actions"><button class="secondary active-view" data-id="${escapeHtml(job.id)}">Follow</button>${jobActionButtons(job)}</div></li>`;
       }).join("")}</ol></div>` : ""}
     `;
 }
@@ -6099,7 +6234,7 @@ function renderActive(jobs, queue, inv) {
   // it was protecting.
   const pausedNote = queue?.paused ? `<span class="queue-paused">Paused${queue.paused_since ? ` since ${new Date(queue.paused_since).toLocaleTimeString()}` : ""} — nothing queued will start${queue.paused_reason ? `: ${escapeHtml(queue.paused_reason)}` : ""}</span>` : `<span class="muted">${queued.length ? `${queued.length} waiting` : "Nothing waiting"}</span>`;
   const queueList = queued.length
-    ? `<ol class="queue-list">${queued.map((job, index) => `<li><span class="queue-pos">${index + 1}</span><div><strong>${escapeHtml(job.kind)} · ${escapeHtml(job.id.slice(0, 8))}</strong><small>${escapeHtml(jobProject(job))} · ${revisionLabel(job)} · waited ${liveTimer(job.created_at)}</small>${waiting[job.id] ? `<small class="queue-wait">${escapeHtml(waiting[job.id])}</small>` : ""}</div><div class="actions">${jobActionButtons(job, {promotable: index > 0})}</div></li>`).join("")}</ol>`
+    ? `<ol class="queue-list">${queued.map((job, index) => `<li><span class="queue-pos">${index + 1}</span><div><strong>${escapeHtml(jobTitle(job))} · ${escapeHtml(job.id.slice(0, 8))}</strong><small>${revisionLabel(job)} · waited ${liveTimer(job.created_at)}</small>${waiting[job.id] ? `<small class="queue-wait">${escapeHtml(waiting[job.id])}</small>` : ""}</div><div class="actions">${jobActionButtons(job, {promotable: index > 0})}</div></li>`).join("")}</ol>`
     : "";
   const queueBlock = `<div><div class="queue-head"><div><p class="eyebrow">QUEUE</p>${pausedNote}</div>${pauseButton}</div>${queueList}</div>`;
   if (!running) {
@@ -6156,6 +6291,13 @@ async function refresh(force = false) {
       // A bundle's page opened from a link renders before the profiles have
       // arrived, and whether it can be run depends on them.
       if (!hadProfiles && bundlePage.entry) renderBundlePage();
+      // So does a run's page or a profile opened from a link (a CI log's run
+      // link, most often): they named the project by its file name until the
+      // run changed, which a finished run never does.
+      if (!hadProfiles && Object.keys(profiles).length) {
+        if (selectedJobId) showJob(selectedJobId, {force: true});
+        if (document.querySelector('.page.active')?.dataset.page === "profile") loadProfile(profileShown);
+      }
       hasActiveJob = jobs.some(job => ["queued", "running"].includes(job.status));
       rigBusy = jobs.some(job => ["queued", "running"].includes(job.status) && ["suite", "build"].includes(job.kind));
       rigAlone = (inv.reservations || []).some(held => !held.shared);

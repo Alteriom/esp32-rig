@@ -25,6 +25,8 @@ theme:
       toggle:
         icon: material/weather-night
         name: Dark
+extra_css:
+  - stylesheets/extra.css
 markdown_extensions:
   - admonition
   - attr_list
@@ -40,6 +42,7 @@ nav:
   - Hardware: hardware.md
   - Bring-up: bringup.md
   - The dashboard: dashboard.md
+  - A tour of the dashboard: tour.md
   - Projects and your CI: projects.md
   - The health check firmware: health-check.md
   - Connecting to a farm: farm.md
