@@ -1,0 +1,1400 @@
+{
+  "workspace_root": "",
+  "schema_version": 2,
+  "access": "workspace",
+  "entrypoint": "AGENTS.md",
+  "runtimes": [
+    "claude_code",
+    "codex_cli"
+  ],
+  "projects": [
+    "esp32-rig"
+  ],
+  "nodes": [
+    {
+      "id": "AGENTS.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L0",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "id": "CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L0",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "CLAUDE.md"
+      ]
+    },
+    {
+      "id": "rig-AGENTS.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "rig/AGENTS.md"
+      ]
+    },
+    {
+      "id": "rig-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "rig/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "doc-.github-copilot-instructions.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/copilot-instructions.md"
+      ]
+    },
+    {
+      "id": "doc-CONTRIBUTING.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "CONTRIBUTING.md"
+      ]
+    },
+    {
+      "id": "doc-README.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "README.md"
+      ]
+    },
+    {
+      "id": "doc-SECURITY.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "SECURITY.md"
+      ]
+    },
+    {
+      "id": "doc-docs-api.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/api.md"
+      ]
+    },
+    {
+      "id": "doc-docs-bringup.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/bringup.md"
+      ]
+    },
+    {
+      "id": "doc-docs-dashboard.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/dashboard.md"
+      ]
+    },
+    {
+      "id": "doc-docs-farm.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/farm.md"
+      ]
+    },
+    {
+      "id": "doc-docs-getting-started.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/getting-started.md"
+      ]
+    },
+    {
+      "id": "doc-docs-hardware.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/hardware.md"
+      ]
+    },
+    {
+      "id": "doc-docs-health-check.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/health-check.md"
+      ]
+    },
+    {
+      "id": "doc-docs-index.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/index.md"
+      ]
+    },
+    {
+      "id": "doc-docs-mcp.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/mcp.md"
+      ]
+    },
+    {
+      "id": "doc-docs-projects.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/projects.md"
+      ]
+    },
+    {
+      "id": "doc-docs-tour.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/tour.md"
+      ]
+    },
+    {
+      "id": "doc-docs-troubleshooting.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "docs/troubleshooting.md"
+      ]
+    },
+    {
+      "id": "doc-runner-screenshots-README.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        "runner/screenshots/README.md"
+      ]
+    },
+    {
+      "id": "01-fix-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/01-fix/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "01-fix-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/01-fix/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-01_reproduce-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/01-fix/stages/01_reproduce/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-02_fix-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/01-fix/stages/02_fix/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "01-fix-stages-03_verify-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/01-fix/stages/03_verify/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/02-feature/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "02-feature-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/02-feature/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-01_spec-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/02-feature/stages/01_spec/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-02_implement-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/02-feature/stages/02_implement/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "02-feature-stages-03_verify-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/02-feature/stages/03_verify/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-CLAUDE.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/03-release/CLAUDE.md"
+      ]
+    },
+    {
+      "id": "03-release-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/03-release/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-01_plan-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/03-release/stages/01_plan/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-02_publish-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/03-release/stages/02_publish/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "03-release-stages-03_follow-CONTEXT.md",
+      "revision": 1,
+      "kind": "stage",
+      "layer": "L2",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/03-release/stages/03_follow/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "shared-CONTEXT.md",
+      "revision": 1,
+      "kind": "route",
+      "layer": "L1",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/CONTEXT.md"
+      ]
+    },
+    {
+      "id": "shared-architecture.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/architecture.md"
+      ],
+      "evidence": [
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/release.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "canary/firmware.json",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/allocation.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/api_keys.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/artifacts.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/backup.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/jobstore.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/profiles.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/projects.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/service.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/pyproject.toml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/index.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "mkdocs.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "profiles/rig-example.yaml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/admin_cli.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/farm_node.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/pytest_plugin.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/rig_manager.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/sim.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/updates.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/install-health-service.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/pyproject.toml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/setup-runner.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/verify-rig.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/web/app.js",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/ci/build-release.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/screenshots/README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_package_boundaries.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        }
+      ]
+    },
+    {
+      "id": "shared-build-and-test.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/build-and-test.md"
+      ],
+      "evidence": [
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/ci.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/docs.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/icm-check.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/release.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "CONTRIBUTING.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "canary/firmware.json",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/pyproject.toml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "mkdocs.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/sim.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/pyproject.toml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/web/app.js",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/ci/build-release.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_canary.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_package_boundaries.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_public_scrub.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_release_build.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_web_dashboard.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_wiring_check.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        }
+      ]
+    },
+    {
+      "id": "shared-documents.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/documents.md"
+      ],
+      "evidence": [
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/docs.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/release.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "CONTRIBUTING.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "SECURITY.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "canary/firmware.json",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/api_keys.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/artifacts.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/mcp_server.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/projects.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/service.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/api.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/bringup.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/dashboard.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/farm.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/getting-started.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/hardware.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/health-check.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/index.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/mcp.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/projects.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/tour.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/troubleshooting.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "mkdocs.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "profiles/rig-example.yaml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/admin_cli.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/farm_node.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/health_check.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/harden-pi.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/install-dashboard-proxy.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/install-health-service.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/setup-gateway-network.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/setup-runner.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/verify-rig.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/web/app.js",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/ci/build-release.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/screenshots/README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/screenshots/capture.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/screenshots/demo_rig.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_package_boundaries.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_public_scrub.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        }
+      ]
+    },
+    {
+      "id": "shared-release.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/release.md"
+      ],
+      "evidence": [
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/ci.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": ".github/workflows/release.yml",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "VERSION",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "canary/firmware.json",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/bringup.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/getting-started.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "docs/health-check.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/rig_manager.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "rig/alteriom_hil/updates.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/ci/build-release.sh",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_canary.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_release_build.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_wiring_check.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        }
+      ]
+    },
+    {
+      "id": "shared-rules.md",
+      "revision": 1,
+      "kind": "fact",
+      "layer": "L3",
+      "state": "accepted",
+      "project_id": "esp32-rig",
+      "verified_at": "2026-10-15",
+      "review_after": "2027-01-13",
+      "files": [
+        ".github/icm/_shared/rules.md"
+      ],
+      "evidence": [
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "CONTRIBUTING.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "SECURITY.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/allocation.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/api_keys.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/backup.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "core/alteriom_hil/service.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "runner/screenshots/README.md",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_allocation.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_api_keys.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_farm_service.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_package_boundaries.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        },
+        {
+          "repo": "Alteriom/esp32-rig",
+          "path": "tests/test_public_scrub.py",
+          "commit": "1b1a24a0e0767ef4b1b505a83d3713e27672e214"
+        }
+      ]
+    }
+  ],
+  "forms": [
+    {
+      "form": "umbrella",
+      "root": "",
+      "pipelines": [
+        ".github/icm/01-fix",
+        ".github/icm/02-feature",
+        ".github/icm/03-release"
+      ],
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/01-fix",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/02-feature",
+      "unit": "run"
+    },
+    {
+      "form": "pipeline",
+      "root": ".github/icm/03-release",
+      "unit": "run"
+    }
+  ],
+  "stages": {
+    "fix-reproduce": {
+      "order": 1,
+      "contract": ".github/icm/01-fix/stages/01_reproduce/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/architecture.md",
+          ".github/icm/_shared/build-and-test.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/01_reproduce/output/reproduction.md"
+      ],
+      "human_check": "A person runs the command, or reads the evidence, and confirms it fails for the reported reason and not a neighbouring one.",
+      "required": [
+        "01-fix-stages-01_reproduce-CONTEXT.md"
+      ],
+      "optional": [
+        "rig-AGENTS.md"
+      ]
+    },
+    "fix-fix": {
+      "order": 2,
+      "contract": ".github/icm/01-fix/stages/02_fix/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/01-fix/stages/01_reproduce/output/reproduction.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/rules.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/02_fix/output/change.md"
+      ],
+      "human_check": "A person reads the diff beside the reproduction: it removes the cause, not only the symptom the test sees, and no scope, gate or rule was loosened. Edit `change.md` if the explanation is wrong; stage 03 reads it.",
+      "required": [
+        "01-fix-stages-02_fix-CONTEXT.md"
+      ],
+      "optional": [
+        "rig-AGENTS.md",
+        "shared-build-and-test.md"
+      ]
+    },
+    "fix-verify": {
+      "order": 3,
+      "contract": ".github/icm/01-fix/stages/03_verify/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/01-fix/stages/02_fix/output/change.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/build-and-test.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/02-feature/",
+        ".github/icm/03-release/"
+      ],
+      "outputs": [
+        ".github/icm/01-fix/stages/03_verify/output/pull-request.md"
+      ],
+      "human_check": "A person reads `pull-request.md` and its evidence and says whether to open it; the reviewer, not the author, merges.",
+      "required": [
+        "01-fix-stages-03_verify-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-release.md",
+        "shared-documents.md"
+      ]
+    },
+    "feature-spec": {
+      "order": 1,
+      "contract": ".github/icm/02-feature/stages/01_spec/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/architecture.md",
+          ".github/icm/_shared/rules.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/01_spec/output/spec.md"
+      ],
+      "human_check": "A person approves the spec, or corrects it, before any code is written.",
+      "required": [
+        "02-feature-stages-01_spec-CONTEXT.md"
+      ],
+      "optional": [
+        "rig-AGENTS.md"
+      ]
+    },
+    "feature-implement": {
+      "order": 2,
+      "contract": ".github/icm/02-feature/stages/02_implement/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/02-feature/stages/01_spec/output/spec.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/rules.md",
+          ".github/icm/_shared/build-and-test.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/",
+        ".github/icm/_shared/release.md"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/02_implement/output/change.md"
+      ],
+      "human_check": "A person reads the diff beside the spec: it does what the spec says and no more, the test failed first, and no rule was loosened.",
+      "required": [
+        "02-feature-stages-02_implement-CONTEXT.md"
+      ],
+      "optional": [
+        "rig-AGENTS.md"
+      ]
+    },
+    "feature-verify": {
+      "order": 3,
+      "contract": ".github/icm/02-feature/stages/03_verify/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/02-feature/stages/02_implement/output/change.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/build-and-test.md",
+          ".github/icm/_shared/documents.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/03-release/"
+      ],
+      "outputs": [
+        ".github/icm/02-feature/stages/03_verify/output/pull-request.md"
+      ],
+      "human_check": "A person reads `pull-request.md`, the guide diff and the evidence, and says whether to open it; the reviewer, not the author, merges.",
+      "required": [
+        "02-feature-stages-03_verify-CONTEXT.md"
+      ]
+    },
+    "release-plan": {
+      "order": 1,
+      "contract": ".github/icm/03-release/stages/01_plan/CONTEXT.md",
+      "inputs": {
+        "working": [],
+        "reference": [
+          ".github/icm/_shared/release.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/",
+        ".github/icm/_shared/architecture.md"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/01_plan/output/plan.md"
+      ],
+      "human_check": "A person approves the tag number and the commit; nothing is tagged until they do.",
+      "required": [
+        "03-release-stages-01_plan-CONTEXT.md"
+      ]
+    },
+    "release-publish": {
+      "order": 2,
+      "contract": ".github/icm/03-release/stages/02_publish/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/03-release/stages/01_plan/output/plan.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/release.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/02_publish/output/publish.md"
+      ],
+      "human_check": "A person pushes the tag, then reads `publish.md` and confirms the release page shows every asset before anyone is told to take it.",
+      "required": [
+        "03-release-stages-02_publish-CONTEXT.md"
+      ]
+    },
+    "release-follow": {
+      "order": 3,
+      "contract": ".github/icm/03-release/stages/03_follow/CONTEXT.md",
+      "inputs": {
+        "working": [
+          ".github/icm/03-release/stages/02_publish/output/publish.md"
+        ],
+        "reference": [
+          ".github/icm/_shared/release.md"
+        ]
+      },
+      "do_not_load": [
+        ".github/icm/01-fix/",
+        ".github/icm/02-feature/"
+      ],
+      "outputs": [
+        ".github/icm/03-release/stages/03_follow/output/follow.md"
+      ],
+      "human_check": "A person reads `follow.md` and opens (or asks for) each consumer's pull request; a change to `core/` or `rig/` is done when the farm portal's mirror has landed.",
+      "required": [
+        "03-release-stages-03_follow-CONTEXT.md"
+      ],
+      "optional": [
+        "shared-documents.md"
+      ]
+    }
+  }
+}
