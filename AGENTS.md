@@ -1,89 +1,50 @@
 # AGENTS.md — esp32-rig
 
-Instructions for AI coding agents (Claude Code, Copilot, Codex, Cursor). Humans: README.md and
-CONTRIBUTING.md. Keep this file short and true — a fact here that the code contradicts is worse
-than none. Update it in the same PR as the change that makes it wrong.
+The software for an ESP32 hardware-in-the-loop **rig**: a Raspberry Pi with boards on USB that flashes a project's firmware bundle, runs its pytest suite against the boards and keeps the evidence, standalone (its own dashboard and projects) or as a node of a farm portal. Public, Apache-2.0, released by tag; the guide at https://alteriom.github.io/esp32-rig is built from `docs/`. Humans: `README.md` and `CONTRIBUTING.md`. For Claude Code, Copilot, Codex and Cursor alike (`CLAUDE.md` and `.github/copilot-instructions.md` point here). Keep this file short and true: a line the code contradicts is worse than none, so update it in the pull request that makes it wrong.
 
-## What this repo is
+## Where things live
 
-The software for an ESP32 hardware-in-the-loop **rig**: a Raspberry Pi with boards on USB that
-flashes a project's firmware bundle, runs its pytest suite against the boards and keeps the
-evidence. It runs standalone (its own dashboard and projects) or as a node of a farm portal.
-Public, Apache-2.0. Guide: https://alteriom.github.io/esp32-rig (built from `docs/`).
-
-One of four repositories that must stay consistent:
-
-| Repo | Role |
+| Path | What it holds |
 |---|---|
-| `Alteriom/esp32-rig` (this) | Source of truth for `core/` and `rig/`; each release is consumed by the portal |
-| `Alteriom/esp32-hil-firmware` | Rig Health Check firmware, pinned here in `canary/firmware.json` |
-| `Alteriom/esp32-rig-example` | The built-in "Rig example" project (`profiles/rig-example.yaml`) |
-| The Alteriom farm portal (a private repository) | Pins a release of this repo and mirrors `core/` + `rig/` byte for byte |
+| `core/`, `rig/` | `alteriom_hil`, one import name over two distributions: `core/` (`alteriom-hil-core`, what a portal holds with no hardware) and `rig/` (`alteriom-hil`: the rig half, host scripts, the dashboard — read [`rig/AGENTS.md`](rig/AGENTS.md) first) |
+| `profiles/`, `suites/` | the built-in projects' profiles; the health check (`canary`) and painlessMesh suites |
+| `canary/firmware.json` | the release of `Alteriom/esp32-hil-firmware` every rig release carries |
+| `devices/`, `instruments/`, `hardware/` | example board and instrument descriptions; printable mounts and renders |
+| `runner/` | the release build (`runner/ci/`) and the guide's screenshot recipe (`runner/screenshots/`) |
+| `tests/`, `docs/` | the suite CI runs; the guide, published by `docs.yml` |
+| `.github/workflows/` | `ci.yml` (tests, simulated suites, the release build), `release.yml` (`v*` tags), `docs.yml`, `icm-check.yml` |
+| [`.github/icm/_shared/`](.github/icm/_shared/CONTEXT.md) | what every job below draws on, one file per question |
+| [`.github/icm/01-fix/`](.github/icm/01-fix/CLAUDE.md) | fix a defect |
+| [`.github/icm/02-feature/`](.github/icm/02-feature/CLAUDE.md) | change what a rig does: a route, a page, a setting, a script, a board family |
+| [`.github/icm/03-release/`](.github/icm/03-release/CLAUDE.md) | cut a rig release (a person tags it) and bring its consumers along |
 
-## Layout — where to look
+## Route by what just happened
 
-`alteriom_hil` is one import name split over two distributions with no `__init__.py`:
-`core/` (`alteriom-hil-core`, what a portal holds with no hardware) and `rig/` (`alteriom-hil`).
+| Route | If | Go to | Then stop at |
+|---|---|---|---|
+| triage | an issue or report arrives and its kind is unclear | read it whole, then take the row below that fits | the row chosen, said to the person |
+| fix | a defect is reported (an issue, a failing test, a run's evidence, a rig giving the wrong answer) | [01_reproduce](.github/icm/01-fix/stages/01_reproduce/CONTEXT.md) | a person has seen the reproduction fail |
+| ci-red | `CI`, `Docs` or `Release` is red on `main` or on a tag | [01_reproduce](.github/icm/01-fix/stages/01_reproduce/CONTEXT.md), with the run log as the report | a person has seen the reproduction fail |
+| feature | a new route, page, setting, script, suite fixture or board family is asked for | [01_spec](.github/icm/02-feature/stages/01_spec/CONTEXT.md) | a person approves the spec |
+| dashboard | the change is under `rig/` (the dashboard, the rig half, the host scripts) | [rig/AGENTS.md](rig/AGENTS.md), then the row above that fits | its rules read before the change is designed |
+| guide | a page of the guide is wrong or missing and no code has to change | [documents.md](.github/icm/_shared/documents.md) "The guide" | a person reads the edit and its `mkdocs build --strict` |
+| firmware | the health check firmware is to move to a newer release | [release.md](.github/icm/_shared/release.md) "Moving the firmware forward" | a person reviews the one-line pin pull request |
+| release | a rig release is to be cut, or one was tagged and its consumers must follow | [01_plan](.github/icm/03-release/stages/01_plan/CONTEXT.md) | a person approves the tag number |
+| next | a stage's output was approved | the next numbered stage of the same job | a person reads that stage's output |
+| status | asked for status | scan `.github/icm/*/stages/*/output/` | report what exists |
 
-| Question | Where |
-|---|---|
-| HTTP API, auth gate, runs, artifact store and library, retention, backups, statistics | `core/alteriom_hil/service.py` (`BaseManager`, `make_handler`) |
-| Keys, roles, which routes an account may use | `core/alteriom_hil/api_keys.py` (`allowed`, `ACCOUNT_ROUTES`) |
-| Job store (SQLite) | `core/alteriom_hil/jobstore.py` |
-| Backup and restore (streaming, checksummed, allow-listed) | `core/alteriom_hil/backup.py` |
-| Board families — data, not code | `core/alteriom_hil/devices/families/` |
-| Profiles and project documents (`.alteriom-hil.yaml`) | `core/alteriom_hil/profiles.py`, `projects.py`, `profiles/*.yaml` |
-| The rig half: pipeline, health check, quarantine, GitHub fetch, metering | `rig/alteriom_hil/rig_manager.py` |
-| Node agent, admin CLI, pytest plugin and simulator | `rig/alteriom_hil/farm_node.py`, `admin_cli.py`, `pytest_plugin.py`, `sim.py` |
-| Dashboard (plain JS, no build step) | `rig/web/` — read `rig/AGENTS.md` first |
-| Host scripts, systemd, udev, nginx | `rig/*.sh`, `rig/udev/`, `rig/nginx/` |
-| Suites | `suites/canary` (health check), `suites/painlessmesh` (reference) |
-| Release build | `runner/ci/build-release.sh`, `.github/workflows/release.yml` |
-| The guide's screenshots (retake after a visible `rig/web/` change) | `runner/screenshots/` (demo rig + Playwright capture), into `docs/images/` |
+## Agents connecting remotely
 
-## Commands
+This repository becomes the ICM workspace `esp32-rig` on MemoryRelay, created by a person from this repository's `main`; the Alteriom hub `portfolio` then delegates to it. Until the workspace exists, an agent on a clone reads these files directly: this file is the entry and the table above is the route. Once it exists, an agent that is not on a clone reaches the same files over MCP at `https://api.memoryrelay.net/mcp` with a key in `MEMORYRELAY_API_KEY`; none of it holds a secret.
 
-```bash
-python -m pip install -e ./core[dev] -e './rig[dev]'
-python -m pytest tests -q                                        # Linux is authoritative
-ALTERIOM_HIL_MODE=sim python -m pytest suites/canary/tests suites/painlessmesh/tests -q
-runner/ci/build-release.sh --version-only                        # the version the next tag must be
-mkdocs build --strict                                            # the guide; every relative link must resolve
-```
+- Start with `icm_context_build` for the route that fits (`{kind: "route", id: "fix"}`), not with the whole repository.
+- Report what you read with `icm_report_reads` when a stage ends, and what the task came to with `icm_report_outcome`.
+- Never write through MCP: a change is a branch and a pull request here, read and merged by a person.
 
-On Windows or macOS dozens of tests fail or skip for platform reasons; a green run there proves
-little. Run on Linux, e.g. a throwaway container:
+## Rules
 
-```bash
-docker run --rm -v "$PWD:/src:ro" python:3.12 bash -lc 'cp -r /src /work && cd /work && rm -rf .git && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm t && pip install -q -e ./core[dev] -e ./rig[dev] && python -m pytest tests -q'
-```
-
-## Releasing (by hand, on purpose)
-
-1. Merge to `main` (squash) with CI green on Python 3.9 and 3.12.
-2. `git tag v1.0.$(git rev-list --count origin/main) origin/main && git push origin <tag>` —
-   `release.yml` runs on `v*` tags only and refuses a tag that disagrees with the tree.
-3. The farm portal pins the release (its `release.json`) and copies `core/` and `rig/` from the tag;
-   a test there compares them file by file, so nothing is changed there first.
-4. Rigs update from Settings → Rig → Software, or `POST /api/v1/update/check` then `/update/install`.
-
-## Rules that are easy to break
-
-- **Tests first** (CONTRIBUTING.md): a change needs a test that fails without it. Test names are
-  sentences stating the behaviour. Comments say *why*, with what was observed and when.
-- **Boundaries** are tests: `tests/test_package_boundaries.py` (core never imports rig; neither
-  half imports a portal) and `tests/test_public_scrub.py` (no internal host, person, portal or
-  private-repo name ships).
-- **Scope reads to the caller, and answer 404 — never 403 — outside it**, so ids and rig names
-  cannot be probed. Every total beside a scoped list is counted over the same scope.
-- **Nothing unbounded, nothing unproven on a timer.** Backups stream; anything scheduled inside the
-  service is tried once against production-sized data first (a portal pod has 1 GiB).
-- **Secrets never reach logs, URLs, backups or the page.**
-- **A run is scoped to the families the user chose**; never assume a family is connected.
-- **ESP32 core 3.x callbacks run under the event lock** (esp32-c5/c6): never reconfigure the radio
-  inside one — the node hangs silently.
-
-## Conventions
-
-One change per PR, squash-merged, subject in plain words (what a rig owner would notice). A change
-to `core/` or `rig/` is not done until it is released and the farm's mirror PR has landed.
+- Nothing moves to the next stage until a person has read the output of the last one.
+- A stage writes to its own `output/`, which is not committed: one run per worktree or branch; clear that job's `stages/*/output/` when its pull request merges or is abandoned.
+- `.github/icm/` points at the files that own each fact. When they disagree, the owning file is right: correct `.github/icm/` in the same pull request and bump its `verified_commit`.
+- No stage pushes a tag or publishes a release: a person does ([release.md](.github/icm/_shared/release.md)).
+- Public repository: no host name, address, person or private repository of ours, in code or in these files ([rules.md](.github/icm/_shared/rules.md)).
